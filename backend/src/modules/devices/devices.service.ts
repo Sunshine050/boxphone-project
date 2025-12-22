@@ -1,20 +1,20 @@
 import { Injectable } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { Device } from './device.entity';
+import { InjectModel } from '@nestjs/mongoose';
+import { Model } from 'mongoose';
+import { Device, DeviceDocument } from './device.schema';
 
 @Injectable()
 export class DevicesService {
     constructor(
-        @InjectRepository(Device)
-        private devicesRepository: Repository<Device>,
+        @InjectModel(Device.name) private deviceModel: Model<DeviceDocument>,
     ) { }
 
-    findAll(): Promise<Device[]> {
-        return this.devicesRepository.find();
+    async findAll(): Promise<Device[]> {
+        return this.deviceModel.find().exec();
     }
 
-    create(device: Partial<Device>): Promise<Device> {
-        return this.devicesRepository.save(device);
+    async create(createDeviceDto: any): Promise<Device> {
+        const createdDevice = new this.deviceModel(createDeviceDto);
+        return createdDevice.save();
     }
 }

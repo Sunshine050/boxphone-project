@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { TypeOrmModule } from '@nestjs/typeorm';
-import { AppGateway } from './gateway/app.gateway'; // WebSocket
+import { MongooseModule } from '@nestjs/mongoose';
+import { AppGateway } from './gateway/app.gateway';
 import { DevicesModule } from './modules/devices/devices.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { UsersModule } from './modules/users/users.module';
@@ -11,17 +11,10 @@ import { UsersModule } from './modules/users/users.module';
     ConfigModule.forRoot({
       isGlobal: true,
     }),
-    TypeOrmModule.forRootAsync({
+    MongooseModule.forRootAsync({
       imports: [ConfigModule],
-      useFactory: (configService: ConfigService) => ({
-        type: 'postgres',
-        host: configService.get<string>('DB_HOST'),
-        port: configService.get<number>('DB_PORT'),
-        username: configService.get<string>('DB_USERNAME'),
-        password: configService.get<string>('DB_PASSWORD'),
-        database: configService.get<string>('DB_NAME'),
-        entities: [__dirname + '/**/*.entity{.ts,.js}'],
-        synchronize: true, // Auto-create tables (Dev only)
+      useFactory: async (configService: ConfigService) => ({
+        uri: configService.get<string>('MONGO_URI'),
       }),
       inject: [ConfigService],
     }),
@@ -30,6 +23,6 @@ import { UsersModule } from './modules/users/users.module';
     DevicesModule,
   ],
   controllers: [],
-  providers: [AppGateway], // Global Gateway
+  providers: [AppGateway],
 })
-export class AppModule {}
+export class AppModule { }

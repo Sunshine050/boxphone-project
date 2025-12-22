@@ -1,11 +1,13 @@
 import { Module } from '@nestjs/common';
-import { TypeOrmModule } from '@nestjs/typeorm';
+import { MongooseModule } from '@nestjs/mongoose';
 import { DevicesController } from './devices.controller';
 import { DevicesService } from './devices.service';
-import { Device } from './device.entity';
+import { Device, DeviceSchema } from './device.schema';
 
 @Module({
-    imports: [TypeOrmModule.forFeature([Device])],
+    imports: [
+        MongooseModule.forFeature([{ name: Device.name, schema: DeviceSchema }]),
+    ],
     controllers: [DevicesController],
     providers: [DevicesService],
     exports: [DevicesService],

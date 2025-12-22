@@ -1,17 +1,25 @@
 version: '3.8'
 
 services:
-  postgres:
-    image: postgres:15-alpine
+  mongo:
+    image: mongo:6.0
     container_name: remote_control_db
     ports:
-      - "5432:5432"
-    environment:
-      POSTGRES_USER: ${DB_USERNAME}
-      POSTGRES_PASSWORD: ${DB_PASSWORD}
-      POSTGRES_DB: ${DB_NAME}
+      - "27017:27017"
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - mongodata:/data/db
+
+  mongo-express:
+    image: mongo-express
+    container_name: remote_control_admin
+    restart: always
+    ports:
+      - 8081:8081
+    environment:
+      ME_CONFIG_MONGODB_SERVER: mongo
+      ME_CONFIG_MONGODB_PORT: 27017
+    depends_on:
+      - mongo
 
   redis:
     image: redis:7-alpine
@@ -20,11 +28,5 @@ services:
       - "6379:6379"
     command: redis-server --requirepass ${REDIS_PASSWORD}
 
-  adminer:
-    image: adminer
-    restart: always
-    ports:
-      - 8080:8080
-
 volumes:
-  pgdata:
+  mongodata:

@@ -1,18 +1,18 @@
-import { Controller, Get, Post, Body, Param, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body } from '@nestjs/common';
 import { DevicesService } from './devices.service';
-import { Device } from './device.entity';
+import { Device } from './device.schema';
 
 @Controller('devices')
 export class DevicesController {
     constructor(private readonly devicesService: DevicesService) { }
 
     @Get()
-    findAll(): Promise<Device[]> {
+    async findAll(): Promise<Device[]> {
         return this.devicesService.findAll();
     }
 
     @Post()
-    create(@Body() device: Partial<Device>): Promise<Device> {
+    async create(@Body() device: any): Promise<Device> {
         return this.devicesService.create(device);
     }
 }
