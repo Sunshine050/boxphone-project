@@ -21,9 +21,7 @@ export class DevicesController {
         return this.devicesService.findOne(id);
     }
 
-    /**
-     * Update Device (e.g., Rename) - Admin Only
-     */
+   
     @Patch(':id')
     @UseGuards(RolesGuard)
     @Roles(UserRole.ADMIN)
@@ -31,9 +29,7 @@ export class DevicesController {
         return this.devicesService.update(id, updateDeviceDto);
     }
 
-    /**
-     * Delete Device - Admin Only
-     */
+    
     @Delete(':id')
     @UseGuards(RolesGuard)
     @Roles(UserRole.ADMIN)

@@ -6,13 +6,7 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { UserRole } from './user.schema';
 
-/**
- * Users Controller - จัดการ User Management
- * 
- * GET /users      - ดู User ทั้งหมด (Admin Only)
- * GET /users/me   - ดูข้อมูลตัวเอง (ต้อง Login)
- * DELETE /users/:id - ลบ User (Admin Only)
- */
+
 @Controller('users')
 export class UsersController {
     constructor(private readonly usersService: UsersService) { }
