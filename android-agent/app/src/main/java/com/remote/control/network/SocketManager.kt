@@ -13,13 +13,19 @@ class SocketManager private constructor() {
     private var socket: Socket? = null
     private val deviceId = "android_device_${Build.SERIAL}" // Simple unique ID
 
-    fun connect(serverUrl: String) {
+    fun connect(serverUrl: String, onStatusChange: (Boolean) -> Unit) {
         try {
             socket = IO.socket(serverUrl)
             
             socket?.on(Socket.EVENT_CONNECT) {
                 Log.d("SocketManager", "Connected to Server")
                 registerDevice()
+                onStatusChange(true)
+            }
+
+            socket?.on(Socket.EVENT_CONNECT_ERROR) { args ->
+                Log.e("SocketManager", "Connect Error: ${args[0]}")
+                onStatusChange(false)
             }
 
             socket?.on("perform_action") { args ->

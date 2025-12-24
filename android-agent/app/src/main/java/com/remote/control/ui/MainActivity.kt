@@ -28,9 +28,18 @@ class MainActivity : AppCompatActivity() {
             startActivity(intent)
         }
 
-        // Connect to Backend (ใช้ IP เครื่องคอมคุณ)
-        SocketManager.instance.connect("http://172.20.160.1:3000")
-        connectionStatus.text = "Connection: Connecting..."
+        // Connect to Backend (ใช้ IP เครื่องคอมคุณ และ Port 3001)
+        SocketManager.instance.connect("http://172.20.160.1:3001") { isConnected ->
+            runOnUiThread {
+                if (isConnected) {
+                    connectionStatus.text = "Connection: Connected"
+                    connectionStatus.setTextColor(android.graphics.Color.parseColor("#27ae60")) // สีเขียว
+                } else {
+                    connectionStatus.text = "Connection: Failed (Check IP/Port)"
+                    connectionStatus.setTextColor(android.graphics.Color.parseColor("#e74c3c")) // สีแดง
+                }
+            }
+        }
     }
 
     override fun onDestroy() {
