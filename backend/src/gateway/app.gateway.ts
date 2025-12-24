@@ -2,6 +2,9 @@ import { WebSocketGateway, WebSocketServer, SubscribeMessage, OnGatewayConnectio
 import { Server, Socket } from 'socket.io';
 import { Logger } from '@nestjs/common';
 
+import { DevicesService } from '../modules/devices/devices.service';
+import { DeviceStatus } from '../modules/devices/device.schema';
+
 @WebSocketGateway({
     cors: {
         origin: '*', // Allow all for dev
@@ -12,7 +15,9 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @WebSocketServer() server: Server;
     private logger: Logger = new Logger('AppGateway');
 
-    // Map device_id -> socket_id (Phase 2)
+    constructor(private readonly devicesService: DevicesService) { }
+
+    // Map device_id -> socket_id
     private devices: Map<string, string> = new Map();
 
     handleConnection(client: Socket) {
@@ -21,13 +26,14 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect {
         // Auth logic could go here (check handshake query token)
     }
 
-    handleDisconnect(client: Socket) {
+    async handleDisconnect(client: Socket) {
         this.logger.log(`Client disconnected: ${client.id}`);
 
         // Cleanup if it was a device
         for (const [deviceId, socketId] of this.devices.entries()) {
             if (socketId === client.id) {
                 this.devices.delete(deviceId);
+                await this.devicesService.updateStatus(deviceId, DeviceStatus.OFFLINE);
                 this.server.emit('device_offline', { deviceId });
                 break;
             }
@@ -37,10 +43,13 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect {
     // --- Device Side Events ---
 
     @SubscribeMessage('device_register')
-    handleDeviceRegister(client: Socket, payload: { deviceId: string; info: any }) {
+    async handleDeviceRegister(client: Socket, payload: { deviceId: string; info: any }) {
         this.logger.log(`Device Registered: ${payload.deviceId}`);
         this.devices.set(payload.deviceId, client.id);
-        // Persist status to DB (DevicesService) here normally
+
+        // Persist to DB
+        await this.devicesService.register(payload.deviceId, payload.info);
+
         this.server.emit('device_online', { deviceId: payload.deviceId });
     }
 

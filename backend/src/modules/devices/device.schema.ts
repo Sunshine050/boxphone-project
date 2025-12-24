@@ -25,7 +25,19 @@ export class Device {
     status: DeviceStatus;
 
     @Prop()
+    model: string;
+
+    @Prop()
+    sdk_version: number;
+
+    @Prop({ type: Object })
+    metadata: any;
+
+    @Prop()
     current_user_id: string;
+
+    @Prop()
+    last_connected_at: Date;
 }
 
 export const DeviceSchema = SchemaFactory.createForClass(Device);

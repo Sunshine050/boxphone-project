@@ -5,14 +5,7 @@ import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import * as bcrypt from 'bcrypt';
 
-/**
- * Auth Service - จัดการ Logic การ Login/Register
- * 
- * หน้าที่:
- * 1. Login - ตรวจสอบ username/password และสร้าง JWT Token
- * 2. Register - สร้าง User ใหม่โดย Hash Password ก่อนบันทึก
- * 3. Validate User - ใช้โดย JWT Strategy เพื่อดึงข้อมูล User จาก Token
- */
+
 @Injectable()
 export class AuthService {
     constructor(
@@ -84,10 +77,7 @@ export class AuthService {
         };
     }
 
-    /**
-     * Validate User - ใช้โดย JWT Strategy
-     * เรียกจาก Passport JWT เมื่อมีการส่ง Token มา
-     */
+    
     async validateUser(userId: string) {
         return await this.usersService.findById(userId);
     }

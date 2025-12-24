@@ -1,6 +1,7 @@
-import { Module } from '@nestjs/common';
+import { Module, OnModuleInit } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { MongooseModule } from '@nestjs/mongoose';
+import { MongooseModule, InjectConnection } from '@nestjs/mongoose';
+import { Connection } from 'mongoose';
 import { AppGateway } from './gateway/app.gateway';
 import { DevicesModule } from './modules/devices/devices.module';
 import { AuthModule } from './modules/auth/auth.module';
@@ -25,4 +26,14 @@ import { UsersModule } from './modules/users/users.module';
   controllers: [],
   providers: [AppGateway],
 })
-export class AppModule { }
+export class AppModule implements OnModuleInit {
+  constructor(@InjectConnection() private readonly connection: Connection) { }
+
+  onModuleInit() {
+    if (this.connection.readyState === 1) {
+      console.log('✅ MongoDB Connected Successfully to:', this.connection.name);
+    } else {
+      console.error('❌ MongoDB Connection Failed! Current state:', this.connection.readyState);
+    }
+  }
+}
