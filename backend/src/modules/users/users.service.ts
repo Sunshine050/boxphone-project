@@ -35,6 +35,20 @@ export class UsersService {
     }
 
     /**
+     * อัปเดตข้อมูล User
+     */
+    async update(userId: string, updateUserDto: any): Promise<User | null> {
+        // ถ้ามีการแก้ Password ต้อง Hash ใหม่ด้วย
+        if (updateUserDto.password) {
+            const bcrypt = require('bcrypt');
+            const saltRounds = 10;
+            updateUserDto.password_hash = await bcrypt.hash(updateUserDto.password, saltRounds);
+            delete updateUserDto.password;
+        }
+        return this.userModel.findByIdAndUpdate(userId, updateUserDto, { new: true }).exec();
+    }
+
+    /**
      * ลบ User (สำหรับ Admin)
      */
     async delete(userId: string): Promise<void> {

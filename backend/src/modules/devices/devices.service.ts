@@ -36,6 +36,18 @@ export class DevicesService {
         ).exec();
     }
 
+    async findOne(id: string): Promise<Device | null> {
+        return this.deviceModel.findById(id).exec();
+    }
+
+    async update(id: string, updateDeviceDto: any): Promise<Device | null> {
+        return this.deviceModel.findByIdAndUpdate(id, updateDeviceDto, { new: true }).exec();
+    }
+
+    async remove(id: string): Promise<void> {
+        await this.deviceModel.findByIdAndDelete(id).exec();
+    }
+
     async create(createDeviceDto: any): Promise<Device> {
         const createdDevice = new this.deviceModel(createDeviceDto);
         return createdDevice.save();
