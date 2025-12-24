@@ -1,7 +1,40 @@
-import { Controller } from '@nestjs/common';
+import { Controller, Get, UseGuards, Delete, Param } from '@nestjs/common';
 import { UsersService } from './users.service';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../../common/decorators/roles.decorator';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { UserRole } from './user.schema';
 
+/**
+ * Users Controller - จัดการ User Management
+ * 
+ * GET /users      - ดู User ทั้งหมด (Admin Only)
+ * GET /users/me   - ดูข้อมูลตัวเอง (ต้อง Login)
+ * DELETE /users/:id - ลบ User (Admin Only)
+ */
 @Controller('users')
 export class UsersController {
     constructor(private readonly usersService: UsersService) { }
+
+    @Get()
+    @UseGuards(JwtAuthGuard, RolesGuard)
+    @Roles(UserRole.ADMIN)
+    async findAll() {
+        return this.usersService.findAll();
+    }
+
+    @Get('me')
+    @UseGuards(JwtAuthGuard)
+    async getProfile(@CurrentUser() user) {
+        return user;
+    }
+
+    @Delete(':id')
+    @UseGuards(JwtAuthGuard, RolesGuard)
+    @Roles(UserRole.ADMIN)
+    async delete(@Param('id') id: string) {
+        await this.usersService.delete(id);
+        return { message: 'User deleted successfully' };
+    }
 }
