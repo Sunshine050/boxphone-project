@@ -138,48 +138,14 @@ export function AndroidControl({ paramsPromise }: { paramsPromise: Promise<{ ses
               </CardContent>
             </Card>
 
-            <div>
-              <h3 className="mb-3 text-sm font-medium text-slate-400">Device Controls</h3>
-              <div className="grid grid-cols-2 gap-3">
-                <Button
-                  variant="outline"
-                  className="h-20 flex-col gap-2 border-slate-800 bg-slate-950/50 hover:bg-slate-800"
-                >
-                  <RotateCcw className="h-5 w-5 text-cyan-400" />
-                  <span className="text-xs text-slate-300">Back</span>
-                </Button>
-                <Button
-                  variant="outline"
-                  className="h-20 flex-col gap-2 border-slate-800 bg-slate-950/50 hover:bg-slate-800"
-                >
-                  <Home className="h-5 w-5 text-cyan-400" />
-                  <span className="text-xs text-slate-300">Home</span>
-                </Button>
-                <Button
-                  variant="outline"
-                  className="h-20 flex-col gap-2 border-slate-800 bg-slate-950/50 hover:bg-slate-800"
-                >
-                  <Square className="h-5 w-5 text-cyan-400" />
-                  <span className="text-xs text-slate-300">Recent</span>
-                </Button>
-                <Button
-                  variant="outline"
-                  className="h-20 flex-col gap-2 border-slate-800 bg-slate-950/50 hover:bg-slate-800"
-                >
-                  <Volume2 className="h-5 w-5 text-cyan-400" />
-                  <span className="text-xs text-slate-300">Volume</span>
-                </Button>
-              </div>
-            </div>
-
-            <Button
+            {/* <Button
               onClick={handleEndSession}
               variant="destructive"
               className="w-full bg-red-500/20 text-red-400 hover:bg-red-500/30"
             >
               <Power className="mr-2 h-4 w-4" />
               End Session
-            </Button>
+            </Button> */}
           </div>
         </div>
 

@@ -12,7 +12,6 @@ interface Device {
   id: string
   name: string
   serialNumber: string
-  androidVersion: string
   status: DeviceStatus
   lastHeartbeat: string
 }
@@ -22,7 +21,6 @@ const mockDevices: Device[] = [
     id: "1",
     name: "Android-001",
     serialNumber: "SN-001-ABC",
-    androidVersion: "13",
     status: "in-use",
     lastHeartbeat: "2 min ago",
   },
@@ -30,7 +28,6 @@ const mockDevices: Device[] = [
     id: "2",
     name: "Android-002",
     serialNumber: "SN-002-DEF",
-    androidVersion: "14",
     status: "available",
     lastHeartbeat: "1 min ago",
   },
@@ -38,7 +35,6 @@ const mockDevices: Device[] = [
     id: "3",
     name: "Android-003",
     serialNumber: "SN-003-GHI",
-    androidVersion: "13",
     status: "in-use",
     lastHeartbeat: "3 min ago",
   },
@@ -46,7 +42,6 @@ const mockDevices: Device[] = [
     id: "4",
     name: "Android-004",
     serialNumber: "SN-004-JKL",
-    androidVersion: "12",
     status: "error",
     lastHeartbeat: "45 min ago",
   },
@@ -54,7 +49,6 @@ const mockDevices: Device[] = [
     id: "5",
     name: "Android-005",
     serialNumber: "SN-005-MNO",
-    androidVersion: "14",
     status: "available",
     lastHeartbeat: "1 min ago",
   },
@@ -62,7 +56,6 @@ const mockDevices: Device[] = [
     id: "6",
     name: "Android-006",
     serialNumber: "SN-006-PQR",
-    androidVersion: "13",
     status: "in-use",
     lastHeartbeat: "2 min ago",
   },
@@ -70,7 +63,6 @@ const mockDevices: Device[] = [
     id: "7",
     name: "Android-007",
     serialNumber: "SN-007-STU",
-    androidVersion: "14",
     status: "maintenance",
     lastHeartbeat: "2h ago",
   },
@@ -96,7 +88,6 @@ export function DeviceManagementTable() {
               <TableRow className="border-border">
                 <TableHead className="text-muted-foreground">Device</TableHead>
                 <TableHead className="text-muted-foreground">Serial Number</TableHead>
-                <TableHead className="text-muted-foreground">Android</TableHead>
                 <TableHead className="text-muted-foreground">Status</TableHead>
                 <TableHead className="text-muted-foreground">Last Heartbeat</TableHead>
                 <TableHead className="text-muted-foreground text-right">Actions</TableHead>
@@ -115,7 +106,6 @@ export function DeviceManagementTable() {
                   <TableCell>
                     <code className="text-xs text-muted-foreground">{device.serialNumber}</code>
                   </TableCell>
-                  <TableCell className="text-foreground">Android {device.androidVersion}</TableCell>
                   <TableCell>
                     <Badge variant="outline" className={statusConfig[device.status].className}>
                       {statusConfig[device.status].label}
@@ -134,7 +124,7 @@ export function DeviceManagementTable() {
                       )}
                       {device.status === "in-use" && (
                         <Button variant="destructive" size="sm">
-                          Force Unlock
+                          Force Lock
                         </Button>
                       )}
                       {device.status === "available" && (

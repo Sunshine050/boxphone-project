@@ -53,7 +53,7 @@ const mockUsers: User[] = [
     id: "6",
     username: "emma.white",
     email: "emma.white@email.com",
-    status: "disabled",
+    status: "active",
     maxSessions: 2,
     activeSessions: 0,
   },
@@ -108,8 +108,8 @@ export function UsersTable() {
                       <Button variant="outline" size="sm">
                         View Sessions
                       </Button>
-                      <Button variant={user.status === "active" ? "ghost" : "default"} size="sm">
-                        {user.status === "active" ? "Disable" : "Enable"}
+                      <Button variant={user.status === "disabled" ? "ghost" : "default"} size="sm">
+                        {user.status === "disabled" ? "Edit" : "Edit"}
                       </Button>
                       <Button variant="destructive" size="sm">
                         End All
