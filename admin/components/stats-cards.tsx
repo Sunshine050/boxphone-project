@@ -32,15 +32,6 @@ const stats = [
     iconBg: "bg-green-500/10",
     borderColor: "border-green-500/30",
   },
-  {
-    title: "Error Devices",
-    value: "5",
-    subtitle: "Requires attention",
-    icon: AlertCircle,
-    bgColor: "bg-card",
-    iconBg: "bg-red-500/10",
-    borderColor: "border-red-500/30",
-  },
 ]
 
 const container = {

@@ -6,14 +6,13 @@ import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { motion } from "framer-motion"
 
-type DeviceStatus = "available" | "in-use" | "error" | "maintenance"
+type DeviceStatus = "available" | "in-use"
 
 interface Device {
   id: string
   name: string
   serialNumber: string
   status: DeviceStatus
-  lastHeartbeat: string
 }
 
 const mockDevices: Device[] = [
@@ -22,60 +21,53 @@ const mockDevices: Device[] = [
     name: "Android-001",
     serialNumber: "SN-001-ABC",
     status: "in-use",
-    lastHeartbeat: "2 min ago",
   },
   {
     id: "2",
     name: "Android-002",
     serialNumber: "SN-002-DEF",
     status: "available",
-    lastHeartbeat: "1 min ago",
   },
   {
     id: "3",
     name: "Android-003",
     serialNumber: "SN-003-GHI",
     status: "in-use",
-    lastHeartbeat: "3 min ago",
   },
   {
     id: "4",
     name: "Android-004",
     serialNumber: "SN-004-JKL",
-    status: "error",
-    lastHeartbeat: "45 min ago",
+    status: "in-use",
   },
   {
     id: "5",
     name: "Android-005",
     serialNumber: "SN-005-MNO",
     status: "available",
-    lastHeartbeat: "1 min ago",
   },
   {
     id: "6",
     name: "Android-006",
     serialNumber: "SN-006-PQR",
     status: "in-use",
-    lastHeartbeat: "2 min ago",
   },
   {
     id: "7",
     name: "Android-007",
     serialNumber: "SN-007-STU",
-    status: "maintenance",
-    lastHeartbeat: "2h ago",
+    status: "in-use",
   },
 ]
 
 const statusConfig: Record<DeviceStatus, { label: string; className: string }> = {
   available: { label: "Available", className: "bg-green-500/10 text-green-500 border-green-500/20" },
   "in-use": { label: "In Use", className: "bg-red-500/10 text-red-500 border-red-500/20" },
-  error: { label: "Error", className: "bg-yellow-500/10 text-yellow-500 border-yellow-500/20" },
-  maintenance: { label: "Maintenance", className: "bg-gray-500/10 text-gray-500 border-gray-500/20" },
 }
 
 export function DeviceManagementTable() {
+  // เพิ่ม Column สำหรับ การนับเวลาถอยหลังถ้ามีการใช้งานอยู่ "เวลาคงเหลือ"
+  // เพิ่มกล่อง dialog รายละเอียดเพื่่อแสดงข้อมูล device, status, user ที่ใช้งานอยู่, เวลาคงเหลือ
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
       <Card className="bg-card border-border">
@@ -87,9 +79,7 @@ export function DeviceManagementTable() {
             <TableHeader>
               <TableRow className="border-border">
                 <TableHead className="text-muted-foreground">Device</TableHead>
-                <TableHead className="text-muted-foreground">Serial Number</TableHead>
                 <TableHead className="text-muted-foreground">Status</TableHead>
-                <TableHead className="text-muted-foreground">Last Heartbeat</TableHead>
                 <TableHead className="text-muted-foreground text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -104,34 +94,15 @@ export function DeviceManagementTable() {
                 >
                   <TableCell className="font-medium font-mono text-foreground">{device.name}</TableCell>
                   <TableCell>
-                    <code className="text-xs text-muted-foreground">{device.serialNumber}</code>
-                  </TableCell>
-                  <TableCell>
                     <Badge variant="outline" className={statusConfig[device.status].className}>
                       {statusConfig[device.status].label}
                     </Badge>
                   </TableCell>
-                  <TableCell className="text-muted-foreground">{device.lastHeartbeat}</TableCell>
                   <TableCell className="text-right">
                     <div className="flex gap-2 justify-end">
                       <Button variant="outline" size="sm">
                         View Details
                       </Button>
-                      {device.status === "error" && (
-                        <Button variant="ghost" size="sm">
-                          Mark Fixed
-                        </Button>
-                      )}
-                      {device.status === "in-use" && (
-                        <Button variant="destructive" size="sm">
-                          Force Lock
-                        </Button>
-                      )}
-                      {device.status === "available" && (
-                        <Button variant="ghost" size="sm">
-                          Maintenance
-                        </Button>
-                      )}
                     </div>
                   </TableCell>
                 </motion.tr>

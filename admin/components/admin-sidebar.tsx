@@ -3,12 +3,11 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
-import { LayoutDashboard, Activity, Smartphone, Users, MonitorSmartphone } from "lucide-react"
+import { LayoutDashboard, Smartphone, Users, MonitorSmartphone } from "lucide-react"
 import { motion } from "framer-motion"
 
 const navigation = [
   { name: "Overview", href: "/admin", icon: LayoutDashboard },
-  { name: "Active Sessions", href: "/admin/sessions", icon: Activity },
   { name: "Available Devices", href: "/admin/available", icon: Smartphone },
   { name: "User Management", href: "/admin/users", icon: Users },
   { name: "Device Management", href: "/admin/devices", icon: MonitorSmartphone },

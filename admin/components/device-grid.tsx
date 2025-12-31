@@ -75,12 +75,6 @@ export function DeviceGrid() {
             390
           </Badge>
         </Button>
-        <Button variant="ghost" className="gap-2 h-9">
-          Maintenance
-          <Badge variant="secondary" className="ml-1 px-1.5 py-0 text-xs bg-muted">
-            5
-          </Badge>
-        </Button>
       </div>
 
       <motion.div
