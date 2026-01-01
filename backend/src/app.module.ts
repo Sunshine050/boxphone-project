@@ -6,6 +6,7 @@ import { AppGateway } from './gateway/app.gateway';
 import { DevicesModule } from './modules/devices/devices.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { UsersModule } from './modules/users/users.module';
+import { SessionsModule } from './modules/sessions/sessions.module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { UsersModule } from './modules/users/users.module';
     AuthModule,
     UsersModule,
     DevicesModule,
+    SessionsModule,
   ],
   controllers: [],
   providers: [AppGateway],

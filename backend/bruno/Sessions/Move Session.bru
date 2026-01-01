@@ -1,0 +1,23 @@
+meta {
+  name: Move Session
+  type: http
+  seq: 9
+}
+
+post {
+  url: {{base_url}}/sessions/{{session_id}}/move
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  {{admin_token}}
+}
+
+body:json {
+  {
+    "to_device_id": "{{device2_id}}",
+    "reason": "Device 1 broken, moving to Device 2"
+  }
+}
+

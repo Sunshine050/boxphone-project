@@ -1,0 +1,22 @@
+meta {
+  name: Update Device
+  type: http
+  seq: 4
+}
+
+patch {
+  url: {{base_url}}/devices/{{device_id}}
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  {{admin_token}}
+}
+
+body:json {
+  {
+    "status": "BUSY"
+  }
+}
+

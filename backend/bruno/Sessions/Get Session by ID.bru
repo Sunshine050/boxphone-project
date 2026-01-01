@@ -1,0 +1,16 @@
+meta {
+  name: Get Session by ID
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{base_url}}/sessions/{{session_id}}
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  {{admin_token}}
+}
+

@@ -1,5 +1,6 @@
 import { Injectable, UnauthorizedException, ConflictException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
 import { UsersService } from '../users/users.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
@@ -11,6 +12,7 @@ export class AuthService {
     constructor(
         private usersService: UsersService,
         private jwtService: JwtService,
+        private readonly configService: ConfigService,
     ) { }
 
     /**
@@ -57,7 +59,7 @@ export class AuthService {
         }
 
         // Hash password
-        const saltRounds = 10;
+        const saltRounds = this.configService.get<number>('BCRYPT_SALT_ROUNDS') || 10;
         const password_hash = await bcrypt.hash(registerDto.password, saltRounds);
 
         // บันทึก User

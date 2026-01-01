@@ -40,6 +40,10 @@ export class DevicesService {
         return this.deviceModel.findById(id).exec();
     }
 
+    async findBySerialNumber(serialNumber: string): Promise<Device | null> {
+        return this.deviceModel.findOne({ serial_number: serialNumber }).exec();
+    }
+
     async update(id: string, updateDeviceDto: any): Promise<Device | null> {
         return this.deviceModel.findByIdAndUpdate(id, updateDeviceDto, { new: true }).exec();
     }

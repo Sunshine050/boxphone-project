@@ -1,0 +1,16 @@
+meta {
+  name: Disconnect User from Device
+  type: http
+  seq: 7
+}
+
+post {
+  url: {{base_url}}/users/{{user_id}}/disconnect-device
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  {{admin_token}}
+}
+

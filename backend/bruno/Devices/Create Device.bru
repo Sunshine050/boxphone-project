@@ -1,0 +1,41 @@
+meta {
+  name: Create Device
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{base_url}}/devices
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  {{admin_token}}
+}
+
+body:json {
+  {
+    "name": "{{device_name}}",
+    "serial_number": "{{device_serial}}",
+    "model": "{{device_model}}",
+    "status": "AVAILABLE"
+  }
+}
+
+tests {
+  test("Status code is 201", function() {
+    expect(res.status).to.equal(201);
+  });
+
+  test("Save device_id", function() {
+    if (res.status === 201 && res.body._id) {
+      if (!bru.getVar("device_id")) {
+        bru.setVar("device_id", res.body._id);
+      } else if (!bru.getVar("device2_id")) {
+        bru.setVar("device2_id", res.body._id);
+      }
+    }
+  });
+}
+

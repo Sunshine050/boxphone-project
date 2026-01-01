@@ -1,0 +1,16 @@
+meta {
+  name: Get Active Session by Device
+  type: http
+  seq: 5
+}
+
+get {
+  url: {{base_url}}/sessions/device/{{device_id}}
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  {{admin_token}}
+}
+

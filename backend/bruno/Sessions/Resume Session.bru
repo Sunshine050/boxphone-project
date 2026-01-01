@@ -1,0 +1,16 @@
+meta {
+  name: Resume Session
+  type: http
+  seq: 8
+}
+
+post {
+  url: {{base_url}}/sessions/{{session_id}}/resume
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  {{admin_token}}
+}
+

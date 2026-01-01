@@ -1,0 +1,22 @@
+meta {
+  name: Update User
+  type: http
+  seq: 5
+}
+
+patch {
+  url: {{base_url}}/users/{{user_id}}
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  {{admin_token}}
+}
+
+body:json {
+  {
+    "package": "PREMIUM"
+  }
+}
+
