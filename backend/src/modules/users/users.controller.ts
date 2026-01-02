@@ -10,6 +10,7 @@ import {
   HttpCode,
   HttpStatus,
   NotFoundException,
+  Logger,
 } from "@nestjs/common";
 import { UsersService } from "./users.service";
 import { DevicesService } from "../devices/devices.service";
@@ -23,6 +24,8 @@ import { ConnectDeviceDto } from "./dto/connect-device.dto";
 
 @Controller("users")
 export class UsersController {
+  private readonly logger = new Logger(UsersController.name);
+
   constructor(
     private readonly usersService: UsersService,
     private readonly devicesService: DevicesService
@@ -39,19 +42,36 @@ export class UsersController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
   @HttpCode(HttpStatus.CREATED)
-  async create(@Body() createUserDto: CreateUserByAdminDto) {
-    const user = await this.usersService.createByAdmin(createUserDto);
-    return {
-      message: "User created successfully",
-      user: {
-        id: (user as any)._id.toString(),
-        username: user.username,
-        role: user.role,
-        package: user.package,
-        status: user.status,
-        start_date: user.start_date,
-      },
-    };
+  async create(
+    @Body() createUserDto: CreateUserByAdminDto,
+    @CurrentUser() currentUser: any
+  ) {
+    this.logger.log(
+      `[CREATE_USER] Admin: ${currentUser?.username || "unknown"} creating user: ${createUserDto.username}`
+    );
+    try {
+      const user = await this.usersService.createByAdmin(createUserDto);
+      const userId = (user as any)._id.toString();
+      this.logger.log(
+        `[CREATE_USER] ✅ Success - User ID: ${userId}, Username: ${user.username}, Package: ${user.package}`
+      );
+      return {
+        message: "User created successfully",
+        user: {
+          id: userId,
+          username: user.username,
+          role: user.role,
+          package: user.package,
+          status: user.status,
+          start_date: user.start_date,
+        },
+      };
+    } catch (error) {
+      this.logger.error(
+        `[CREATE_USER] ❌ Failed - Username: ${createUserDto.username}, Error: ${error.message}`
+      );
+      throw error;
+    }
   }
 
   @Get()
@@ -110,22 +130,37 @@ export class UsersController {
   @HttpCode(HttpStatus.OK)
   async connectDevice(
     @Param("id") userId: string,
-    @Body() connectDeviceDto: ConnectDeviceDto
+    @Body() connectDeviceDto: ConnectDeviceDto,
+    @CurrentUser() currentUser: any
   ) {
-    const user = await this.usersService.connectDevice(
-      userId,
-      connectDeviceDto.device_id,
-      this.devicesService
+    this.logger.log(
+      `[CONNECT_DEVICE] Admin: ${currentUser?.username || "unknown"} connecting User ID: ${userId} to Device ID: ${connectDeviceDto.device_id}`
     );
-    return {
-      message: "User connected to device successfully",
-      user: {
-        id: (user as any)._id.toString(),
-        username: user.username,
-        status: user.status,
-        device_id: user.device_id,
-      },
-    };
+    try {
+      const user = await this.usersService.connectDevice(
+        userId,
+        connectDeviceDto.device_id,
+        this.devicesService
+      );
+      const userIdStr = (user as any)._id.toString();
+      this.logger.log(
+        `[CONNECT_DEVICE] ✅ Success - User ID: ${userIdStr}, Device ID: ${connectDeviceDto.device_id}, Status: ${user.status}`
+      );
+      return {
+        message: "User connected to device successfully",
+        user: {
+          id: userIdStr,
+          username: user.username,
+          status: user.status,
+          device_id: user.device_id,
+        },
+      };
+    } catch (error) {
+      this.logger.error(
+        `[CONNECT_DEVICE] ❌ Failed - User ID: ${userId}, Device ID: ${connectDeviceDto.device_id}, Error: ${error.message}`
+      );
+      throw error;
+    }
   }
 
   /**

@@ -1,4 +1,4 @@
-import { Injectable, CanActivate, ExecutionContext } from '@nestjs/common';
+import { Injectable, CanActivate, ExecutionContext, Logger, ForbiddenException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { UserRole } from '../../users/user.schema';
 
@@ -15,6 +15,8 @@ import { UserRole } from '../../users/user.schema';
  */
 @Injectable()
 export class RolesGuard implements CanActivate {
+    private readonly logger = new Logger(RolesGuard.name);
+
     constructor(private reflector: Reflector) { }
 
     canActivate(context: ExecutionContext): boolean {
@@ -30,6 +32,19 @@ export class RolesGuard implements CanActivate {
         const request = context.switchToHttp().getRequest();
         const user = request.user;
 
-        return requiredRoles.some((role) => user.role === role);
+        if (!user) {
+            this.logger.error(`[ROLES] ❌ No user in request - Method: ${request.method}, Path: ${request.url}`);
+            throw new ForbiddenException('User not authenticated');
+        }
+
+        const hasRole = requiredRoles.some((role) => user.role === role);
+        
+        if (!hasRole) {
+            this.logger.warn(`[ROLES] ❌ Forbidden - User: ${user.username}, Role: ${user.role}, Required: ${requiredRoles.join(', ')}, Method: ${request.method}, Path: ${request.url}`);
+            throw new ForbiddenException('Insufficient permissions');
+        }
+
+        this.logger.debug(`[ROLES] ✅ Authorized - User: ${user.username}, Role: ${user.role}, Method: ${request.method}, Path: ${request.url}`);
+        return true;
     }
 }

@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException, ConflictException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, ConflictException, Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { UsersService } from '../users/users.service';
@@ -9,6 +9,8 @@ import * as bcrypt from 'bcrypt';
 
 @Injectable()
 export class AuthService {
+    private readonly logger = new Logger(AuthService.name);
+
     constructor(
         private usersService: UsersService,
         private jwtService: JwtService,
@@ -20,27 +22,35 @@ export class AuthService {
      * @returns JWT Access Token และข้อมูล User
      */
     async login(loginDto: LoginDto) {
+        this.logger.debug(`[LOGIN] Checking user: ${loginDto.username}`);
         const user = await this.usersService.findOne(loginDto.username);
 
         if (!user) {
+            this.logger.warn(`[LOGIN] ❌ User not found: ${loginDto.username}`);
             throw new UnauthorizedException('Invalid credentials');
         }
 
+        this.logger.debug(`[LOGIN] User found, validating password for: ${loginDto.username}`);
         const isPasswordValid = await bcrypt.compare(
             loginDto.password,
             user.password_hash,
         );
 
         if (!isPasswordValid) {
+            this.logger.warn(`[LOGIN] ❌ Invalid password for: ${loginDto.username}`);
             throw new UnauthorizedException('Invalid credentials');
         }
 
-        const payload = { sub: (user as any).id || (user as any)._id.toString(), username: user.username, role: user.role };
+        const userId = (user as any).id || (user as any)._id.toString();
+        const payload = { sub: userId, username: user.username, role: user.role };
+        const token = this.jwtService.sign(payload);
+
+        this.logger.log(`[LOGIN] ✅ Token generated for user: ${loginDto.username} (ID: ${userId})`);
 
         return {
-            access_token: this.jwtService.sign(payload),
+            access_token: token,
             user: {
-                id: (user as any).id || (user as any)._id.toString(),
+                id: userId,
                 username: user.username,
                 role: user.role,
             },

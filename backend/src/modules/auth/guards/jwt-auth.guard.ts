@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, ExecutionContext, Logger } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 
 /**
@@ -8,4 +8,31 @@ import { AuthGuard } from '@nestjs/passport';
  * ถ้าไม่มี Token หรือ Token ไม่ถูกต้อง จะ Return 401 Unauthorized
  */
 @Injectable()
-export class JwtAuthGuard extends AuthGuard('jwt') { }
+export class JwtAuthGuard extends AuthGuard('jwt') {
+    private readonly logger = new Logger(JwtAuthGuard.name);
+
+    canActivate(context: ExecutionContext) {
+        const request = context.switchToHttp().getRequest();
+        const authHeader = request.headers?.authorization;
+        
+        if (!authHeader) {
+            this.logger.warn(`[AUTH] ❌ No Authorization header - Method: ${request.method}, Path: ${request.url}`);
+        } else {
+            this.logger.debug(`[AUTH] Checking token - Method: ${request.method}, Path: ${request.url}`);
+        }
+
+        return super.canActivate(context);
+    }
+
+    handleRequest(err: any, user: any, info: any, context: ExecutionContext) {
+        const request = context.switchToHttp().getRequest();
+        
+        if (err || !user) {
+            this.logger.error(`[AUTH] ❌ Unauthorized - Method: ${request.method}, Path: ${request.url}, Error: ${err?.message || info?.message || 'Invalid token'}`);
+            throw err || new Error('Unauthorized');
+        }
+
+        this.logger.debug(`[AUTH] ✅ Authenticated - User: ${user.username}, Role: ${user.role}, Method: ${request.method}, Path: ${request.url}`);
+        return user;
+    }
+}

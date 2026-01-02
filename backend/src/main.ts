@@ -1,38 +1,54 @@
-import { NestFactory } from '@nestjs/core';
-import { AppModule } from './app.module';
-import { ConfigService } from '@nestjs/config';
-import { ValidationPipe } from '@nestjs/common';
-import { seedAdmin } from './seed/seed-admin';
+import { NestFactory } from "@nestjs/core";
+import { AppModule } from "./app.module";
+import { ConfigService } from "@nestjs/config";
+import { ValidationPipe, Logger } from "@nestjs/common";
+import { seedAdmin } from "./seed/seed-admin";
 
 /**
  * Main Entry Point
- * 
+ *
  * เพิ่ม:
  * 1. ValidationPipe - Auto validate DTO ทุก Request
  * 2. seedAdmin() - สร้าง Admin User ครั้งแรก (ถ้ายังไม่มี)
+ * 3. Global Logger - Log ทุก request และ error
  */
 async function bootstrap() {
-    const app = await NestFactory.create(AppModule);
-    const configService = app.get(ConfigService);
+  const logger = new Logger("Bootstrap");
 
-    // Enable validation globally
-    app.useGlobalPipes(new ValidationPipe({
-        whitelist: true, // ลบ field ที่ไม่ต้องการออก
-        forbidNonWhitelisted: true, // Error ถ้ามี field แปลกๆ
-    }));
+  logger.log("🚀 Starting application...");
 
-    // Enable CORS for Frontend
-    app.enableCors({
-        origin: '*',
-        methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
-        credentials: true,
-    });
+  const app = await NestFactory.create(AppModule, {
+    logger: ["error", "warn", "log", "debug", "verbose"],
+  });
+  const configService = app.get(ConfigService);
 
-    const port = configService.get<number>('PORT') || 3001;
-    await app.listen(port, '0.0.0.0');
-    console.log(`Application is running on: ${await app.getUrl()}`);
+  // Enable validation globally
+  app.useGlobalPipes(
+    new ValidationPipe({
+      whitelist: true, // ลบ field ที่ไม่ต้องการออก
+      forbidNonWhitelisted: true, // Error ถ้ามี field แปลกๆ
+      transform: true,
+    })
+  );
 
-    // Seed Admin User
-    await seedAdmin(app);
+  // Enable CORS for Frontend
+  app.enableCors({
+    origin: "*",
+    methods: "GET,HEAD,PUT,PATCH,POST,DELETE",
+    credentials: true,
+  });
+
+  const port = configService.get<number>("PORT") || 3001;
+  await app.listen(port, "0.0.0.0");
+
+  logger.log(`✅ Application is running on: ${await app.getUrl()}`);
+  logger.log(
+    `📝 Logging enabled - All requests and errors will be shown in terminal`
+  );
+
+  // Seed Admin User
+  logger.log("👤 Seeding admin user...");
+  await seedAdmin(app);
+  logger.log("✅ Admin user seeded");
 }
 bootstrap();
