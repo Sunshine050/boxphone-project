@@ -3,6 +3,8 @@ import { AppModule } from "./app.module";
 import { ConfigService } from "@nestjs/config";
 import { ValidationPipe, Logger } from "@nestjs/common";
 import { seedAdmin } from "./seed/seed-admin";
+import { getCorsConfig } from "./config/cors.config";
+import { getValidationPipeConfig, getLoggerConfig } from "./config/app.config";
 
 /**
  * Main Entry Point
@@ -11,6 +13,7 @@ import { seedAdmin } from "./seed/seed-admin";
  * 1. ValidationPipe - Auto validate DTO ทุก Request
  * 2. seedAdmin() - สร้าง Admin User ครั้งแรก (ถ้ายังไม่มี)
  * 3. Global Logger - Log ทุก request และ error
+ * 4. CORS Configuration - จาก config file
  */
 async function bootstrap() {
   const logger = new Logger("Bootstrap");
@@ -18,23 +21,15 @@ async function bootstrap() {
   logger.log("🚀 Starting application...");
 
   const app = await NestFactory.create(AppModule, {
-    logger: ["error", "warn", "log", "debug", "verbose"],
+    logger: getLoggerConfig(),
   });
   const configService = app.get(ConfigService);
-  app.useGlobalPipes(
-    new ValidationPipe({
-      whitelist: true, 
-      forbidNonWhitelisted: true,
-      transform: true,
-    })
-  );
 
-  // Enable CORS for Frontend
-  app.enableCors({
-    origin: "*",
-    methods: "GET,HEAD,PUT,PATCH,POST,DELETE",
-    credentials: true,
-  });
+  // Validation Pipe Configuration
+  app.useGlobalPipes(new ValidationPipe(getValidationPipeConfig()));
+
+  // CORS Configuration
+  app.enableCors(getCorsConfig(configService));
 
   const port = configService.get<number>("PORT");
   if (!port) {
