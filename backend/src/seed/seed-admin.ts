@@ -40,10 +40,20 @@ export async function seedAdmin(app: INestApplication) {
   }
 
   // สร้าง Admin User
-  const saltRounds = configService.get<number>("BCRYPT_SALT_ROUNDS") || 10;
+  const saltRounds = configService.get<number>("BCRYPT_SALT_ROUNDS");
+  if (!saltRounds) {
+    console.warn(
+      "⚠️  BCRYPT_SALT_ROUNDS not found in .env, skipping admin seed"
+    );
+    return;
+  }
   const password_hash = await bcrypt.hash(adminPassword, saltRounds);
 
-  const adminCredits = configService.get<number>("ADMIN_CREDITS") || 999999;
+  const adminCredits = configService.get<number>("ADMIN_CREDITS");
+  if (adminCredits === undefined) {
+    console.warn("⚠️  ADMIN_CREDITS not found in .env, skipping admin seed");
+    return;
+  }
   await usersService.create({
     username: adminUsername,
     password_hash,

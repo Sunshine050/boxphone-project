@@ -38,7 +38,10 @@ async function bootstrap() {
     credentials: true,
   });
 
-  const port = configService.get<number>("PORT") || 3001;
+  const port = configService.get<number>("PORT");
+  if (!port) {
+    throw new Error("PORT is not configured");
+  }
   await app.listen(port, "0.0.0.0");
 
   logger.log(`✅ Application is running on: ${await app.getUrl()}`);

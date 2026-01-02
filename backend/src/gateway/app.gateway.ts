@@ -63,7 +63,7 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect {
               const disconnectReason =
                 this.configService.get<string>(
                   "SESSION_DEFAULT_DISCONNECT_REASON"
-                ) || "Device disconnected";
+                );
               await this.sessionsService.pauseSession(
                 (session as any)._id.toString(),
                 disconnectReason

@@ -69,7 +69,10 @@ export class AuthService {
         }
 
         // Hash password
-        const saltRounds = this.configService.get<number>('BCRYPT_SALT_ROUNDS') || 10;
+        const saltRounds = this.configService.get<number>('BCRYPT_SALT_ROUNDS');
+        if (!saltRounds) {
+            throw new Error('BCRYPT_SALT_ROUNDS is not configured');
+        }
         const password_hash = await bcrypt.hash(registerDto.password, saltRounds);
 
         // บันทึก User

@@ -34,11 +34,17 @@ export class UsersService {
         }
 
         // Hash password
-        const saltRounds = this.configService.get<number>('BCRYPT_SALT_ROUNDS') || 10;
+        const saltRounds = this.configService.get<number>('BCRYPT_SALT_ROUNDS');
+        if (!saltRounds) {
+            throw new Error('BCRYPT_SALT_ROUNDS is not configured');
+        }
         const password_hash = await bcrypt.hash(createUserDto.password, saltRounds);
 
         // สร้าง User ใหม่
-        const defaultCredits = this.configService.get<number>('DEFAULT_USER_CREDITS') || 0;
+        const defaultCredits = this.configService.get<number>('DEFAULT_USER_CREDITS');
+        if (defaultCredits === undefined) {
+            throw new Error('DEFAULT_USER_CREDITS is not configured');
+        }
         const newUser = new this.userModel({
             username: createUserDto.username,
             password_hash,
@@ -74,7 +80,10 @@ export class UsersService {
     async update(userId: string, updateUserDto: any): Promise<User | null> {
         // ถ้ามีการแก้ Password ต้อง Hash ใหม่ด้วย
         if (updateUserDto.password) {
-            const saltRounds = this.configService.get<number>('BCRYPT_SALT_ROUNDS') || 10;
+            const saltRounds = this.configService.get<number>('BCRYPT_SALT_ROUNDS');
+            if (!saltRounds) {
+                throw new Error('BCRYPT_SALT_ROUNDS is not configured');
+            }
             updateUserDto.password_hash = await bcrypt.hash(updateUserDto.password, saltRounds);
             delete updateUserDto.password;
         }

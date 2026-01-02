@@ -15,9 +15,18 @@ import { SessionsModule } from './modules/sessions/sessions.module';
     }),
     MongooseModule.forRootAsync({
       imports: [ConfigModule],
-      useFactory: async (configService: ConfigService) => ({
-        uri: configService.get<string>('MONGO_URI'),
-      }),
+      useFactory: async (configService: ConfigService) => {
+        const mongoUri = configService.get<string>('MONGO_URI');
+        if (!mongoUri) {
+          throw new Error('MONGO_URI is not configured in .env file');
+        }
+        if (!mongoUri.startsWith('mongodb://') && !mongoUri.startsWith('mongodb+srv://')) {
+          throw new Error(`Invalid MONGO_URI format. Must start with 'mongodb://' or 'mongodb+srv://'. Current value: ${mongoUri}`);
+        }
+        return {
+          uri: mongoUri,
+        };
+      },
       inject: [ConfigService],
     }),
     AuthModule,

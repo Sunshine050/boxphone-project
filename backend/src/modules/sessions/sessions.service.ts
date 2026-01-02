@@ -61,8 +61,10 @@ export class SessionsService {
       );
     }
 
-    const maxMoveCount =
-      this.configService.get<number>("SESSION_MAX_MOVE_COUNT") || 2;
+    const maxMoveCount = this.configService.get<number>("SESSION_MAX_MOVE_COUNT");
+    if (maxMoveCount === undefined) {
+      throw new Error("SESSION_MAX_MOVE_COUNT is not configured");
+    }
 
     const newSession = new this.sessionModel({
       user_id: createSessionDto.user_id,
@@ -118,8 +120,7 @@ export class SessionsService {
         pause_time: now,
         disconnect_reason:
           reason ||
-          this.configService.get<string>("SESSION_DEFAULT_DISCONNECT_REASON") ||
-          "Connection lost",
+          this.configService.get<string>("SESSION_DEFAULT_DISCONNECT_REASON"),
       },
       { new: true }
     );
