@@ -27,20 +27,19 @@ export class UsersService {
      * - ตั้ง status เป็น PENDING (จะเปลี่ยนเป็น INUSE เมื่อเชื่อม device)
      */
     async createByAdmin(createUserDto: CreateUserByAdminDto): Promise<User> {
-        // เช็คว่า Username ซ้ำหรือไม่
         const existingUser = await this.findOne(createUserDto.username);
         if (existingUser) {
             throw new ConflictException('Username already exists');
         }
 
-        // Hash password
+        
         const saltRounds = this.configService.get<number>('BCRYPT_SALT_ROUNDS');
         if (!saltRounds) {
             throw new Error('BCRYPT_SALT_ROUNDS is not configured');
         }
         const password_hash = await bcrypt.hash(createUserDto.password, saltRounds);
 
-        // สร้าง User ใหม่
+        
         const defaultCredits = this.configService.get<number>('DEFAULT_USER_CREDITS');
         if (defaultCredits === undefined) {
             throw new Error('DEFAULT_USER_CREDITS is not configured');
@@ -51,7 +50,7 @@ export class UsersService {
             role: createUserDto.role,
             package: createUserDto.package,
             status: UserStatus.PENDING,
-            start_date: new Date(),  // เริ่มนับตั้งแต่วันที่สร้าง
+            start_date: new Date(),  
             device_id: null,
             credits: defaultCredits,
         });
@@ -67,18 +66,13 @@ export class UsersService {
         return this.userModel.findOne({ username }).exec();
     }
 
-    /**
-     * ดึง User จาก ID (ใช้โดย JWT Strategy)
-     */
+    
     async findById(userId: string): Promise<User | null> {
         return this.userModel.findById(userId).exec();
     }
 
-    /**
-     * อัปเดตข้อมูล User
-     */
+    
     async update(userId: string, updateUserDto: any): Promise<User | null> {
-        // ถ้ามีการแก้ Password ต้อง Hash ใหม่ด้วย
         if (updateUserDto.password) {
             const saltRounds = this.configService.get<number>('BCRYPT_SALT_ROUNDS');
             if (!saltRounds) {
@@ -90,12 +84,7 @@ export class UsersService {
         return this.userModel.findByIdAndUpdate(userId, updateUserDto, { new: true }).exec();
     }
 
-    /**
-     * เชื่อม User กับ Device
-     * - เปลี่ยน status เป็น INUSE
-     * - บันทึก device_id
-     * - ต้องเช็คว่า device มีอยู่จริงและว่างอยู่
-     */
+    
     async connectDevice(userId: string, deviceId: string, deviceService: any): Promise<User> {
         const user = await this.findById(userId);
         if (!user) {

@@ -62,7 +62,6 @@ export class AuthService {
      * Hash Password ด้วย bcrypt ก่อนบันทึกลง Database
      */
     async register(registerDto: RegisterDto) {
-        // เช็คว่า Username ซ้ำหรือไม่
         const existingUser = await this.usersService.findOne(registerDto.username);
         if (existingUser) {
             throw new ConflictException('Username already exists');
@@ -75,7 +74,6 @@ export class AuthService {
         }
         const password_hash = await bcrypt.hash(registerDto.password, saltRounds);
 
-        // บันทึก User
         const user = await this.usersService.create({
             username: registerDto.username,
             password_hash,

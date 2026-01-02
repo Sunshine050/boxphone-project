@@ -15,7 +15,7 @@ export class CreateSessionDto {
 
   @IsString()
   @IsNotEmpty()
-  package: string; // แพคเกจที่ซื้อ
+  package: string; 
 
   @IsNumber()
   @Min(1, { message: "Total seconds must be at least 1" })

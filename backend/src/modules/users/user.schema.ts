@@ -9,9 +9,9 @@ export enum UserRole {
 }
 
 export enum UserStatus {
-  PENDING = "PENDING", // รอเชื่อมต่อ device
-  INUSE = "INUSE", // เชื่อมต่อ device แล้ว ใช้งานได้
-  INACTIVE = "INACTIVE", // ถูกปิดการใช้งาน
+  PENDING = "PENDING",
+  INUSE = "INUSE", 
+  INACTIVE = "INACTIVE", 
 }
 
 @Schema({ timestamps: true })
@@ -43,10 +43,10 @@ export class User {
   status: UserStatus;
 
   @Prop({ type: Date })
-  start_date: Date; // วันที่เริ่มนับ (ตั้งเมื่อแอดมินสร้าง user)
+  start_date: Date;
 
   @Prop({ type: Types.ObjectId, ref: "Device", default: null })
-  device_id: Types.ObjectId | null; // เชื่อมกับ device
+  device_id: Types.ObjectId | null; 
 }
 
 export const UserSchema = SchemaFactory.createForClass(User);

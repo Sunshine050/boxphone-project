@@ -26,7 +26,7 @@ export class RolesGuard implements CanActivate {
         ]);
 
         if (!requiredRoles) {
-            return true; // ไม่มีการกำหนด Role = ใครก็เข้าได้
+            return true; 
         }
 
         const request = context.switchToHttp().getRequest();

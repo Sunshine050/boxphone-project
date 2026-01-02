@@ -8,7 +8,7 @@ import { DevicesModule } from "../devices/devices.module";
 @Module({
   imports: [
     MongooseModule.forFeature([{ name: User.name, schema: UserSchema }]),
-    DevicesModule, // Import เพื่อใช้ DevicesService
+    DevicesModule, 
   ],
   providers: [UsersService],
   controllers: [UsersController],

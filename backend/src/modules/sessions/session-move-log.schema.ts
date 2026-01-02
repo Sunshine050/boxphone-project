@@ -5,7 +5,7 @@ export type SessionMoveLogDocument = HydratedDocument<SessionMoveLog>;
 
 /**
  * Log การย้าย Session ไปเครื่องอื่น
- * ใช้สำหรับ audit trail และป้องกันการโกง
+ * ใช้สำหรับป้องกันการโกง
  */
 @Schema({ timestamps: true })
 export class SessionMoveLog {

@@ -4,11 +4,11 @@ import { HydratedDocument, Types } from "mongoose";
 export type SessionDocument = HydratedDocument<Session>;
 
 export enum SessionStatus {
-  ACTIVE = "ACTIVE", // กำลังใช้งาน
-  PAUSED = "PAUSED", // หยุดชั่วคราว (disconnect)
-  DISCONNECTED = "DISCONNECTED", // หลุด/เครื่องพัง
-  COMPLETED = "COMPLETED", // หมดเวลาแล้ว
-  CANCELLED = "CANCELLED", // ยกเลิก
+  ACTIVE = "ACTIVE", 
+  PAUSED = "PAUSED", 
+  DISCONNECTED = "DISCONNECTED",
+  COMPLETED = "COMPLETED", 
+  CANCELLED = "CANCELLED",
 }
 
 @Schema({ timestamps: true })
@@ -20,10 +20,10 @@ export class Session {
   device_id: Types.ObjectId | null; // null = ไม่ได้ผูกกับเครื่อง (paused/disconnected)
 
   @Prop({ type: String, required: true })
-  package: string; // แพคเกจที่ซื้อ
+  package: string; 
 
   @Prop({ type: Number, required: true })
-  total_seconds: number; // เวลาทั้งหมดที่ซื้อ (วินาที)
+  total_seconds: number; 
 
   @Prop({ type: Number, required: true })
   remaining_seconds: number; // เวลาที่เหลือ (วินาที) - ค่านี้ freeze เมื่อ pause
@@ -36,7 +36,7 @@ export class Session {
   status: SessionStatus;
 
   @Prop({ type: Date })
-  start_time: Date; // เริ่มใช้งานครั้งแรก
+  start_time: Date; 
 
   @Prop({ type: Date })
   pause_time: Date | null; // เวลาที่ pause (เมื่อ disconnect)
@@ -45,18 +45,16 @@ export class Session {
   resume_time: Date | null; // เวลาที่ resume (เมื่อ reconnect/move)
 
   @Prop({ type: Number, default: 0 })
-  moved_count: number; // จำนวนครั้งที่ย้ายเครื่อง
+  moved_count: number; 
 
   @Prop({ type: Number })
-  max_move_count: number; // จำกัดจำนวนครั้งที่ย้ายได้ (จาก config)
+  max_move_count: number; 
 
   @Prop({ type: String, default: null })
-  disconnect_reason: string | null; // เหตุผลที่ disconnect
+  disconnect_reason: string | null; 
 }
 
 export const SessionSchema = SchemaFactory.createForClass(Session);
-
-// Index สำหรับ query ที่ใช้บ่อย
 SessionSchema.index({ user_id: 1, status: 1 });
 SessionSchema.index({ device_id: 1, status: 1 });
 

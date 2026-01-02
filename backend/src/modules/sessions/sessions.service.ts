@@ -116,7 +116,7 @@ export class SessionsService {
       sessionId,
       {
         status: SessionStatus.DISCONNECTED,
-        remaining_seconds: actualRemaining, // Freeze ค่านี้
+        remaining_seconds: actualRemaining, 
         pause_time: now,
         disconnect_reason:
           reason ||
@@ -220,7 +220,7 @@ export class SessionsService {
       sessionId,
       {
         device_id: moveSessionDto.to_device_id,
-        remaining_seconds: actualRemaining, // Freeze ค่านี้
+        remaining_seconds: actualRemaining, 
         status: SessionStatus.ACTIVE, // เปลี่ยนเป็น ACTIVE เพื่อพร้อมใช้งาน
         resume_time: new Date(), // เริ่มนับใหม่
         moved_count: session.moved_count + 1,

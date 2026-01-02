@@ -70,10 +70,7 @@ export class SessionsController {
     }
   }
 
-  /**
-   * ดึง Session ทั้งหมด (Admin only)
-   * GET /sessions
-   */
+ 
   @Get()
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN)
@@ -81,10 +78,7 @@ export class SessionsController {
     return this.sessionsService.findAll();
   }
 
-  /**
-   * ดึง Session จาก ID
-   * GET /sessions/:id
-   */
+ 
   @Get(":id")
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN)
@@ -96,10 +90,7 @@ export class SessionsController {
     return session;
   }
 
-  /**
-   * ดึง Session ที่ active ของ User
-   * GET /sessions/user/:userId
-   */
+  
   @Get("user/:userId")
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN)
@@ -111,23 +102,17 @@ export class SessionsController {
     return session;
   }
 
-  /**
-   * ดึง Session ที่ active ของ Device
-   * GET /sessions/device/:deviceId
-   */
+  
   @Get("device/:deviceId")
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN)
   async getActiveSessionByDevice(@Param("deviceId") deviceId: string) {
     const session =
       await this.sessionsService.getActiveSessionByDevice(deviceId);
-    return session; // null ถ้าไม่มี
+    return session; 
   }
 
-  /**
-   * ดูเวลาที่เหลือของ Session
-   * GET /sessions/:id/remaining
-   */
+ 
   @Get(":id/remaining")
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN)
@@ -156,10 +141,7 @@ export class SessionsController {
     }
   }
 
-  /**
-   * หยุด Session (เมื่อ disconnect)
-   * POST /sessions/:id/pause
-   */
+  
   @Post(":id/pause")
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN)
@@ -195,10 +177,7 @@ export class SessionsController {
     }
   }
 
-  /**
-   * เริ่ม Session ต่อ (resume)
-   * POST /sessions/:id/resume
-   */
+  
   @Post(":id/resume")
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN)
@@ -230,11 +209,7 @@ export class SessionsController {
     }
   }
 
-  /**
-   * ย้าย Session ไปเครื่องอื่น
-   * POST /sessions/:id/move
-   * ฟีเจอร์หลัก: ย้ายสิทธิโดยไม่เสียเวลาแม้แต่วินาทีเดียว
-   */
+  
   @Post(":id/move")
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN)
@@ -281,10 +256,7 @@ export class SessionsController {
     }
   }
 
-  /**
-   * ยกเลิก Session
-   * POST /sessions/:id/cancel
-   */
+  
   @Post(":id/cancel")
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN)
@@ -300,10 +272,7 @@ export class SessionsController {
     };
   }
 
-  /**
-   * ดึง Move Logs ของ Session
-   * GET /sessions/:id/move-logs
-   */
+  
   @Get(":id/move-logs")
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN)
@@ -311,9 +280,7 @@ export class SessionsController {
     return this.sessionsService.getMoveLogs(id);
   }
 
-  /**
-   * Helper: Format time จาก seconds เป็น HH:MM:SS
-   */
+  
   private formatTime(seconds: number): string {
     const hours = Math.floor(seconds / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);

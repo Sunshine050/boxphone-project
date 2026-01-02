@@ -21,12 +21,10 @@ async function bootstrap() {
     logger: ["error", "warn", "log", "debug", "verbose"],
   });
   const configService = app.get(ConfigService);
-
-  // Enable validation globally
   app.useGlobalPipes(
     new ValidationPipe({
-      whitelist: true, // ลบ field ที่ไม่ต้องการออก
-      forbidNonWhitelisted: true, // Error ถ้ามี field แปลกๆ
+      whitelist: true, 
+      forbidNonWhitelisted: true,
       transform: true,
     })
   );
