@@ -9,7 +9,10 @@ export default function AdminLayout({
   return (
     <div className="flex min-h-screen bg-background">
       <AdminSidebar />
-      <main className="flex-1 ml-64">{children}</main>
+      {/* ใช้ pl แทน ml เพื่อให้ responsive */}
+      <main className="flex-1 pl-64 transition-all duration-300 data-[collapsed=true]:pl-20">
+        {children}
+      </main>
     </div>
   )
 }

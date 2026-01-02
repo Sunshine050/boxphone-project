@@ -6,28 +6,33 @@ import { Smartphone } from "lucide-react"
 import { motion } from "framer-motion"
 import { cn } from "@/lib/utils"
 
+/* ================= TYPES ================= */
+
 interface StatusItem {
   label: string
   count: number
   variant: "inUse" | "available" | "error" | "maintenance"
 }
 
+/* ================= DATA ================= */
+
 const items: StatusItem[] = [
-  { label: "In Use", count: 845, variant: "inUse" },
-  { label: "Available", count: 390, variant: "available" },
-  { label: "Error", count: 3, variant: "error" },
-  { label: "Maintenance", count: 2, variant: "maintenance" },
+  { label: "กำลังใช้งาน", count: 845, variant: "inUse" },
+  { label: "พร้อมใช้งาน", count: 390, variant: "available" },
+  { label: "เกิดข้อผิดพลาด", count: 3, variant: "error" },
+  { label: "อยู่ระหว่างซ่อมบำรุง", count: 2, variant: "maintenance" },
 ]
 
-const accentMap: Record<
-  StatusItem["variant"],
-  string
-> = {
+/* ================= STYLE MAP ================= */
+
+const accentMap: Record<StatusItem["variant"], string> = {
   inUse: "from-red-500/30",
   available: "from-green-500/30",
   error: "from-yellow-500/30",
   maintenance: "from-muted/40",
 }
+
+/* ================= COMPONENT ================= */
 
 export function StatusSummaryCards() {
   return (

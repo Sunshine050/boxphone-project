@@ -1,6 +1,6 @@
 "use client"
 
-import { UsersTable } from "@/components/users-table"
+import { UsersTable } from "@/components/users/users-table"
 import { motion } from "framer-motion"
 
 export default function UserManagementPage() {
@@ -13,8 +13,8 @@ export default function UserManagementPage() {
     >
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-semibold text-foreground mb-2">User Management</h1>
-          <p className="text-muted-foreground">Manage user accounts and sessions</p>
+          <h1 className="text-3xl font-semibold text-foreground mb-2">การจัดการผู้ใช้</h1>
+          <p className="text-muted-foreground">จัดการบัญชีผู้ใช้และเซสชัน</p>
         </div>
       </div>
 

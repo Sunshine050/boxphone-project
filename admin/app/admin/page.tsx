@@ -30,37 +30,37 @@ export default function AdminOverviewPage() {
       {/* Header */}
       <div>
         <h1 className="text-3xl font-semibold mb-1">
-          System Overview
+          ภาพรวมระบบ
         </h1>
         <p className="text-sm text-muted-foreground">
-          Real-time Android device farm status
+          สถานะเครื่อง Android แบบเรียลไทม์
         </p>
       </div>
 
-      {/* Status Cards */}
+      {/* สรุปสถานะ */}
       <StatusSummaryCards />
 
-      {/* Filters */}
+      {/* ตัวกรอง */}
       <div className="flex flex-wrap items-center gap-3">
-        {/* Search */}
+        {/* ค้นหา */}
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search device, user, OS..."
+            placeholder="ค้นหาชื่อเครื่อง / ผู้ใช้"
             className="pl-10"
           />
         </div>
 
-        {/* Status filter */}
+        {/* กรองตามสถานะ */}
         <div className="flex gap-2">
           {[
-            { key: "all", label: "All" },
-            { key: "in-use", label: "In Use" },
-            { key: "available", label: "Available" },
-            { key: "error", label: "Error" },
-            { key: "maintenance", label: "Maintenance" },
+            { key: "all", label: "ทั้งหมด" },
+            { key: "in-use", label: "กำลังใช้งาน" },
+            { key: "available", label: "ว่าง" },
+            { key: "error", label: "ผิดพลาด" },
+            { key: "maintenance", label: "ซ่อมบำรุง" },
           ].map((s) => (
             <Button
               key={s.key}
@@ -76,7 +76,7 @@ export default function AdminOverviewPage() {
         </div>
       </div>
 
-      {/* Phone Grid */}
+      {/* กริดเครื่อง */}
       <OverviewPhoneGrid
         query={query}
         statusFilter={statusFilter}
