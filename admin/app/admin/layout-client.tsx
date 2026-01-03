@@ -2,7 +2,7 @@
 
 import type React from "react"
 import { cn } from "@/lib/utils"
-import { useSidebar } from "@/components/admin-sidebar-context"
+import { useSidebar } from "@/components/layout/admin-sidebar-context"
 
 export function AdminLayoutClient({
   children,

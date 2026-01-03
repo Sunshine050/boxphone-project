@@ -10,6 +10,7 @@ import { UserSessionsDialog } from "./user-sessions-dialog";
 import { UserTimeDialog } from "./user-time-dialog";
 import { UserMoveDialog } from "./user-move-dialog";
 import { UserDeleteDialog } from "./user-delete-dialog";
+import { UserAssignDeviceDialog } from "./user-assign-device-dialog";
 
 /* ===== TYPES ===== */
 
@@ -48,12 +49,23 @@ const mockUsers: User[] = [
       { id: "s2", deviceId: "PHONE-02", deviceName: "Galaxy S24" },
     ],
   },
+  {
+    id: "2",
+    name: "Alice Smith",
+    username: "alice.smith",
+    password: "alice123",
+    status: "offline",
+    maxSessions: 1,
+    remainingSeconds: 0,
+    totalSeconds: 0,
+    sessions: [],
+  },
 ];
 
 export function UsersTable() {
   const [query, setQuery] = useState("");
   const [dialog, setDialog] = useState<
-    "sessions" | "time" | "move" | "delete" | null
+    "sessions" | "time" | "move" | "delete" | "assign" | null
   >(null);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
 
@@ -140,6 +152,11 @@ export function UsersTable() {
       <UserDeleteDialog
         user={selectedUser}
         open={dialog === "delete"}
+        onClose={() => setDialog(null)}
+      />
+      <UserAssignDeviceDialog
+        user={selectedUser}
+        open={dialog === "assign"}
         onClose={() => setDialog(null)}
       />
     </>

@@ -13,7 +13,9 @@ import {
   LogOut,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { useSidebar } from "@/components/admin-sidebar-context";
+import { useSidebar } from "@/components/layout/admin-sidebar-context";
+import { useState } from "react";
+import { LogoutConfirmDialog } from "./logout-confirm-dialog";
 
 /* ===== เมนูภาษาไทย ===== */
 
@@ -43,6 +45,7 @@ const navigation = [
 export function AdminSidebar() {
   const pathname = usePathname();
   const { collapsed, toggle } = useSidebar();
+  const [logoutOpen, setLogoutOpen] = useState(false);
 
   return (
     <aside
@@ -78,9 +81,9 @@ export function AdminSidebar() {
           </div>
 
           {/* ===== Toggle Sidebar ===== */}
-        <button
-  onClick={toggle}
-  className="
+          <button
+            onClick={toggle}
+            className="
     absolute -right-3 top-6
     rounded-full p-1
     bg-blue-600 text-white
@@ -91,14 +94,13 @@ export function AdminSidebar() {
     hover:shadow-lg
     active:scale-95
   "
->
-  {collapsed ? (
-    <ChevronRight className="w-4 h-4" />
-  ) : (
-    <ChevronLeft className="w-4 h-4" />
-  )}
-</button>
-
+          >
+            {collapsed ? (
+              <ChevronRight className="w-4 h-4" />
+            ) : (
+              <ChevronLeft className="w-4 h-4" />
+            )}
+          </button>
         </div>
 
         {/* ================= Navigation ================= */}
@@ -142,10 +144,7 @@ export function AdminSidebar() {
         {/* ================= Logout ================= */}
         <div className="p-3 border-t-2 border-sidebar-border/100">
           <button
-            onClick={() => {
-              // TODO: ใส่ logic logout จริง (clear token / cookie)
-              window.location.href = "/login";
-            }}
+            onClick={() => setLogoutOpen(true)}
             className={cn(
               "w-full flex items-center gap-3",
               "px-3 py-2.5 rounded-xl",
@@ -173,6 +172,14 @@ export function AdminSidebar() {
           </button>
         </div>
       </div>
+      <LogoutConfirmDialog
+        open={logoutOpen}
+        onClose={() => setLogoutOpen(false)}
+        onConfirm={() => {
+          // TODO: clear token / cookie / session
+          window.location.href = "/login";
+        }}
+      />
     </aside>
   );
 }
