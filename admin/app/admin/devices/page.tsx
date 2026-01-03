@@ -44,6 +44,7 @@ export default function DeviceManagementPage() {
 
         {/* CREATE */}
         <Button
+        className=" cursor-pointer"
           onClick={() => {
             setMode("create")
             setSelected(null)

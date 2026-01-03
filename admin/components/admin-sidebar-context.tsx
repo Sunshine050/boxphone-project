@@ -2,22 +2,25 @@
 
 import { createContext, useContext, useState } from "react"
 
-const SidebarContext = createContext<{
+interface SidebarContextValue {
   collapsed: boolean
   toggle: () => void
-}>({
-  collapsed: false,
-  toggle: () => {},
-})
+}
 
-export function SidebarProvider({ children }: { children: React.ReactNode }) {
+const SidebarContext = createContext<SidebarContextValue | null>(null)
+
+export function SidebarProvider({
+  children,
+}: {
+  children: React.ReactNode
+}) {
   const [collapsed, setCollapsed] = useState(false)
 
   return (
     <SidebarContext.Provider
       value={{
         collapsed,
-        toggle: () => setCollapsed((p) => !p),
+        toggle: () => setCollapsed((prev) => !prev),
       }}
     >
       {children}
@@ -25,4 +28,10 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
   )
 }
 
-export const useSidebar = () => useContext(SidebarContext)
+export function useSidebar() {
+  const ctx = useContext(SidebarContext)
+  if (!ctx) {
+    throw new Error("useSidebar must be used within SidebarProvider")
+  }
+  return ctx
+}

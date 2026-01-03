@@ -75,7 +75,7 @@ export function AvailableDevicesGrid() {
                 </div>
 
                 <Button
-                  className="w-full"
+                  className="w-full cursor-pointer"
                   onClick={() => setSelected(device)}
                 >
                   มอบหมายผู้ใช้งาน

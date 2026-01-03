@@ -1,5 +1,7 @@
 import type React from "react"
+import { SidebarProvider } from "@/components/admin-sidebar-context"
 import { AdminSidebar } from "@/components/admin-sidebar"
+import { AdminLayoutClient } from "./layout-client"
 
 export default function AdminLayout({
   children,
@@ -7,12 +9,11 @@ export default function AdminLayout({
   children: React.ReactNode
 }) {
   return (
-    <div className="flex min-h-screen bg-background">
-      <AdminSidebar />
-      {/* ใช้ pl แทน ml เพื่อให้ responsive */}
-      <main className="flex-1 pl-64 transition-all duration-300 data-[collapsed=true]:pl-20">
+    <SidebarProvider>
+      <AdminLayoutClient>
+        <AdminSidebar />
         {children}
-      </main>
-    </div>
+      </AdminLayoutClient>
+    </SidebarProvider>
   )
 }

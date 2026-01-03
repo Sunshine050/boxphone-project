@@ -2,7 +2,7 @@
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { motion } from "framer-motion"
-import { User } from "./users-table"
+import { User } from "./user-table"
 
 export function UserSessionsDialog({
   user,

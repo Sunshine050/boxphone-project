@@ -12,6 +12,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { motion } from "framer-motion";
+import { Pencil } from "lucide-react";
 
 /* ================= TYPES ================= */
 
@@ -73,15 +74,17 @@ export function DeviceManagementTable({ onView, onEdit }: Props) {
 
         <CardContent>
           <Table>
+            {/* ===== TABLE HEADER ===== */}
             <TableHeader>
               <TableRow>
-                <TableHead>อุปกรณ์</TableHead>
-                <TableHead>ผู้ใช้งาน</TableHead>
-                <TableHead>สถานะ</TableHead>
+                <TableHead className="text-left">อุปกรณ์</TableHead>
+                <TableHead className="text-center">ผู้ใช้งาน</TableHead>
+                <TableHead className="text-center">สถานะ</TableHead>
                 <TableHead className="text-right">การจัดการ</TableHead>
               </TableRow>
             </TableHeader>
 
+            {/* ===== TABLE BODY ===== */}
             <TableBody>
               {mockDevices.map((d, i) => (
                 <motion.tr
@@ -89,17 +92,20 @@ export function DeviceManagementTable({ onView, onEdit }: Props) {
                   initial={{ opacity: 0, x: -20 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: i * 0.05 }}
+                  className="border-b last:border-b-0"
                 >
                   {/* Device */}
-                  <TableCell className="font-mono">
-                    {d.name}
-                    <div className="text-xs text-muted-foreground">
-                      {d.serialNumber}
+                  <TableCell className="text-left font-mono">
+                    <div className="flex flex-col items-left">
+                      <span>{d.name}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {d.serialNumber}
+                      </span>
                     </div>
                   </TableCell>
 
                   {/* USER */}
-                  <TableCell className="text-sm">
+                  <TableCell className="text-center text-sm">
                     {d.user ? (
                       <span className="font-medium">{d.user}</span>
                     ) : (
@@ -108,24 +114,55 @@ export function DeviceManagementTable({ onView, onEdit }: Props) {
                   </TableCell>
 
                   {/* STATUS */}
-                  <TableCell>
-                    <Badge className={statusConfig[d.status].className}>
-                      {statusConfig[d.status].label}
-                    </Badge>
+                  <TableCell className="text-center">
+                    <div className="flex justify-center">
+                      <Badge className={statusConfig[d.status].className}>
+                        {statusConfig[d.status].label}
+                      </Badge>
+                    </div>
                   </TableCell>
 
                   {/* ACTIONS */}
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-2">
+                      {/* ดูรายละเอียด (outline + hover ชัด) */}
                       <Button
                         size="sm"
                         variant="outline"
                         onClick={() => onView(d)}
+                        className="
+    cursor-pointer
+    border border-muted-foreground/30
+    transition-all duration-300 ease-out
+    hover:bg-blue-50
+    hover:text-blue-600
+    hover:border-blue-400
+    hover:shadow-md
+    hover:-translate-y-0.5
+    active:translate-y-0
+  "
                       >
                         ดูรายละเอียด
                       </Button>
-                      <Button size="sm" onClick={() => onEdit(d)}>
-                        แก้ไข
+
+                      {/* แก้ไข (icon + วงกลม + ฟ้า + hover effect) */}
+                      <Button
+                        size="icon"
+                        onClick={() => onEdit(d)}
+                        title="แก้ไข"
+                        className="
+        cursor-pointer
+        rounded-full
+        bg-blue-600 text-white
+        border border-blue-700
+        transition-all duration-200
+        hover:bg-blue-700
+        hover:scale-105
+        hover:shadow-md
+        active:scale-95
+      "
+                      >
+                        <Pencil className="h-4 w-4" />
                       </Button>
                     </div>
                   </TableCell>
