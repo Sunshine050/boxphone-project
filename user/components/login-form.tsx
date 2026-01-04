@@ -128,51 +128,9 @@ export function LoginForm() {
               Login
             </Button>
           </form>
-
+            {/* Demo and admin123*/}
           <div className="mt-6 space-y-4 text-center">
             <p className="text-sm text-slate-400">www.MyrealPhone.cloud</p>
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4, delay: 0.2 }}
-              className="
-    mt-4 rounded-xl
-    border border-white/10
-    bg-slate-800/40
-    px-4 py-3
-    text-sm
-  "
-            >
-              <p className="text-slate-400 mb-1 font-medium">Demo Account</p>
-
-              <div className="flex flex-col gap-1 text-slate-300">
-                <span>
-                  Username:{" "}
-                  <span className="font-mono text-blue-400">demo</span>
-                </span>
-                <span>
-                  Password:{" "}
-                  <span className="font-mono text-blue-400">admin123</span>
-                </span>
-              </div>
-
-              <button
-                type="button"
-                onClick={fillDemo}
-                className="
-      mt-3 w-full
-      rounded-lg
-      bg-blue-600/20
-      py-2
-      text-sm font-semibold
-      text-blue-400
-      transition
-      hover:bg-blue-600 hover:text-white
-    "
-              >
-                Use Demo Account
-              </button>
-            </motion.div>
 
             {/* Social Media Icons */}
             <div className="flex items-center justify-center gap-3">
