@@ -25,9 +25,9 @@ export function LoginForm() {
     }
   };
   const fillDemo = () => {
-  setUsername("demo")
-  setPassword("admin123")
-}
+    setUsername("demo");
+    setPassword("admin123");
+  };
 
   return (
     <motion.div
@@ -36,33 +36,33 @@ export function LoginForm() {
       transition={{ duration: 0.5, delay: 0.3 }}
       className="w-full max-w-md"
     >
-      <Card className="overflow-hidden border-none bg-slate-900/90 shadow-2xl backdrop-blur-xl">
+      <Card className="overflow-hidden border-none bg-slate-900/90 shadow-2xl backdrop-blur-xl p-0">
         {/* Logo Section */}
-        <div className="relative h-36 overflow-hidden rounded-t-lg bg-gradient-to-br from-blue-600 via-blue-700 to-blue-800 sm:h-40">
-          <div className="absolute inset-0 bg-[url('/night-sky-stars.png')] bg-cover opacity-30" />
-          <div className="relative flex h-full items-center justify-center">
-            <div className="text-center">
-              <div className="relative mb-2 inline-block">
-                {/* Wolf Logo */}
-                <svg
-                  className="h-14 w-14 text-white drop-shadow-lg sm:h-16 sm:w-16"
-                  viewBox="0 0 24 24"
-                  fill="currentColor"
-                >
-                  <path d="M12 2L10.5 3.5L8 3L7 5L4.5 5.5L4 8L2 10L3 12L2 14L4 16L4.5 18.5L7 19L8 21L10.5 20.5L12 22L13.5 20.5L16 21L17 19L19.5 18.5L20 16L22 14L21 12L22 10L20 8L19.5 5.5L17 5L16 3L13.5 3.5L12 2Z" />
-                </svg>
-              </div>
-              <h1 className="text-xl font-bold leading-tight text-white drop-shadow-lg sm:text-2xl">
-                MY REAL
-                <br />
-                PHONE
-              </h1>
-            </div>
-          </div>
+        <div className="relative h-44 sm:h-52 md:h-56 overflow-hidden rounded-t-lg">
+          {/* Background Image */}
+          <div
+            className="
+      absolute inset-0
+      bg-[url('/login-header.png')]
+      bg-cover
+      bg-[center_35%]
+    "
+          />
+
+          {/* Gradient overlay */}
+          <div
+            className="
+      absolute inset-0
+      bg-gradient-to-b
+      from-black/0
+      via-black/25
+      to-slate-900
+    "
+          />
         </div>
 
         {/* Login Form Section */}
-        <CardContent className="p-6 sm:p-8">
+        <CardContent className="p-6 sm:p-4">
           <div className="mb-6 text-center">
             <h2 className="text-lg font-semibold sm:text-xl">
               <span className="text-blue-400">Login</span>{" "}
@@ -128,7 +128,7 @@ export function LoginForm() {
               Login
             </Button>
           </form>
-            {/* Demo and admin123*/}
+          {/* Demo and admin123*/}
           <div className="mt-6 space-y-4 text-center">
             <p className="text-sm text-slate-400">www.MyrealPhone.cloud</p>
 
