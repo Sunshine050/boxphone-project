@@ -23,6 +23,8 @@ export function AndroidControl({ paramsPromise }: { paramsPromise: Promise<{ ses
   const [currentTime, setCurrentTime] = useState(Date.now())
   const [showExpiredModal, setShowExpiredModal] = useState(false)
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 })
+  const [screenImage, setScreenImage] = useState<string | null>(null)
+  const [isConnecting, setIsConnecting] = useState(true)
 
   useEffect(() => {
     // Check if user is logged in
@@ -39,6 +41,19 @@ export function AndroidControl({ paramsPromise }: { paramsPromise: Promise<{ ses
       const currentSession = sessions.find((s) => s.id === params.sessionId)
       if (currentSession) {
         setSession(currentSession)
+
+        // Connect to socket for real-time control
+        // Note: For demo, we might need a fixed deviceId or get it from session
+        // Let's assume currentSession has deviceId, otherwise use a fallback
+        const deviceId = (currentSession as any).deviceId || "android_device_1"
+
+        import("@/lib/socket-client").then(({ socketClient }) => {
+          socketClient.connect(deviceId)
+          socketClient.onScreenFrame((imageData) => {
+            setScreenImage(imageData)
+            setIsConnecting(false)
+          })
+        })
       } else {
         router.push("/dashboard")
       }
@@ -49,7 +64,12 @@ export function AndroidControl({ paramsPromise }: { paramsPromise: Promise<{ ses
       setCurrentTime(Date.now())
     }, 1000)
 
-    return () => clearInterval(interval)
+    return () => {
+      clearInterval(interval)
+      import("@/lib/socket-client").then(({ socketClient }) => {
+        socketClient.disconnect()
+      })
+    }
   }, [params.sessionId, router])
 
   useEffect(() => {
@@ -90,6 +110,16 @@ export function AndroidControl({ paramsPromise }: { paramsPromise: Promise<{ ses
 
   const handleReturnToDashboard = () => {
     router.push("/dashboard")
+  }
+
+  const handleScreenClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect()
+    const x = ((e.clientX - rect.left) / rect.width) * 100
+    const y = ((e.clientY - rect.top) / rect.height) * 100
+
+    import("@/lib/socket-client").then(({ socketClient }) => {
+      socketClient.sendAction("click", { x, y })
+    })
   }
 
   if (!session) {
@@ -137,15 +167,6 @@ export function AndroidControl({ paramsPromise }: { paramsPromise: Promise<{ ses
                 </div>
               </CardContent>
             </Card>
-
-            {/* <Button
-              onClick={handleEndSession}
-              variant="destructive"
-              className="w-full bg-red-500/20 text-red-400 hover:bg-red-500/30"
-            >
-              <Power className="mr-2 h-4 w-4" />
-              End Session
-            </Button> */}
           </div>
         </div>
 
@@ -154,7 +175,7 @@ export function AndroidControl({ paramsPromise }: { paramsPromise: Promise<{ ses
           <div className="relative">
             {/* Android Screen */}
             <div
-              className="relative h-[720px] w-[360px] overflow-hidden rounded-3xl border-8 border-slate-800 bg-slate-950 shadow-2xl"
+              className="relative h-[720px] w-[360px] cursor-crosshair overflow-hidden rounded-3xl border-8 border-slate-800 bg-slate-950 shadow-2xl"
               onMouseMove={(e) => {
                 const rect = e.currentTarget.getBoundingClientRect()
                 setMousePos({
@@ -162,69 +183,76 @@ export function AndroidControl({ paramsPromise }: { paramsPromise: Promise<{ ses
                   y: e.clientY - rect.top,
                 })
               }}
+              onClick={handleScreenClick}
             >
-              {/* Mock Android Home Screen */}
-              <div className="h-full w-full bg-gradient-to-br from-slate-900 to-slate-800">
-                {/* Status Bar */}
-                <div className="flex items-center justify-between bg-slate-950/50 px-4 py-2 text-xs text-slate-400">
-                  <span>12:34</span>
-                  <div className="flex gap-2">
-                    <span>WiFi</span>
-                    <span>Battery</span>
-                  </div>
-                </div>
-
-                {/* App Grid */}
-                <div className="grid grid-cols-4 gap-6 p-6">
-                  {Array.from({ length: 12 }).map((_, i) => (
-                    <div key={i} className="flex flex-col items-center gap-2">
-                      <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-cyan-500/20 to-blue-600/20">
-                        <Smartphone className="h-7 w-7 text-cyan-400" />
-                      </div>
-                      <span className="text-[10px] text-slate-400">App {i + 1}</span>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Touch Indicator */}
-                <div
-                  className="pointer-events-none absolute h-8 w-8 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-cyan-400/50 bg-cyan-400/20"
-                  style={{
-                    left: mousePos.x,
-                    top: mousePos.y,
-                  }}
+              {screenImage ? (
+                <img
+                  src={screenImage}
+                  alt="Android Screen"
+                  className="h-full w-full object-contain"
                 />
-              </div>
+              ) : (
+                <div className="flex h-full w-full flex-col items-center justify-center bg-slate-900 text-center p-6">
+                  {isConnecting ? (
+                    <>
+                      <div className="mb-4 h-12 w-12 animate-spin rounded-full border-4 border-cyan-500 border-t-transparent"></div>
+                      <p className="text-cyan-400">Connecting to device...</p>
+                    </>
+                  ) : (
+                    <>
+                      <Smartphone className="mb-4 h-16 w-16 text-slate-700 animate-pulse" />
+                      <p className="text-slate-500">Waiting for screen stream...</p>
+                    </>
+                  )}
+                </div>
+              )}
+
+              {/* Touch Indicator */}
+              <div
+                className="pointer-events-none absolute h-6 w-6 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-cyan-400/50 bg-cyan-400/20 mix-blend-screen"
+                style={{
+                  left: mousePos.x,
+                  top: mousePos.y,
+                }}
+              />
             </div>
 
             {/* Screen Label */}
             <div className="mt-4 text-center">
-              <p className="text-sm text-slate-400">Click to tap • Drag to swipe • Type to input</p>
+              <p className="text-sm text-slate-400">Click to tap • Real-time Stream</p>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Session Expired Modal */}
-      <Dialog open={showExpiredModal} onOpenChange={setShowExpiredModal}>
-        <DialogContent className="border-slate-800 bg-slate-900 sm:max-w-md">
-          <DialogHeader>
-            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-red-500/20">
-              <Clock className="h-8 w-8 text-red-400" />
-            </div>
-            <DialogTitle className="text-center text-2xl text-white">Session Expired</DialogTitle>
-            <DialogDescription className="text-center text-slate-400">
-              Your device session has ended and the device has been released.
-            </DialogDescription>
-          </DialogHeader>
-          <Button
-            onClick={handleReturnToDashboard}
-            className="w-full bg-gradient-to-r from-cyan-500 to-blue-600 text-white hover:from-cyan-600 hover:to-blue-700"
-          >
-            Return to Dashboard
-          </Button>
-        </DialogContent>
-      </Dialog>
+      {/* Screen Label */}
+      <div className="mt-4 text-center">
+        <p className="text-sm text-slate-400">Click to tap • Drag to swipe • Type to input</p>
+      </div>
+    </div >
+        </div >
+      </div >
+
+    {/* Session Expired Modal */ }
+    < Dialog open = { showExpiredModal } onOpenChange = { setShowExpiredModal } >
+      <DialogContent className="border-slate-800 bg-slate-900 sm:max-w-md">
+        <DialogHeader>
+          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-red-500/20">
+            <Clock className="h-8 w-8 text-red-400" />
+          </div>
+          <DialogTitle className="text-center text-2xl text-white">Session Expired</DialogTitle>
+          <DialogDescription className="text-center text-slate-400">
+            Your device session has ended and the device has been released.
+          </DialogDescription>
+        </DialogHeader>
+        <Button
+          onClick={handleReturnToDashboard}
+          className="w-full bg-gradient-to-r from-cyan-500 to-blue-600 text-white hover:from-cyan-600 hover:to-blue-700"
+        >
+          Return to Dashboard
+        </Button>
+      </DialogContent>
+      </Dialog >
     </>
   )
 }
