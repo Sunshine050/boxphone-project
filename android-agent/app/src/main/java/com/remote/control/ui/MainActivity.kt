@@ -29,7 +29,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         // Connect to Backend (ใช้ IP เครื่องคอมคุณ และ Port 3001)
-        SocketManager.instance.connect("http://172.20.160.1:3001") { isConnected ->
+        SocketManager.instance.connect("http://10.30.102.205:3001") { isConnected ->
             runOnUiThread {
                 if (isConnected) {
                     connectionStatus.text = "Connection: Connected"

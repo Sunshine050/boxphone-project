@@ -1,27 +1,31 @@
-"use client"
+"use client";
 
-import { Card, CardContent } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Smartphone } from "lucide-react"
-import { motion } from "framer-motion"
-import { cn } from "@/lib/utils"
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Smartphone } from "lucide-react";
+import { motion } from "framer-motion";
+import { cn } from "@/lib/utils";
+import { useEffect, useState } from "react";
+import { DevicesService } from "@/services/devices.service";
 
 /* ================= TYPES ================= */
 
 interface StatusItem {
-  label: string
-  count: number
-  variant: "inUse" | "available" | "error" | "maintenance"
+  label: string;
+  count: number;
+  variant: "inUse" | "available" | "error" | "maintenance";
 }
 
-/* ================= DATA ================= */
-
-const items: StatusItem[] = [
-  { label: "กำลังใช้งาน", count: 845, variant: "inUse" },
-  { label: "พร้อมใช้งาน", count: 390, variant: "available" },
-  { label: "เกิดข้อผิดพลาด", count: 3, variant: "error" },
-  { label: "อยู่ระหว่างซ่อมบำรุง", count: 2, variant: "maintenance" },
-]
+interface BackendDevice {
+  _id: string;
+  name: string;
+  serial_number: string;
+  status: "AVAILABLE" | "BUSY" | "OFFLINE";
+  model?: string;
+  sdk_version?: number;
+  current_user_id?: string;
+  last_connected_at?: string;
+}
 
 /* ================= STYLE MAP ================= */
 
@@ -30,11 +34,71 @@ const accentMap: Record<StatusItem["variant"], string> = {
   available: "from-green-500/30",
   error: "from-yellow-500/30",
   maintenance: "from-muted/40",
-}
+};
 
 /* ================= COMPONENT ================= */
 
 export function StatusSummaryCards() {
+  const [devices, setDevices] = useState<BackendDevice[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchDevices = async () => {
+      try {
+        setLoading(true);
+        const data = await DevicesService.getAll();
+        setDevices(data as BackendDevice[]);
+      } catch (error) {
+        console.error("Failed to fetch devices:", error);
+        setDevices([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchDevices();
+  }, []);
+
+  // Map backend status to UI status and count
+  const countByStatus = {
+    inUse: devices.filter((d) => d.status === "BUSY").length,
+    available: devices.filter((d) => d.status === "AVAILABLE").length,
+    error: devices.filter((d) => d.status === "OFFLINE").length,
+    maintenance: 0, // TODO: Add maintenance status in backend if needed
+  };
+
+  const items: StatusItem[] = [
+    { label: "กำลังใช้งาน", count: countByStatus.inUse, variant: "inUse" },
+    {
+      label: "พร้อมใช้งาน",
+      count: countByStatus.available,
+      variant: "available",
+    },
+    { label: "เกิดข้อผิดพลาด", count: countByStatus.error, variant: "error" },
+    {
+      label: "อยู่ระหว่างซ่อมบำรุง",
+      count: countByStatus.maintenance,
+      variant: "maintenance",
+    },
+  ];
+
+  if (loading) {
+    return (
+      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
+        {[1, 2, 3, 4].map((i) => (
+          <Card key={i} className="bg-card border-border/70">
+            <CardContent className="p-5">
+              <div className="animate-pulse">
+                <div className="h-4 bg-muted rounded w-24 mb-2"></div>
+                <div className="h-8 bg-muted rounded w-16"></div>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    );
+  }
+
   return (
     <div
       className="
@@ -81,9 +145,7 @@ export function StatusSummaryCards() {
 
               {/* Right */}
               <div className="flex flex-col items-end gap-2">
-                <Badge variant={item.variant}>
-                  {item.label}
-                </Badge>
+                <Badge variant={item.variant}>{item.label}</Badge>
                 <Smartphone className="w-5 h-5 text-muted-foreground" />
               </div>
             </CardContent>
@@ -91,5 +153,5 @@ export function StatusSummaryCards() {
         </motion.div>
       ))}
     </div>
-  )
+  );
 }
