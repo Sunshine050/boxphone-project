@@ -21,6 +21,7 @@ import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import { UserRole } from "./user.schema";
 import { CreateUserByAdminDto } from "./dto/create-user-by-admin.dto";
 import { ConnectDeviceDto } from "./dto/connect-device.dto";
+import { AddTimeDto } from "./dto/add-time.dto";
 
 @Controller("users")
 export class UsersController {
@@ -32,11 +33,9 @@ export class UsersController {
   ) {}
 
   /**
-   * สร้าง User ใหม่โดยแอดมิน
+   * ✅ สร้าง User ใหม่โดยแอดมิน
    * POST /users
-   * - ต้องมี username, password, role, package
-   * - status จะเป็น PENDING จนกว่าจะเชื่อม device
-   * - start_date จะถูกตั้งเป็นวันที่ปัจจุบัน
+   * - รับแค่ username, password
    */
   @Post()
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -49,21 +48,31 @@ export class UsersController {
     this.logger.log(
       `[CREATE_USER] Admin: ${currentUser?.username || "unknown"} creating user: ${createUserDto.username}`
     );
+
     try {
       const user = await this.usersService.createByAdmin(createUserDto);
       const userId = (user as any)._id.toString();
+
       this.logger.log(
-        `[CREATE_USER] ✅ Success - User ID: ${userId}, Username: ${user.username}, Package: ${user.package}`
+        `[CREATE_USER] ✅ Success - User ID: ${userId}, Username: ${user.username}`
       );
+
       return {
         message: "User created successfully",
         user: {
           id: userId,
           username: user.username,
           role: user.role,
-          package: user.package,
           status: user.status,
           start_date: user.start_date,
+          device_id: user.device_id,
+
+          // ✅ เวลาแทน credits
+          total_seconds: (user as any).total_seconds,
+          remaining_seconds: (user as any).remaining_seconds,
+
+          // ✅ password สำหรับแสดงในหน้า admin
+          password_plain: (user as any).password_plain,
         },
       };
     } catch (error) {
@@ -74,6 +83,9 @@ export class UsersController {
     }
   }
 
+  /**
+   * ✅ ดึง user list (Admin)
+   */
   @Get()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
@@ -81,26 +93,15 @@ export class UsersController {
     return this.usersService.findAll();
   }
 
-  @Get(":id")
+  /**
+   * ✅ เติมเวลาให้ user
+   * POST /users/:id/add-time
+   */
+  @Post(":id/add-time")
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
-  async findOne(@Param("id") id: string) {
-    const user = await this.usersService.findById(id);
-    if (!user) {
-      throw new NotFoundException("User not found");
-    }
-    return {
-      id: (user as any)._id.toString(),
-      username: user.username,
-      role: user.role,
-      package: user.package,
-      status: user.status,
-      start_date: user.start_date,
-      device_id: user.device_id,
-      credits: user.credits,
-      createdAt: (user as any).createdAt,
-      updatedAt: (user as any).updatedAt,
-    };
+  async addTime(@Param("id") id: string, @Body() dto: AddTimeDto) {
+    return this.usersService.addTime(id, dto.duration, dto.start_time);
   }
 
   @Get("me")
@@ -109,6 +110,41 @@ export class UsersController {
     return user;
   }
 
+  /**
+   * ✅ ดู user คนเดียว
+   */
+  @Get(":id")
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  async findOne(@Param("id") id: string) {
+    const user = await this.usersService.findById(id);
+    if (!user) {
+      throw new NotFoundException("User not found");
+    }
+
+    return {
+      id: (user as any)._id.toString(),
+      username: user.username,
+      role: user.role,
+      status: user.status,
+      start_date: (user as any).start_date,
+      device_id: user.device_id,
+
+      // ✅ เวลา
+      total_seconds: (user as any).total_seconds,
+      remaining_seconds: (user as any).remaining_seconds,
+
+      // ✅ password column
+      password_plain: (user as any).password_plain,
+
+      createdAt: (user as any).createdAt,
+      updatedAt: (user as any).updatedAt,
+    };
+  }
+
+  /**
+   * ✅ ลบ user
+   */
   @Delete(":id")
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
@@ -119,10 +155,6 @@ export class UsersController {
 
   /**
    * เชื่อม User กับ Device
-   * POST /users/:id/connect-device
-   * - เปลี่ยน status จาก PENDING เป็น INUSE
-   * - บันทึก device_id
-   * - อัปเดต device ให้มี current_user_id
    */
   @Post(":id/connect-device")
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -136,16 +168,20 @@ export class UsersController {
     this.logger.log(
       `[CONNECT_DEVICE] Admin: ${currentUser?.username || "unknown"} connecting User ID: ${userId} to Device ID: ${connectDeviceDto.device_id}`
     );
+
     try {
       const user = await this.usersService.connectDevice(
         userId,
         connectDeviceDto.device_id,
         this.devicesService
       );
+
       const userIdStr = (user as any)._id.toString();
+
       this.logger.log(
         `[CONNECT_DEVICE] ✅ Success - User ID: ${userIdStr}, Device ID: ${connectDeviceDto.device_id}, Status: ${user.status}`
       );
+
       return {
         message: "User connected to device successfully",
         user: {
@@ -165,10 +201,6 @@ export class UsersController {
 
   /**
    * ยกเลิกการเชื่อม User กับ Device
-   * POST /users/:id/disconnect-device
-   * - เปลี่ยน status จาก INUSE เป็น PENDING
-   * - ลบ device_id
-   * - อัปเดต device ให้ลบ current_user_id
    */
   @Post(":id/disconnect-device")
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -179,6 +211,7 @@ export class UsersController {
       userId,
       this.devicesService
     );
+
     return {
       message: "User disconnected from device successfully",
       user: {
@@ -190,6 +223,9 @@ export class UsersController {
     };
   }
 
+  /**
+   * ✅ update user (ยังคงไว้)
+   */
   @Patch(":id")
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)

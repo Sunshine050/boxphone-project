@@ -1,90 +1,190 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Eye,
-  EyeOff,
-  Smartphone,
-  Clock,
-  RefreshCcw,
-  Trash2,
-  PlusCircle,
-} from "lucide-react";
+import { Trash2, PlusCircle, Unplug, Clock, Eye, EyeOff } from "lucide-react";
 import { motion } from "framer-motion";
-import { User } from "./user-table";
+import { User, UserAction } from "@/types/user";
+
+const statusMap: Record<User["status"], { label: string; className: string }> =
+  {
+    PENDING: {
+      label: "รอเชื่อมต่อ",
+      className: "bg-yellow-500/10 text-yellow-600 border-yellow-500/30",
+    },
+    INUSE: {
+      label: "กำลังใช้งาน",
+      className: "bg-green-500/10 text-green-600 border-green-500/30",
+    },
+    INACTIVE: {
+      label: "ไม่ใช้งาน",
+      className: "bg-gray-500/10 text-gray-500 border-gray-500/30",
+    },
+  };
+
+function formatHMS(sec: number) {
+  if (!sec || sec <= 0) return "00:00:00";
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  const s = Math.floor(sec % 60);
+
+  const hh = String(h).padStart(2, "0");
+  const mm = String(m).padStart(2, "0");
+  const ss = String(s).padStart(2, "0");
+
+  return `${hh}:${mm}:${ss}`;
+}
+
+/**
+ * ✅ format แบบอ่านง่ายสำหรับเวลาใหญ่ (วัน/เดือน/ปี)
+ * - >= 1 วัน: "10 วัน 5 ชม."
+ * - < 1 วัน: "HH:MM:SS"
+ */
+function formatPrettyTime(sec: number) {
+  if (!sec || sec <= 0) return "หมดเวลา";
+
+  const day = Math.floor(sec / 86400);
+  const hour = Math.floor((sec % 86400) / 3600);
+  const minute = Math.floor((sec % 3600) / 60);
+
+  if (day >= 1) {
+    if (hour > 0) return `${day} วัน ${hour} ชม.`;
+    if (minute > 0) return `${day} วัน ${minute} นาที`;
+    return `${day} วัน`;
+  }
+
+  return formatHMS(sec);
+}
 
 export function UserRow({
   user,
   index,
-  onOpen,
+  currentUserId,
+  onAction,
 }: {
   user: User;
   index: number;
-  onOpen: (type: "sessions" | "time" | "move" | "delete" | "assign") => void;
+  currentUserId: string | null;
+  onAction: (action: UserAction) => void;
 }) {
   const [showPass, setShowPass] = useState(false);
 
-  /* ===== helper ===== */
-  const hasActiveTime = user.totalSeconds > 0 && user.sessions.length > 0;
+  // ✅ state เวลาที่จะ “ลดจริงบนหน้า”
+  const [liveRemaining, setLiveRemaining] = useState<number>(
+    user.remaining_seconds ?? 0
+  );
 
-  const percent = hasActiveTime
-    ? (user.remainingSeconds / user.totalSeconds) * 100
-    : 0;
+  // ✅ sync เวลาใหม่เมื่อ backend ส่ง user list มาใหม่
+  useEffect(() => {
+    setLiveRemaining(user.remaining_seconds ?? 0);
+  }, [user.remaining_seconds, user.id]);
 
-  const format = (sec: number) =>
-    new Date(sec * 1000).toISOString().substring(11, 19);
+  // ✅ มีเวลาไหม
+  const hasTime = (user.total_seconds ?? 0) > 0;
+
+  // ✅ ✅ สำคัญ: จะเริ่มนับเวลา "เมื่อใช้งานจริงเท่านั้น"
+  // logic: start ตอน INUSE เท่านั้น
+  const isStarted = user.status === "INUSE";
+
+  // ✅ countdown ลดลงเองทุก 1 วินาที (เฉพาะตอนเริ่มแล้ว)
+  useEffect(() => {
+    // ❌ ยังไม่เริ่มใช้งานจริง → ห้ามนับ
+    if (!isStarted) return;
+
+    // ❌ ไม่มีเวลา หรือหมดแล้ว → ไม่ต้องนับ
+    if (!hasTime) return;
+    if (liveRemaining <= 0) return;
+
+    const timer = setInterval(() => {
+      setLiveRemaining((prev) => {
+        const next = prev - 1;
+        return next < 0 ? 0 : next;
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [isStarted, hasTime, liveRemaining]);
+
+  // ✅ progress bar %
+  const percent = useMemo(() => {
+    if (!hasTime) return 0;
+    if (!user.total_seconds || user.total_seconds <= 0) return 0;
+
+    const raw = (liveRemaining / user.total_seconds) * 100;
+    return Math.max(0, Math.min(100, raw));
+  }, [hasTime, liveRemaining, user.total_seconds]);
+
+  // ✅ กันลบตัวเอง
+  const isSelf = currentUserId && user.id === currentUserId;
 
   return (
     <motion.tr
       initial={{ opacity: 0, x: -20 }}
       animate={{ opacity: 1, x: 0 }}
       transition={{ delay: index * 0.05 }}
-      className="border-b last:border-b-0"
+      className="border-b"
     >
-      {/* ===== Name ===== */}
-      <td className="p-4 text-left font-medium">{user.name}</td>
+      {/* name */}
+      <td className="p-4 font-medium">{user.name}</td>
 
-      {/* ===== Username ===== */}
+      {/* username */}
       <td className="text-center font-mono text-sm">{user.username}</td>
 
-      {/* ===== Password ===== */}
+      {/* password */}
       <td className="text-center">
-        <div className="flex items-center justify-center gap-2 font-mono">
-          {showPass ? user.password : "•".repeat(user.password.length)}
-          <Button
-            size="icon"
-            variant="ghost"
-            onClick={() => setShowPass(!showPass)}
-          >
-            {showPass ? <EyeOff size={16} /> : <Eye size={16} />}
-          </Button>
+        <div className="flex items-center justify-center gap-2 font-mono text-sm">
+          {user.password_plain ? (
+            <>
+              <span>
+                {showPass
+                  ? user.password_plain
+                  : "•".repeat(user.password_plain.length)}
+              </span>
+
+              <Button
+                size="icon"
+                variant="ghost"
+                onClick={() => setShowPass((s) => !s)}
+                title={showPass ? "ซ่อนรหัสผ่าน" : "แสดงรหัสผ่าน"}
+              >
+                {showPass ? <EyeOff size={16} /> : <Eye size={16} />}
+              </Button>
+            </>
+          ) : (
+            <span className="text-muted-foreground italic">ไม่มีข้อมูล</span>
+          )}
         </div>
       </td>
 
-      {/* ===== Status ===== */}
+      {/* role */}
+      <td className="text-center font-mono text-sm">{user.role}</td>
+
+      {/* status */}
       <td className="text-center">
-        <Badge
-          className={
-            user.status === "online"
-              ? "bg-green-500/10 text-green-500 border-green-500/30"
-              : "bg-gray-500/10 text-gray-500 border-gray-500/30"
-          }
-        >
-          {user.status === "online" ? "ออนไลน์" : "ออฟไลน์"}
+        <Badge className={statusMap[user.status].className}>
+          {statusMap[user.status].label}
         </Badge>
       </td>
 
-      {/* ===== Time Progress (แก้ตรงนี้) ===== */}
+      {/* ✅ เวลาใช้งาน */}
+      {/* ✅ เวลาใช้งาน */}
       <td className="text-center">
-        {hasActiveTime ? (
+        {hasTime ? (
           <div className="flex flex-col items-center gap-1">
-            <span className="text-xs font-mono">
-              {format(user.remainingSeconds)}
+            {/* ✅ โชว์เวลาเสมอ */}
+            <span
+              className={`text-xs font-medium ${
+                isStarted ? "text-foreground" : "text-muted-foreground"
+              }`}
+            >
+              {formatPrettyTime(liveRemaining)}
+              {!isStarted && (
+                <span className="ml-2 italic text-[11px]">(ยังไม่เริ่ม)</span>
+              )}
             </span>
 
-            <div className="h-1.5 w-24 bg-muted rounded-full overflow-hidden">
+            <div className="h-1.5 w-28 bg-muted rounded-full overflow-hidden">
               <div
                 className={`h-full transition-all ${
                   percent < 20 ? "bg-red-500" : "bg-green-500"
@@ -96,98 +196,59 @@ export function UserRow({
         ) : (
           <div className="flex flex-col items-center gap-1 text-muted-foreground">
             <span className="text-xs italic">ยังไม่เริ่มใช้งาน</span>
-            <div className="h-1.5 w-24 bg-muted rounded-full" />
+            <div className="h-1.5 w-28 bg-muted rounded-full" />
           </div>
         )}
       </td>
 
-      {/* ===== Sessions Count ===== */}
-      <td className="text-center text-sm">{user.sessions.length}</td>
+      {/* device */}
+      <td className="text-center text-sm">
+        {user.device_id ? "เชื่อมแล้ว" : "ยังไม่เชื่อม"}
+      </td>
 
-      {/* ===== Actions ===== */}
+      {/* actions */}
       <td className="p-4">
-        <div className="flex justify-end gap-1">
-          {/* ===== กรณีมี Session ===== */}
-          {user.sessions.length > 0 ? (
-            <>
-              {/* ดู Sessions */}
-              <Button
-                size="icon"
-                variant="outline"
-                onClick={() => onOpen("sessions")}
-                title="ดู Sessions"
-                className="
-            cursor-pointer
-            hover:bg-blue-50
-            hover:border-blue-400
-            hover:text-blue-600
-          "
-              >
-                <Smartphone size={16} />
-              </Button>
-
-              {/* จัดการเวลา */}
-              <Button
-                size="icon"
-                variant="outline"
-                onClick={() => onOpen("time")}
-                title="จัดการเวลา"
-                className="
-            cursor-pointer
-            hover:bg-purple-50
-            hover:border-purple-400
-            hover:text-purple-600
-          "
-              >
-                <Clock size={16} />
-              </Button>
-
-              {/* ย้าย Session */}
-              <Button
-                size="icon"
-                variant="outline"
-                onClick={() => onOpen("move")}
-                title="ย้าย Session"
-                className="
-            cursor-pointer
-            hover:bg-orange-50
-            hover:border-orange-400
-            hover:text-orange-600
-          "
-              >
-                <RefreshCcw size={16} />
-              </Button>
-            </>
-          ) : (
-            <>
-              {/* ===== Assign Device (ใหม่) ===== */}
-              <Button
-                size="icon"
-                variant="outline"
-                onClick={() => onOpen("assign")}
-                title="Assign Device"
-                className="
-            cursor-pointer
-            hover:bg-emerald-50
-            hover:border-emerald-400
-            hover:text-emerald-600
-          "
-              >
-                <PlusCircle size={16} />
-              </Button>
-            </>
-          )}
-
-          {/* ===== Delete (มีเสมอ) ===== */}
+        <div className="flex justify-end gap-2">
           <Button
             size="icon"
-            variant="destructive"
-            onClick={() => onOpen("delete")}
-            title="ลบผู้ใช้"
-            className="cursor-pointer hover:bg-red-600"
+            variant="outline"
+            onClick={() => onAction("time")}
+            title="เพิ่มเวลา"
           >
-            <Trash2 size={16} />
+            <Clock size={16} />
           </Button>
+
+          {user.device_id ? (
+            <Button
+              size="icon"
+              variant="outline"
+              onClick={() => onAction("disconnect")}
+              title="disconnect"
+            >
+              <Unplug size={16} />
+            </Button>
+          ) : (
+            <Button
+              size="icon"
+              variant="outline"
+              onClick={() => onAction("assign")}
+              title="assign"
+            >
+              <PlusCircle size={16} />
+            </Button>
+          )}
+
+          {/* ✅ hide delete ถ้า user เป็น ADMIN หรือเป็นตัวเอง */}
+          {user.role !== "ADMIN" && !isSelf && (
+            <Button
+              size="icon"
+              variant="destructive"
+              onClick={() => onAction("delete")}
+              title="delete"
+            >
+              <Trash2 size={16} />
+            </Button>
+          )}
         </div>
       </td>
     </motion.tr>

@@ -1,40 +1,57 @@
-"use client"
+"use client";
 
-import { useState } from "react"
+import { useState } from "react";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogFooter,
-} from "@/components/ui/dialog"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Button } from "@/components/ui/button"
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
+import { UsersService } from "@/services/users.service";
 
 interface UserCreateDialogProps {
-  open: boolean
-  onClose: () => void
+  open: boolean;
+  onClose: () => void;
+  onCreated?: () => void;
 }
 
-export function UserCreateDialog({ open, onClose }: UserCreateDialogProps) {
-  const [name, setName] = useState("")
-  const [username, setUsername] = useState("")
-  const [password, setPassword] = useState("")
+export function UserCreateDialog({
+  open,
+  onClose,
+  onCreated,
+}: UserCreateDialogProps) {
+  const [name, setName] = useState("");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  const handleCreate = () => {
-    // TODO: เรียก API สร้าง user
-    console.log({
-      name,
-      username,
-      password,
-    })
+  const handleCreate = async () => {
+    if (!name || !username || !password) return;
 
-    onClose()
-    setName("")
-    setUsername("")
-    setPassword("")
-  }
+    setLoading(true);
+    try {
+      await UsersService.createByAdmin({
+        name,
+        username,
+        password,
+      });
+
+      onCreated?.();
+
+      onClose();
+      setName("");
+      setUsername("");
+      setPassword("");
+    } catch (err: any) {
+      alert(err.message || "สร้างผู้ใช้ไม่สำเร็จ");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
@@ -44,31 +61,34 @@ export function UserCreateDialog({ open, onClose }: UserCreateDialogProps) {
         </DialogHeader>
 
         <div className="space-y-4 py-2">
-          <div className="space-y-1">
-            <Label>ชื่อผู้ใช้</Label>
+          <div>
+            <Label>ชื่อผู้ใช้ (Name)</Label>
             <Input
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="เช่น John Doe"
+              placeholder="เช่น User1"
+              required
             />
           </div>
 
-          <div className="space-y-1">
+          <div>
             <Label>Username</Label>
             <Input
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               placeholder="username"
+              required
             />
           </div>
 
-          <div className="space-y-1">
+          <div>
             <Label>Password</Label>
             <Input
-              type="password"
+              type="text"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="password"
+              required
             />
           </div>
         </div>
@@ -77,9 +97,11 @@ export function UserCreateDialog({ open, onClose }: UserCreateDialogProps) {
           <Button variant="outline" onClick={onClose}>
             ยกเลิก
           </Button>
-          <Button onClick={handleCreate}>สร้างผู้ใช้</Button>
+          <Button onClick={handleCreate} disabled={loading}>
+            {loading ? "กำลังสร้าง..." : "สร้างผู้ใช้"}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
-  )
+  );
 }

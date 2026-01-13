@@ -23,7 +23,7 @@ export class AuthService {
      */
     async login(loginDto: LoginDto) {
         this.logger.debug(`[LOGIN] Checking user: ${loginDto.username}`);
-        const user = await this.usersService.findOne(loginDto.username);
+        const user = await this.usersService.findByUsername(loginDto.username);
 
         if (!user) {
             this.logger.warn(`[LOGIN] ❌ User not found: ${loginDto.username}`);
@@ -62,7 +62,7 @@ export class AuthService {
      * Hash Password ด้วย bcrypt ก่อนบันทึกลง Database
      */
     async register(registerDto: RegisterDto) {
-        const existingUser = await this.usersService.findOne(registerDto.username);
+        const existingUser = await this.usersService.findByUsername(registerDto.username);
         if (existingUser) {
             throw new ConflictException('Username already exists');
         }
