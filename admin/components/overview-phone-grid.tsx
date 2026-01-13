@@ -7,15 +7,11 @@ import { Badge } from "@/components/ui/badge";
 
 /* ================= TYPES ================= */
 
-export type DeviceStatus =
-  | "in-use"
-  | "available"
-  | "error"
-  | "maintenance";
+export type DeviceStatus = "in-use" | "available" | "error" | "maintenance";
 
 export type StatusFilter = DeviceStatus | "all";
 
-interface OverviewDevice {
+export interface OverviewDevice {
   id: string;
   name: string;
   status: DeviceStatus;
@@ -25,48 +21,34 @@ interface OverviewDevice {
 interface OverviewPhoneGridProps {
   query: string;
   statusFilter: StatusFilter;
+  devices: OverviewDevice[];
 }
-
-/* ================= MOCK DATA ================= */
-
-const mockOverviewDevices: OverviewDevice[] = [
-  {
-    id: "1",
-    name: "Pixel 8 Pro",
-    status: "in-use",
-    user: "john.doe@email.com",
-  },
-  { id: "2", name: "Galaxy S24", status: "available" },
-  {
-    id: "3",
-    name: "Pixel 7a",
-    status: "in-use",
-    user: "alice@email.com",
-  },
-  { id: "4", name: "Pixel 6", status: "error" },
-  { id: "5", name: "Galaxy A54", status: "maintenance" },
-  { id: "6", name: "Pixel 8", status: "available" },
-];
 
 /* ================= COMPONENT ================= */
 
 export function OverviewPhoneGrid({
   query,
   statusFilter,
+  devices,
 }: OverviewPhoneGridProps) {
-  const filteredDevices = mockOverviewDevices.filter((d) => {
+  const filteredDevices = devices.filter((d) => {
     const matchQuery =
       d.name.toLowerCase().includes(query.toLowerCase()) ||
       d.user?.toLowerCase().includes(query.toLowerCase());
 
-    const matchStatus =
-      statusFilter === "all" || d.status === statusFilter;
+    const matchStatus = statusFilter === "all" || d.status === statusFilter;
 
     return matchQuery && matchStatus;
   });
 
   return (
     <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-6">
+      {filteredDevices.length === 0 && (
+        <div className="col-span-full text-center text-sm text-muted-foreground py-10">
+          ยังไม่มีข้อมูลอุปกรณ์ (รอเชื่อมต่อ API)
+        </div>
+      )}
+
       {filteredDevices.map((d, index) => (
         <motion.div
           key={d.id}
@@ -105,14 +87,10 @@ export function OverviewPhoneGrid({
 
           {/* ================= INFO ================= */}
           <div className="p-4 space-y-2">
-            <p className="text-sm font-semibold truncate">
-              {d.name}
-            </p>
+            <p className="text-sm font-semibold truncate">{d.name}</p>
 
             {d.user ? (
-              <p className="text-xs text-muted-foreground truncate">
-                {d.user}
-              </p>
+              <p className="text-xs text-muted-foreground truncate">{d.user}</p>
             ) : (
               <p className="text-xs text-muted-foreground italic">
                 ไม่มี session ที่ใช้งานอยู่
@@ -143,19 +121,14 @@ export function OverviewPhoneGrid({
 /* ================= STATUS BADGE ================= */
 
 function StatusBadge({ status }: { status: DeviceStatus }) {
-  const map: Record<
-    DeviceStatus,
-    { label: string; className: string }
-  > = {
+  const map: Record<DeviceStatus, { label: string; className: string }> = {
     "in-use": {
       label: "กำลังใช้งาน",
-      className:
-        "border-2 border-red-500/60 bg-red-500/10 text-red-500",
+      className: "border-2 border-red-500/60 bg-red-500/10 text-red-500",
     },
     available: {
       label: "พร้อมใช้งาน",
-      className:
-        "border-2 border-green-500/60 bg-green-500/10 text-green-500",
+      className: "border-2 border-green-500/60 bg-green-500/10 text-green-500",
     },
     error: {
       label: "ผิดพลาด",
@@ -164,8 +137,7 @@ function StatusBadge({ status }: { status: DeviceStatus }) {
     },
     maintenance: {
       label: "ซ่อมบำรุง",
-      className:
-        "border-2 border-border bg-muted text-muted-foreground",
+      className: "border-2 border-border bg-muted text-muted-foreground",
     },
   };
 

@@ -29,27 +29,10 @@ export interface Device {
 /* ================= PROPS ================= */
 
 interface Props {
+  devices: Device[];
   onView: (device: Device) => void;
   onEdit: (device: Device) => void;
 }
-
-/* ================= MOCK ================= */
-
-const mockDevices: Device[] = [
-  {
-    id: "1",
-    name: "Android-001",
-    serialNumber: "SN-001-ABC",
-    status: "in-use",
-    user: "john.doe",
-  },
-  {
-    id: "2",
-    name: "Android-002",
-    serialNumber: "SN-002-DEF",
-    status: "available",
-  },
-];
 
 const statusConfig = {
   available: {
@@ -64,7 +47,7 @@ const statusConfig = {
 
 /* ================= COMPONENT ================= */
 
-export function DeviceManagementTable({ onView, onEdit }: Props) {
+export function DeviceManagementTable({ devices, onView, onEdit }: Props) {
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
       <Card>
@@ -86,7 +69,18 @@ export function DeviceManagementTable({ onView, onEdit }: Props) {
 
             {/* ===== TABLE BODY ===== */}
             <TableBody>
-              {mockDevices.map((d, i) => (
+              {devices.length === 0 && (
+                <TableRow>
+                  <TableCell
+                    colSpan={4}
+                    className="py-10 text-center text-sm text-muted-foreground"
+                  >
+                    ยังไม่มีข้อมูลอุปกรณ์ (รอเชื่อมต่อ API)
+                  </TableCell>
+                </TableRow>
+              )}
+
+              {devices.map((d, i) => (
                 <motion.tr
                   key={d.id}
                   initial={{ opacity: 0, x: -20 }}

@@ -4,7 +4,7 @@ import { motion } from "framer-motion"
 import { useState } from "react"
 import { Input } from "@/components/ui/input"
 import { Search } from "lucide-react"
-import { OverviewPhoneGrid } from "@/components/overview-phone-grid"
+import { OverviewPhoneGrid, type OverviewDevice } from "@/components/overview-phone-grid"
 import { StatusSummaryCards } from "@/components/status-summary-cards"
 import { Button } from "@/components/ui/button"
 
@@ -19,6 +19,7 @@ export default function AdminOverviewPage() {
   const [query, setQuery] = useState("")
   const [statusFilter, setStatusFilter] =
     useState<DeviceStatus>("all")
+  const [devices] = useState<OverviewDevice[]>([]) // TODO: will be filled from API later
 
   return (
     <motion.div
@@ -80,6 +81,7 @@ export default function AdminOverviewPage() {
       <OverviewPhoneGrid
         query={query}
         statusFilter={statusFilter}
+        devices={devices}
       />
     </motion.div>
   )

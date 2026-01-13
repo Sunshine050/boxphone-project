@@ -1,28 +1,29 @@
-"use client"
+"use client";
 
-import { useState } from "react"
+import { useState } from "react";
 import {
   DeviceManagementTable,
   Device,
-} from "@/components/device/device-management-table"
-import { DeviceFormDialog } from "@/components/device/device-form-dialog"
-import { Button } from "@/components/ui/button"
-import { Plus } from "lucide-react"
-import { motion } from "framer-motion"
+} from "@/components/device/device-management-table";
+import { DeviceFormDialog } from "@/components/device/device-form-dialog";
+import { Button } from "@/components/ui/button";
+import { Plus } from "lucide-react";
+import { motion } from "framer-motion";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog"
+} from "@/components/ui/dialog";
 
 export default function DeviceManagementPage() {
-  const [dialogOpen, setDialogOpen] = useState(false)
-  const [mode, setMode] = useState<"create" | "edit">("create")
-  const [selected, setSelected] = useState<Device | null>(null)
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [mode, setMode] = useState<"create" | "edit">("create");
+  const [selected, setSelected] = useState<Device | null>(null);
 
   // 👁️ View dialog
-  const [viewDevice, setViewDevice] = useState<Device | null>(null)
+  const [viewDevice, setViewDevice] = useState<Device | null>(null);
+  const [devices] = useState<Device[]>([]); // TODO: will be filled from API later
 
   return (
     <motion.div
@@ -34,21 +35,17 @@ export default function DeviceManagementPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-semibold mb-2">
-            จัดการอุปกรณ์
-          </h1>
-          <p className="text-muted-foreground">
-            ลงทะเบียนและจัดการอุปกรณ์จริง
-          </p>
+          <h1 className="text-3xl font-semibold mb-2">จัดการอุปกรณ์</h1>
+          <p className="text-muted-foreground">ลงทะเบียนและจัดการอุปกรณ์จริง</p>
         </div>
 
         {/* CREATE */}
         <Button
-        className=" cursor-pointer"
+          className=" cursor-pointer"
           onClick={() => {
-            setMode("create")
-            setSelected(null)
-            setDialogOpen(true)
+            setMode("create");
+            setSelected(null);
+            setDialogOpen(true);
           }}
         >
           <Plus className="h-4 w-4 mr-2" />
@@ -58,13 +55,14 @@ export default function DeviceManagementPage() {
 
       {/* Table */}
       <DeviceManagementTable
+        devices={devices}
         onView={(device) => {
-          setViewDevice(device)
+          setViewDevice(device);
         }}
         onEdit={(device) => {
-          setMode("edit")
-          setSelected(device)
-          setDialogOpen(true)
+          setMode("edit");
+          setSelected(device);
+          setDialogOpen(true);
         }}
       />
 
@@ -102,5 +100,5 @@ export default function DeviceManagementPage() {
         </DialogContent>
       </Dialog>
     </motion.div>
-  )
+  );
 }

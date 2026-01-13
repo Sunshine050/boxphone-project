@@ -47,13 +47,23 @@ export function AndroidControl({ paramsPromise }: { paramsPromise: Promise<{ ses
         // Let's assume currentSession has deviceId, otherwise use a fallback
         const deviceId = (currentSession as any).deviceId || "android_device_1"
 
-        import("@/lib/socket-client").then(({ socketClient }) => {
-          socketClient.connect(deviceId)
-          socketClient.onScreenFrame((imageData) => {
-            setScreenImage(imageData)
+        // Use dynamic import to avoid SSR issues
+        if (typeof window !== "undefined") {
+          import("@/lib/socket-client").then(({ socketClient }) => {
+            socketClient.connect(deviceId)
+            socketClient.onScreenFrame((imageData) => {
+              setScreenImage(imageData)
+              setIsConnecting(false)
+            })
+            // Simulate connection after 2 seconds for demo
+            setTimeout(() => {
+              setIsConnecting(false)
+            }, 2000)
+          }).catch((err) => {
+            console.warn("Socket client not available, using demo mode:", err)
             setIsConnecting(false)
           })
-        })
+        }
       } else {
         router.push("/dashboard")
       }
@@ -66,9 +76,13 @@ export function AndroidControl({ paramsPromise }: { paramsPromise: Promise<{ ses
 
     return () => {
       clearInterval(interval)
-      import("@/lib/socket-client").then(({ socketClient }) => {
-        socketClient.disconnect()
-      })
+      if (typeof window !== "undefined") {
+        import("@/lib/socket-client").then(({ socketClient }) => {
+          socketClient.disconnect()
+        }).catch(() => {
+          // Ignore errors on cleanup
+        })
+      }
     }
   }, [params.sessionId, router])
 
@@ -117,9 +131,14 @@ export function AndroidControl({ paramsPromise }: { paramsPromise: Promise<{ ses
     const x = ((e.clientX - rect.left) / rect.width) * 100
     const y = ((e.clientY - rect.top) / rect.height) * 100
 
-    import("@/lib/socket-client").then(({ socketClient }) => {
-      socketClient.sendAction("click", { x, y })
-    })
+    if (typeof window !== "undefined") {
+      import("@/lib/socket-client").then(({ socketClient }) => {
+        socketClient.sendAction("click", { x, y })
+      }).catch(() => {
+        // Demo mode - action logged in console
+        console.log("Demo: Click at", { x, y })
+      })
+    }
   }
 
   if (!session) {
@@ -225,34 +244,26 @@ export function AndroidControl({ paramsPromise }: { paramsPromise: Promise<{ ses
         </div>
       </div>
 
-      {/* Screen Label */}
-      <div className="mt-4 text-center">
-        <p className="text-sm text-slate-400">Click to tap • Drag to swipe • Type to input</p>
-      </div>
-    </div >
-        </div >
-      </div >
-
-    {/* Session Expired Modal */ }
-    < Dialog open = { showExpiredModal } onOpenChange = { setShowExpiredModal } >
-      <DialogContent className="border-slate-800 bg-slate-900 sm:max-w-md">
-        <DialogHeader>
-          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-red-500/20">
-            <Clock className="h-8 w-8 text-red-400" />
-          </div>
-          <DialogTitle className="text-center text-2xl text-white">Session Expired</DialogTitle>
-          <DialogDescription className="text-center text-slate-400">
-            Your device session has ended and the device has been released.
-          </DialogDescription>
-        </DialogHeader>
-        <Button
-          onClick={handleReturnToDashboard}
-          className="w-full bg-gradient-to-r from-cyan-500 to-blue-600 text-white hover:from-cyan-600 hover:to-blue-700"
-        >
-          Return to Dashboard
-        </Button>
-      </DialogContent>
-      </Dialog >
+      {/* Session Expired Modal */}
+      <Dialog open={showExpiredModal} onOpenChange={setShowExpiredModal}>
+        <DialogContent className="border-slate-800 bg-slate-900 sm:max-w-md">
+          <DialogHeader>
+            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-red-500/20">
+              <Clock className="h-8 w-8 text-red-400" />
+            </div>
+            <DialogTitle className="text-center text-2xl text-white">Session Expired</DialogTitle>
+            <DialogDescription className="text-center text-slate-400">
+              Your device session has ended and the device has been released.
+            </DialogDescription>
+          </DialogHeader>
+          <Button
+            onClick={handleReturnToDashboard}
+            className="w-full bg-gradient-to-r from-cyan-500 to-blue-600 text-white hover:from-cyan-600 hover:to-blue-700"
+          >
+            Return to Dashboard
+          </Button>
+        </DialogContent>
+      </Dialog>
     </>
   )
 }
