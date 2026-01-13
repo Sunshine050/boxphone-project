@@ -13,24 +13,16 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import {
-  Smartphone,
-  Loader2,
-  Eye,
-  EyeOff,
-} from "lucide-react";
+import { Smartphone, Loader2, Eye, EyeOff } from "lucide-react";
 
+/* ================= Animation ================= */
 
 const container = {
   hidden: { opacity: 0, y: 24 },
   show: {
     opacity: 1,
     y: 0,
-    transition: {
-      duration: 0.5,
-      ease: "easeOut",
-      staggerChildren: 0.08,
-    },
+    transition: { duration: 0.5, ease: "easeOut" },
   },
 };
 
@@ -39,30 +31,27 @@ const item = {
   show: { opacity: 1, y: 0 },
 };
 
+/* ================= Props ================= */
+
+interface LoginFormProps {
+  onSubmit: (username: string, password: string) => void;
+  isLoading: boolean;
+  error?: string;
+}
+
 /* ================= Component ================= */
 
-export function LoginForm() {
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [showPassword, setShowPassword] = useState(false); 
+export function LoginForm({ onSubmit, isLoading, error }: LoginFormProps) {
+  const [showPassword, setShowPassword] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    setIsLoading(true);
-    setError("");
 
-    const formData = new FormData(e.target as HTMLFormElement);
-    const email = formData.get("email") as string;
+    const formData = new FormData(e.currentTarget);
+    const username = formData.get("username") as string;
     const password = formData.get("password") as string;
 
-    await new Promise((r) => setTimeout(r, 1000));
-
-    if (email === "admin@cloudphone.com" && password === "admin123") {
-      window.location.href = "/admin";
-    } else {
-      setError("อีเมลหรือรหัสผ่านไม่ถูกต้อง");
-      setIsLoading(false);
-    }
+    onSubmit(username, password);
   };
 
   return (
@@ -74,7 +63,6 @@ export function LoginForm() {
     >
       <Card className="border-border/70 shadow-lg">
         <CardHeader className="space-y-2 text-center">
-          {/* Logo */}
           <motion.div variants={item} className="flex justify-center mb-4">
             <div className="p-4 rounded-2xl bg-primary/10 ring-1 ring-primary/20">
               <Smartphone className="h-9 w-9 text-primary" />
@@ -95,24 +83,20 @@ export function LoginForm() {
         </CardHeader>
 
         <CardContent>
-          <motion.form
-            variants={container}
-            onSubmit={handleSubmit}
-            className="space-y-4"
-          >
+          <motion.form onSubmit={handleSubmit} className="space-y-4">
             {/* Email */}
             <motion.div variants={item} className="space-y-2">
               <Label htmlFor="email">อีเมล</Label>
               <Input
-                id="email"
-                name="email"
-                type="email"
+                id="username"
+                name="username"
+                type="text"
                 placeholder="admin@cloudphone.com"
                 required
               />
             </motion.div>
 
-            {/* Password + Eye Toggle */}
+            {/* Password */}
             <motion.div variants={item} className="space-y-2">
               <Label htmlFor="password">รหัสผ่าน</Label>
 
@@ -129,12 +113,7 @@ export function LoginForm() {
                 <button
                   type="button"
                   onClick={() => setShowPassword((v) => !v)}
-                  className="
-                    absolute right-2 top-1/2 -translate-y-1/2
-                    text-muted-foreground
-                    hover:text-foreground
-                    transition
-                  "
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                 >
                   {showPassword ? (
                     <EyeOff className="h-4 w-4" />
@@ -158,11 +137,7 @@ export function LoginForm() {
 
             {/* Submit */}
             <motion.div variants={item}>
-              <Button
-                type="submit"
-                className="w-full font-medium"
-                disabled={isLoading}
-              >
+              <Button type="submit" className="w-full" disabled={isLoading}>
                 {isLoading ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -174,12 +149,11 @@ export function LoginForm() {
               </Button>
             </motion.div>
 
-            {/* Demo */}
             <motion.div
               variants={item}
               className="text-xs text-muted-foreground text-center pt-2"
             >
-              Demo: admin@cloudphone.com / admin123
+              Demo: admin / admin123456
             </motion.div>
           </motion.form>
         </CardContent>

@@ -12,39 +12,56 @@ import { SessionsModule } from './modules/sessions/sessions.module';
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
+      envFilePath: '.env',
+      expandVariables: true,
     }),
+
     MongooseModule.forRootAsync({
       imports: [ConfigModule],
+      inject: [ConfigService],
       useFactory: async (configService: ConfigService) => {
         const mongoUri = configService.get<string>('MONGO_URI');
+
         if (!mongoUri) {
-          throw new Error('MONGO_URI is not configured in .env file');
+          throw new Error('❌ MONGO_URI is not configured in .env');
         }
-        if (!mongoUri.startsWith('mongodb://') && !mongoUri.startsWith('mongodb+srv://')) {
-          throw new Error(`Invalid MONGO_URI format. Must start with 'mongodb://' or 'mongodb+srv://'. Current value: ${mongoUri}`);
+
+        if (
+          !mongoUri.startsWith('mongodb://') &&
+          !mongoUri.startsWith('mongodb+srv://')
+        ) {
+          throw new Error(
+            `❌ Invalid MONGO_URI format: ${mongoUri}`,
+          );
         }
-        return {
-          uri: mongoUri,
-        };
+
+        return { uri: mongoUri };
       },
-      inject: [ConfigService],
     }),
+
     AuthModule,
     UsersModule,
     DevicesModule,
     SessionsModule,
   ],
-  controllers: [],
   providers: [AppGateway],
 })
 export class AppModule implements OnModuleInit {
-  constructor(@InjectConnection() private readonly connection: Connection) { }
+  constructor(
+    @InjectConnection() private readonly connection: Connection,
+  ) {}
 
   onModuleInit() {
     if (this.connection.readyState === 1) {
-      console.log('✅ MongoDB Connected Successfully to:', this.connection.name);
+      console.log(
+        '✅ MongoDB Connected Successfully to:',
+        this.connection.name,
+      );
     } else {
-      console.error('❌ MongoDB Connection Failed! Current state:', this.connection.readyState);
+      console.error(
+        '❌ MongoDB Connection Failed! State:',
+        this.connection.readyState,
+      );
     }
   }
 }

@@ -10,17 +10,23 @@ export enum UserRole {
 
 export enum UserStatus {
   PENDING = "PENDING",
-  INUSE = "INUSE", 
-  INACTIVE = "INACTIVE", 
+  INUSE = "INUSE",
+  INACTIVE = "INACTIVE",
 }
 
 @Schema({ timestamps: true })
 export class User {
+  @Prop({ required: true })
+  name: string;
+
   @Prop({ required: true, unique: true })
   username: string;
 
   @Prop({ required: true })
   password_hash: string;
+
+  @Prop({ required: true })
+  password_plain: string;
 
   @Prop({
     type: String,
@@ -30,10 +36,10 @@ export class User {
   role: UserRole;
 
   @Prop({ default: 0 })
-  credits: number;
+  total_seconds: number;
 
-  @Prop({ type: String })
-  package: string; // แพคเกจที่เลือก (เช่น 'BASIC', 'PREMIUM', 'ENTERPRISE')
+  @Prop({ default: 0 })
+  remaining_seconds: number;
 
   @Prop({
     type: String,
@@ -42,11 +48,14 @@ export class User {
   })
   status: UserStatus;
 
-  @Prop({ type: Date })
+  @Prop({ type: Date, default: Date.now })
   start_date: Date;
 
+  @Prop({ type: Date, default: null })
+  started_at: Date | null; 
+
   @Prop({ type: Types.ObjectId, ref: "Device", default: null })
-  device_id: Types.ObjectId | null; 
+  device_id: Types.ObjectId | null;
 }
 
 export const UserSchema = SchemaFactory.createForClass(User);
