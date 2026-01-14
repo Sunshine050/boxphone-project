@@ -195,7 +195,7 @@ export function UserTimeDialog({
                   <SelectContent>
                     {hours.map((h) => (
                       <SelectItem key={h} value={h}>
-                        {h} น.
+                        {h}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -210,7 +210,7 @@ export function UserTimeDialog({
                   <SelectContent>
                     {minutes.map((m) => (
                       <SelectItem key={m} value={m}>
-                        {m}
+                        {m} น.
                       </SelectItem>
                     ))}
                   </SelectContent>
