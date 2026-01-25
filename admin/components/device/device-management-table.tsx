@@ -1,8 +1,8 @@
 "use client";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+
 import {
   Table,
   TableBody,
@@ -11,19 +11,29 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+
+import { Button } from "@/components/ui/button";
+
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+
 import { motion } from "framer-motion";
-import { Pencil } from "lucide-react";
+import { MoreHorizontal, Pencil, Trash2, Eye } from "lucide-react";
 
-/* ================= TYPES ================= */
+/* ================= TYPES (match backend) ================= */
 
-export type DeviceStatus = "available" | "in-use";
+export type DeviceStatus = "AVAILABLE" | "BUSY" | "OFFLINE";
 
 export interface Device {
   id: string;
   name: string;
-  serialNumber: string;
+  serial_number: string;
   status: DeviceStatus;
-  user?: string;
+  current_user_id?: string | null;
 }
 
 /* ================= PROPS ================= */
@@ -32,22 +42,33 @@ interface Props {
   devices: Device[];
   onView: (device: Device) => void;
   onEdit: (device: Device) => void;
+  onDelete: (device: Device) => void; // ✅ เพิ่ม onDelete
 }
 
-const statusConfig = {
-  available: {
-    label: "พร้อมใช้งาน",
-    className: "bg-green-500/10 text-green-500 border-green-500/30",
-  },
-  "in-use": {
-    label: "กำลังใช้งาน",
-    className: "bg-red-500/10 text-red-500 border-red-500/30",
-  },
-};
+const statusConfig: Record<DeviceStatus, { label: string; className: string }> =
+  {
+    AVAILABLE: {
+      label: "พร้อมใช้งาน",
+      className: "bg-green-500/10 text-green-500 border-green-500/30",
+    },
+    BUSY: {
+      label: "กำลังใช้งาน",
+      className: "bg-red-500/10 text-red-500 border-red-500/30",
+    },
+    OFFLINE: {
+      label: "ออฟไลน์",
+      className: "bg-gray-500/10 text-gray-500 border-gray-500/30",
+    },
+  };
 
 /* ================= COMPONENT ================= */
 
-export function DeviceManagementTable({ devices, onView, onEdit }: Props) {
+export function DeviceManagementTable({
+  devices,
+  onView,
+  onEdit,
+  onDelete,
+}: Props) {
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
       <Card>
@@ -75,7 +96,7 @@ export function DeviceManagementTable({ devices, onView, onEdit }: Props) {
                     colSpan={4}
                     className="py-10 text-center text-sm text-muted-foreground"
                   >
-                    ยังไม่มีข้อมูลอุปกรณ์ (รอเชื่อมต่อ API)
+                    ยังไม่มีข้อมูลอุปกรณ์
                   </TableCell>
                 </TableRow>
               )}
@@ -93,15 +114,15 @@ export function DeviceManagementTable({ devices, onView, onEdit }: Props) {
                     <div className="flex flex-col items-left">
                       <span>{d.name}</span>
                       <span className="text-xs text-muted-foreground">
-                        {d.serialNumber}
+                        {d.serial_number}
                       </span>
                     </div>
                   </TableCell>
 
                   {/* USER */}
                   <TableCell className="text-center text-sm">
-                    {d.user ? (
-                      <span className="font-medium">{d.user}</span>
+                    {d.current_user_id ? (
+                      <span className="font-medium">{d.current_user_id}</span>
                     ) : (
                       <span className="text-muted-foreground">-</span>
                     )}
@@ -116,48 +137,42 @@ export function DeviceManagementTable({ devices, onView, onEdit }: Props) {
                     </div>
                   </TableCell>
 
-                  {/* ACTIONS */}
+                  {/* ACTIONS (✅ จุดสามจุด + toolbox) */}
                   <TableCell className="text-right">
-                    <div className="flex justify-end gap-2">
-                      {/* ดูรายละเอียด (outline + hover ชัด) */}
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => onView(d)}
-                        className="
-    cursor-pointer
-    border border-muted-foreground/30
-    transition-all duration-300 ease-out
-    hover:bg-blue-50
-    hover:text-blue-600
-    hover:border-blue-400
-    hover:shadow-md
-    hover:-translate-y-0.5
-    active:translate-y-0
-  "
-                      >
-                        ดูรายละเอียด
-                      </Button>
+                    <div className="flex justify-end">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button size="icon" variant="outline">
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
 
-                      {/* แก้ไข (icon + วงกลม + ฟ้า + hover effect) */}
-                      <Button
-                        size="icon"
-                        onClick={() => onEdit(d)}
-                        title="แก้ไข"
-                        className="
-        cursor-pointer
-        rounded-full
-        bg-blue-600 text-white
-        border border-blue-700
-        transition-all duration-200
-        hover:bg-blue-700
-        hover:scale-105
-        hover:shadow-md
-        active:scale-95
-      "
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </Button>
+                        <DropdownMenuContent align="end" className="w-44">
+                          <DropdownMenuItem
+                            onClick={() => onView(d)}
+                            className="cursor-pointer"
+                          >
+                            <Eye className="mr-2 h-4 w-4" />
+                            ดูรายละเอียด
+                          </DropdownMenuItem>
+
+                          <DropdownMenuItem
+                            onClick={() => onEdit(d)}
+                            className="cursor-pointer"
+                          >
+                            <Pencil className="mr-2 h-4 w-4" />
+                            แก้ไข
+                          </DropdownMenuItem>
+
+                          <DropdownMenuItem
+                            onClick={() => onDelete(d)}
+                            className="cursor-pointer text-red-600 focus:text-red-600"
+                          >
+                            <Trash2 className="mr-2 h-4 w-4" />
+                            ลบอุปกรณ์
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </div>
                   </TableCell>
                 </motion.tr>

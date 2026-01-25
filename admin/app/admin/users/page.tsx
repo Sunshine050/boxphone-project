@@ -5,12 +5,16 @@ import { UsersTable } from "@/components/users/user-table";
 import { UsersService } from "@/services/users.service";
 import { User, UserAction } from "@/types/user";
 import { Button } from "@/components/ui/button";
-import { UserPlus, Search } from "lucide-react";
+import { UserPlus, Search, Clock } from "lucide-react";
 import { UserCreateDialog } from "@/components/users/user-create-dialog";
-import { UserAssignDeviceDialog } from "@/components/users/user-assign-device-dialog";
-import { UserTimeDialog } from "@/components/users/user-time-dialog";
 import { UserDeleteDialog } from "@/components/users/user-delete-dialog";
 import { Input } from "@/components/ui/input";
+
+import { UserAssignDevicesTimeDialog } from "@/components/users/user-assign-devices-time-dialog";
+import { UserBulkAddTimeDialog } from "@/components/users/user-bulk-add-time-dialog";
+import { DevicesService } from "@/services/devices.service";
+import { DeviceMini } from "@/components/users/user-table";
+
 
 export default function UserManagementPage() {
   const [users, setUsers] = useState<User[]>([]);
@@ -20,23 +24,51 @@ export default function UserManagementPage() {
   const [me, setMe] = useState<User | null>(null);
 
   // ✅ Search
-  const [searchInput, setSearchInput] = useState(""); // พิมพ์อยู่
-  const [search, setSearch] = useState(""); // กด Enter แล้วค่อยใช้จริง
+  const [searchInput, setSearchInput] = useState("");
+  const [search, setSearch] = useState("");
 
   // create dialog
   const [createOpen, setCreateOpen] = useState(false);
 
-  // assign dialog
+  // ✅ NEW: assign device+time dialog
   const [assignOpen, setAssignOpen] = useState(false);
   const [assignUser, setAssignUser] = useState<User | null>(null);
 
-  // time dialog
-  const [timeOpen, setTimeOpen] = useState(false);
-  const [timeUser, setTimeUser] = useState<User | null>(null);
+  // ✅ NEW: bulk add time
+  const [bulkOpen, setBulkOpen] = useState(false);
 
   // delete dialog
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteUser, setDeleteUser] = useState<User | null>(null);
+  // ✅ devices list (เอาไว้แปลง id -> name)
+  const [devices, setDevices] = useState<DeviceMini[]>([]);
+
+  // ✅ ทำ map ไว้ lookup device name เร็วๆ
+  const deviceMap = useMemo(() => {
+    return devices.reduce((acc, d) => {
+      acc[d.id] = d;
+      return acc;
+    }, {} as Record<string, DeviceMini>);
+  }, [devices]);
+
+  // ✅ fetch devices จาก backend
+  const fetchDevices = async () => {
+    try {
+      const data = (await DevicesService.getAll()) as any[];
+
+      setDevices(
+        data.map((d) => ({
+          id: d.id || d._id,
+          name: d.name,
+          serial_number: d.serial_number,
+        }))
+      );
+    } catch (e) {
+      console.error("fetchDevices failed:", e);
+      setDevices([]);
+    }
+  };
+
 
   const fetchUsers = async () => {
     setLoading(true);
@@ -70,20 +102,18 @@ export default function UserManagementPage() {
   useEffect(() => {
     fetchUsers();
     fetchMe();
+    fetchDevices();
   }, []);
 
-  // ✅ ฟังก์ชันยืนยันการค้นหา (Enter / Click 🔍)
   const handleSearch = () => {
     setSearch(searchInput.trim());
   };
 
-  // ✅ ล้างค้นหา
   const handleClearSearch = () => {
     setSearchInput("");
     setSearch("");
   };
 
-  // ✅ filtered users (ทำงานเมื่อ search เปลี่ยนเท่านั้น)
   const filteredUsers = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return users;
@@ -102,7 +132,6 @@ export default function UserManagementPage() {
           alert("Admin ไม่สามารถลบตัวเองได้");
           return;
         }
-
         setDeleteUser(user);
         setDeleteOpen(true);
         break;
@@ -113,14 +142,16 @@ export default function UserManagementPage() {
         await fetchUsers();
         break;
 
+      // ✅ รวม assign + time เป็นปุ่มเดียว
       case "assign":
         setAssignUser(user);
         setAssignOpen(true);
         break;
 
+      // ✅ เผื่อมี code เก่าเรียก "time" อยู่
       case "time":
-        setTimeUser(user);
-        setTimeOpen(true);
+        setAssignUser(user);
+        setAssignOpen(true);
         break;
     }
   };
@@ -135,16 +166,29 @@ export default function UserManagementPage() {
       <div className="flex justify-between items-center">
         <h1 className="text-3xl font-semibold">การจัดการผู้ใช้</h1>
 
-        <Button
-          className="flex items-center gap-2"
-          onClick={() => setCreateOpen(true)}
-        >
-          <UserPlus className="w-4 h-4" />
-          สร้างผู้ใช้
-        </Button>
+        <div className="flex items-center gap-2">
+          {/* ✅ Bulk Add Time */}
+          <Button
+            variant="outline"
+            className="flex items-center gap-2"
+            onClick={() => setBulkOpen(true)}
+          >
+            <Clock className="w-4 h-4" />
+            เพิ่มเวลาให้คนที่กำลังใช้งาน
+          </Button>
+
+          {/* Create User */}
+          <Button
+            className="flex items-center gap-2"
+            onClick={() => setCreateOpen(true)}
+          >
+            <UserPlus className="w-4 h-4" />
+            สร้างผู้ใช้
+          </Button>
+        </div>
       </div>
 
-      {/* ✅ Search Bar (กด Enter / กดปุ่ม 🔍 เท่านั้น) */}
+      {/* ✅ Search Bar */}
       <div className="flex items-center gap-2 max-w-md">
         <div className="relative w-full">
           <Input
@@ -157,7 +201,6 @@ export default function UserManagementPage() {
             }}
           />
 
-          {/* ✅ ปุ่มแว่นขยาย */}
           <button
             type="button"
             onClick={handleSearch}
@@ -180,6 +223,7 @@ export default function UserManagementPage() {
         users={filteredUsers}
         currentUserId={me?.id || null}
         onAction={handleAction}
+        deviceMap={deviceMap}
       />
 
       {/* ✅ Create User Dialog */}
@@ -189,8 +233,8 @@ export default function UserManagementPage() {
         onCreated={fetchUsers}
       />
 
-      {/* ✅ Assign Device Dialog */}
-      <UserAssignDeviceDialog
+      {/* ✅ NEW: Assign Devices + Time Dialog */}
+      <UserAssignDevicesTimeDialog
         open={assignOpen}
         user={assignUser}
         onClose={() => {
@@ -200,14 +244,10 @@ export default function UserManagementPage() {
         onSuccess={fetchUsers}
       />
 
-      {/* ✅ Add Time Dialog */}
-      <UserTimeDialog
-        open={timeOpen}
-        user={timeUser}
-        onClose={() => {
-          setTimeOpen(false);
-          setTimeUser(null);
-        }}
+      {/* ✅ NEW: Bulk Add Time Dialog */}
+      <UserBulkAddTimeDialog
+        open={bulkOpen}
+        onClose={() => setBulkOpen(false)}
         onSuccess={fetchUsers}
       />
 

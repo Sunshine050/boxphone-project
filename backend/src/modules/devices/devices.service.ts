@@ -53,7 +53,13 @@ export class DevicesService {
     }
 
     async create(createDeviceDto: any): Promise<Device> {
-        const createdDevice = new this.deviceModel(createDeviceDto);
+        const createdDevice = new this.deviceModel({
+            ...createDeviceDto,
+            status: DeviceStatus.AVAILABLE,
+            last_connected_at: new Date(),
+        });
+
         return createdDevice.save();
     }
+
 }

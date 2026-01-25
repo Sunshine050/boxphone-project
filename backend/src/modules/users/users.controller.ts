@@ -23,6 +23,10 @@ import { CreateUserByAdminDto } from "./dto/create-user-by-admin.dto";
 import { ConnectDeviceDto } from "./dto/connect-device.dto";
 import { AddTimeDto } from "./dto/add-time.dto";
 
+// ✅ NEW DTOs
+import { AssignDevicesDto } from "./dto/assign-devices.dto";
+import { BulkAddTimeDto } from "./dto/bulk-add-time.dto";
+
 @Controller("users")
 export class UsersController {
   private readonly logger = new Logger(UsersController.name);
@@ -35,7 +39,6 @@ export class UsersController {
   /**
    * ✅ สร้าง User ใหม่โดยแอดมิน
    * POST /users
-   * - รับแค่ username, password
    */
   @Post()
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -46,7 +49,9 @@ export class UsersController {
     @CurrentUser() currentUser: any
   ) {
     this.logger.log(
-      `[CREATE_USER] Admin: ${currentUser?.username || "unknown"} creating user: ${createUserDto.username}`
+      `[CREATE_USER] Admin: ${currentUser?.username || "unknown"} creating user: ${
+        createUserDto.username
+      }`
     );
 
     try {
@@ -65,7 +70,12 @@ export class UsersController {
           role: user.role,
           status: user.status,
           start_date: user.start_date,
-          device_id: user.device_id,
+
+          // ✅ ของเดิม
+          device_id: (user as any).device_id ?? null,
+
+          // ✅ NEW
+          devices: (user as any).devices ?? [],
 
           // ✅ เวลาแทน credits
           total_seconds: (user as any).total_seconds,
@@ -94,7 +104,7 @@ export class UsersController {
   }
 
   /**
-   * ✅ เติมเวลาให้ user
+   * ✅ เติมเวลาให้ user (เดิม)
    * POST /users/:id/add-time
    */
   @Post(":id/add-time")
@@ -102,6 +112,48 @@ export class UsersController {
   @Roles(UserRole.ADMIN)
   async addTime(@Param("id") id: string, @Body() dto: AddTimeDto) {
     return this.usersService.addTime(id, dto.duration, dto.start_time);
+  }
+
+  /**
+   * ✅ NEW: assign device หลายเครื่อง + เวลา per-device ในคำขอเดียว
+   * POST /users/:id/assign-devices
+   */
+  @Post(":id/assign-devices")
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @HttpCode(HttpStatus.OK)
+  async assignDevices(
+    @Param("id") userId: string,
+    @Body() dto: AssignDevicesDto,
+    @CurrentUser() currentUser: any
+  ) {
+    this.logger.log(
+      `[ASSIGN_DEVICES] Admin: ${currentUser?.username || "unknown"} assigning ${
+        dto?.items?.length || 0
+      } devices to userId=${userId}`
+    );
+
+    return this.usersService.assignDevices(
+      userId,
+      dto.items,
+      this.devicesService
+    );
+  }
+
+  /**
+   * ✅ NEW: เพิ่มเวลาให้ผู้ใช้ทุกคนที่กำลังใช้งาน (INUSE) ทีเดียว
+   * POST /users/bulk-add-time
+   */
+  @Post("bulk-add-time")
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @HttpCode(HttpStatus.OK)
+  async bulkAddTime(@Body() dto: BulkAddTimeDto, @CurrentUser() currentUser: any) {
+    this.logger.log(
+      `[BULK_ADD_TIME] Admin: ${currentUser?.username || "unknown"} adding ${dto.add_seconds}s to INUSE users`
+    );
+
+    return this.usersService.bulkAddTimeToInuseUsers(dto.add_seconds);
   }
 
   @Get("me")
@@ -117,28 +169,29 @@ export class UsersController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
   async findOne(@Param("id") id: string) {
-    const user = await this.usersService.findById(id);
-    if (!user) {
-      throw new NotFoundException("User not found");
-    }
+    const user: any = await this.usersService.findById(id);
+    if (!user) throw new NotFoundException("User not found");
 
     return {
-      id: (user as any)._id.toString(),
+      id: user._id.toString(),
       username: user.username,
       role: user.role,
       status: user.status,
-      start_date: (user as any).start_date,
-      device_id: user.device_id,
+      start_date: user.start_date,
+
+      // ✅ ของเดิม
+      device_id: user.device_id ?? null,
+
+      // ✅ NEW
+      devices: user.devices ?? [],
 
       // ✅ เวลา
-      total_seconds: (user as any).total_seconds,
-      remaining_seconds: (user as any).remaining_seconds,
+      total_seconds: user.total_seconds,
+      remaining_seconds: user.remaining_seconds,
+      password_plain: user.password_plain,
 
-      // ✅ password column
-      password_plain: (user as any).password_plain,
-
-      createdAt: (user as any).createdAt,
-      updatedAt: (user as any).updatedAt,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt,
     };
   }
 
@@ -154,7 +207,7 @@ export class UsersController {
   }
 
   /**
-   * เชื่อม User กับ Device
+   * ✅ เชื่อม User กับ Device (ของเดิม)
    */
   @Post(":id/connect-device")
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -170,13 +223,13 @@ export class UsersController {
     );
 
     try {
-      const user = await this.usersService.connectDevice(
+      const user: any = await this.usersService.connectDevice(
         userId,
         connectDeviceDto.device_id,
         this.devicesService
       );
 
-      const userIdStr = (user as any)._id.toString();
+      const userIdStr = user._id.toString();
 
       this.logger.log(
         `[CONNECT_DEVICE] ✅ Success - User ID: ${userIdStr}, Device ID: ${connectDeviceDto.device_id}, Status: ${user.status}`
@@ -200,14 +253,14 @@ export class UsersController {
   }
 
   /**
-   * ยกเลิกการเชื่อม User กับ Device
+   * ✅ ยกเลิกการเชื่อม User กับ Device (ของเดิม)
    */
   @Post(":id/disconnect-device")
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
   @HttpCode(HttpStatus.OK)
   async disconnectDevice(@Param("id") userId: string) {
-    const user = await this.usersService.disconnectDevice(
+    const user: any = await this.usersService.disconnectDevice(
       userId,
       this.devicesService
     );
@@ -215,7 +268,7 @@ export class UsersController {
     return {
       message: "User disconnected from device successfully",
       user: {
-        id: (user as any)._id.toString(),
+        id: user._id.toString(),
         username: user.username,
         status: user.status,
         device_id: user.device_id,

@@ -17,7 +17,7 @@ export class UsersService {
   constructor(
     @InjectModel(User.name) private userModel: Model<UserDocument>,
     private readonly configService: ConfigService
-  ) {}
+  ) { }
 
   // ✅ map duration → seconds
   private durationMap = {
@@ -27,18 +27,19 @@ export class UsersService {
     "1m": 60 * 60 * 24 * 30,
     "1y": 60 * 60 * 24 * 365,
   } as const;
- private calcRemaining(user: any) {
-  const remainingDb = user.remaining_seconds ?? 0;
-  const startedAt = user.started_at ? new Date(user.started_at) : null;
 
-  if (!startedAt) return remainingDb;
+  private calcRemaining(user: any) {
+    const remainingDb = user.remaining_seconds ?? 0;
+    const startedAt = user.started_at ? new Date(user.started_at) : null;
 
-  const now = Date.now();
-  const elapsed = Math.floor((now - startedAt.getTime()) / 1000);
+    if (!startedAt) return remainingDb;
 
-  const remaining = remainingDb - elapsed;
-  return remaining < 0 ? 0 : remaining;
-}
+    const now = Date.now();
+    const elapsed = Math.floor((now - startedAt.getTime()) / 1000);
+
+    const remaining = remainingDb - elapsed;
+    return remaining < 0 ? 0 : remaining;
+  }
 
   async create(payload: {
     name?: string;
@@ -51,8 +52,6 @@ export class UsersService {
       name: payload.name ?? payload.username,
       username: payload.username,
       password_hash: payload.password_hash,
-
-      // ✅ ถ้าส่งมาก็เก็บ (optional)
       password_plain: payload.password_plain ?? "",
 
       role: payload.role ?? UserRole.USER,
@@ -60,12 +59,15 @@ export class UsersService {
 
       total_seconds: 0,
       remaining_seconds: 0,
-
-      // ✅ สำคัญ: ยังไม่เริ่มนับ
       started_at: null,
 
       start_date: new Date(),
+
+      // ✅ ของเดิม
       device_id: null,
+
+      // ✅ NEW
+      devices: [],
     });
 
     return createdUser.save();
@@ -97,7 +99,6 @@ export class UsersService {
       password_hash,
       password_plain: createUserDto.password,
 
-      // ✅ FIX: admin สร้างคนอื่น ต้องเป็น USER เสมอ
       role: UserRole.USER,
 
       status: UserStatus.PENDING,
@@ -106,7 +107,12 @@ export class UsersService {
 
       start_date: new Date(),
       started_at: null,
+
+      // ✅ ของเดิม
       device_id: null,
+
+      // ✅ NEW
+      devices: [],
     });
 
     return newUser.save();
@@ -141,7 +147,6 @@ export class UsersService {
       password_hash,
       password_plain: payload.password,
 
-      // ✅ FIX: seed admin ต้องเป็น ADMIN
       role: UserRole.ADMIN,
 
       status: UserStatus.PENDING,
@@ -150,14 +155,19 @@ export class UsersService {
 
       start_date: new Date(),
       started_at: null,
+
+      // ✅ ของเดิม
       device_id: null,
+
+      // ✅ NEW
+      devices: [],
     });
 
     return newAdmin.save();
   }
 
   /**
-   * ✅ เติมเวลาให้ user
+   * ✅ เติมเวลาให้ user (ของเดิม)
    */
   async addTime(
     userId: string,
@@ -177,15 +187,15 @@ export class UsersService {
       },
     };
 
-    // ✅ ถ้ามี start_time → ตั้งเวลาเริ่มเดิน
     if (startTime) {
       const date = new Date(startTime);
       if (Number.isNaN(date.getTime())) {
         throw new BadRequestException("Invalid start_time format");
       }
 
+      // ✅ FIX: ของเดิมคุณ set timer_started_at แต่ schema ใช้ started_at
       update.$set = {
-        timer_started_at: date,
+        started_at: date,
       };
     }
 
@@ -194,6 +204,93 @@ export class UsersService {
       .exec();
 
     return updated;
+  }
+
+  /**
+   * ✅ NEW: Assign หลายเครื่อง + เพิ่มเวลา per-device ในคำขอเดียว
+   */
+  async assignDevices(
+    userId: string,
+    items: { device_id: string; assign_seconds?: number }[],
+    deviceService: any
+  ) {
+    const user: any = await this.findById(userId);
+    if (!user) throw new NotFoundException("User not found");
+
+    if (!Array.isArray(items) || items.length === 0) {
+      throw new BadRequestException("items is required");
+    }
+
+    // ✅ validate device exists
+    for (const item of items) {
+      if (!item.device_id) {
+        throw new BadRequestException("device_id is required");
+      }
+
+      const device = await deviceService.findOne(item.device_id);
+      if (!device) {
+        throw new NotFoundException(`Device not found: ${item.device_id}`);
+      }
+    }
+
+    const devicesArr = Array.isArray(user.devices) ? user.devices : [];
+
+    for (const item of items) {
+      const seconds = Math.max(0, Number(item.assign_seconds ?? 0));
+
+      const exists = devicesArr.find((d: any) => d.device_id === item.device_id);
+
+      if (!exists) {
+        devicesArr.push({
+          device_id: item.device_id,
+          total_seconds: seconds,
+          remaining_seconds: seconds,
+          started_at: null,
+          status: UserStatus.PENDING,
+        });
+      } else {
+        exists.total_seconds = (exists.total_seconds ?? 0) + seconds;
+        exists.remaining_seconds = (exists.remaining_seconds ?? 0) + seconds;
+      }
+    }
+
+    user.devices = devicesArr;
+    await user.save();
+
+    return {
+      message: "Assigned devices successfully",
+      userId,
+      devices: user.devices,
+    };
+  }
+
+  /**
+   * ✅ NEW: เพิ่มเวลาให้ user ที่กำลังใช้งานทั้งหมด (INUSE) ทีเดียว
+   * - custom seconds ได้
+   */
+  async bulkAddTimeToInuseUsers(addSeconds: number) {
+    if (!addSeconds || addSeconds <= 0) {
+      throw new BadRequestException("add_seconds must be > 0");
+    }
+
+    const users = await this.userModel.find({ status: UserStatus.INUSE }).exec();
+
+    for (const u of users) {
+      await this.userModel
+        .findByIdAndUpdate(u._id, {
+          $inc: {
+            total_seconds: addSeconds,
+            remaining_seconds: addSeconds,
+          },
+        })
+        .exec();
+    }
+
+    return {
+      message: "Bulk add time success",
+      count: users.length,
+      add_seconds: addSeconds,
+    };
   }
 
   async findAll(): Promise<any[]> {
@@ -205,10 +302,15 @@ export class UsersService {
       username: u.username,
       role: u.role,
       status: u.status,
-      device_id: u.device_id,
+
+      // ✅ ของเดิม
+      device_id: u.device_id ?? null,
+
+      // ✅ NEW
+      devices: u.devices ?? [],
 
       total_seconds: u.total_seconds,
-      remaining_seconds: this.calcRemaining(u), // ✅ realtime
+      remaining_seconds: this.calcRemaining(u),
 
       password_plain: u.password_plain,
       started_at: u.started_at,
@@ -248,31 +350,31 @@ export class UsersService {
       .exec();
   }
 
+  /**
+   * ✅ connectDevice (เดิม) ยังใช้ได้
+   * - แต่ยังผูก device_id เดียวอยู่ (เพื่อไม่พังระบบเดิม)
+   */
   async connectDevice(
     userId: string,
     deviceId: string,
     deviceService: any
   ): Promise<User> {
-    const user = await this.findById(userId);
-    if (!user) {
-      throw new NotFoundException("User not found");
-    }
+    const user: any = await this.findById(userId);
+    if (!user) throw new NotFoundException("User not found");
 
     const device = await deviceService.findOne(deviceId);
-    if (!device) {
-      throw new NotFoundException("Device not found");
-    }
+    if (!device) throw new NotFoundException("Device not found");
 
     if (device.current_user_id && device.current_user_id !== userId) {
       throw new BadRequestException("Device is already in use by another user");
     }
 
     if (user.device_id && user.device_id.toString() !== deviceId) {
-      throw new BadRequestException(
-        "User is already connected to another device"
-      );
+      throw new BadRequestException("User is already connected to another device");
     }
+
     const shouldStart = user.remaining_seconds > 0 && user.started_at == null;
+
     const updatedUser = await this.userModel
       .findByIdAndUpdate(
         userId,
@@ -290,16 +392,22 @@ export class UsersService {
       status: DeviceStatus.BUSY,
     });
 
-    return updatedUser;
+    return updatedUser as any;
   }
 
+  /**
+   * ✅ disconnectDevice (เดิม) ยังใช้ได้
+   */
   async disconnectDevice(userId: string, deviceService: any): Promise<User> {
     const user: any = await this.findById(userId);
     if (!user) throw new NotFoundException("User not found");
-    if (!user.device_id)
+    if (!user.device_id) {
       throw new BadRequestException("User is not connected to any device");
+    }
 
-    const realtimeRemaining = this.calcRemaining(user); // ✅ เอาเวลาที่เหลือจริง
+    const realtimeRemaining = this.calcRemaining(user);
+
+    const oldDeviceId = user.device_id;
 
     const updatedUser = await this.userModel
       .findByIdAndUpdate(
@@ -307,20 +415,19 @@ export class UsersService {
         {
           status: UserStatus.PENDING,
           device_id: null,
-
-          remaining_seconds: realtimeRemaining, // ✅ เก็บกลับลง DB
-          started_at: null, // ✅ reset ไม่ให้นับต่อ
+          remaining_seconds: realtimeRemaining,
+          started_at: null,
         },
         { new: true }
       )
       .exec();
 
-    await deviceService.update(user.device_id.toString(), {
+    await deviceService.update(oldDeviceId.toString(), {
       current_user_id: null,
       status: DeviceStatus.AVAILABLE,
     });
 
-    return updatedUser;
+    return updatedUser as any;
   }
 
   async delete(userId: string): Promise<void> {

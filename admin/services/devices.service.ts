@@ -1,24 +1,24 @@
 import { apiFetch } from "./api";
 
 export const DevicesService = {
-  getAll: () => apiFetch("/devices"),
+  getAll: (): Promise<any[]> => apiFetch<any[]>("/devices"),
 
-  getById: (id: string) => apiFetch(`/devices/${id}`),
+  getById: (id: string): Promise<any> => apiFetch<any>(`/devices/${id}`),
 
-  create: (payload: any) =>
-    apiFetch("/devices", {
+  create: (payload: any): Promise<any> =>
+    apiFetch<any>("/devices", {
       method: "POST",
       body: payload,
     }),
 
-  update: (id: string, payload: any) =>
-    apiFetch(`/devices/${id}`, {
+  update: (id: string, payload: any): Promise<any> =>
+    apiFetch<any>(`/devices/${id}`, {
       method: "PATCH",
       body: payload,
     }),
 
-  delete: (id: string) =>
-    apiFetch(`/devices/${id}`, {
+  delete: (id: string): Promise<any> =>
+    apiFetch<any>(`/devices/${id}`, {
       method: "DELETE",
     }),
 };

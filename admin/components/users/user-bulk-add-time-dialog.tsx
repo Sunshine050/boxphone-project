@@ -1,0 +1,95 @@
+"use client";
+
+import { useMemo, useState } from "react";
+import { UsersService } from "@/services/users.service";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+
+function toSeconds(hours: string, minutes: string) {
+  const h = Math.max(0, Number(hours || 0));
+  const m = Math.max(0, Number(minutes || 0));
+  return h * 3600 + m * 60;
+}
+
+export function UserBulkAddTimeDialog({
+  open,
+  onClose,
+  onSuccess,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onSuccess?: () => void;
+}) {
+  const [hours, setHours] = useState("0");
+  const [minutes, setMinutes] = useState("30");
+  const [loading, setLoading] = useState(false);
+
+  const addSeconds = useMemo(() => toSeconds(hours, minutes), [hours, minutes]);
+
+  const handleSubmit = async () => {
+    if (addSeconds <= 0) {
+      alert("กรุณากรอกเวลาที่เพิ่มให้มากกว่า 0");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await UsersService.bulkAddTimeToInuse(addSeconds);
+      onSuccess?.();
+      onClose();
+    } catch (err: any) {
+      alert(err.message || "Bulk add time ไม่สำเร็จ");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>เพิ่มเวลาให้ผู้ใช้ที่กำลังใช้งานทั้งหมด</DialogTitle>
+          <p className="text-sm text-muted-foreground">
+            ระบบจะเพิ่มเวลาให้ user ที่สถานะเป็น <b>INUSE</b> ทั้งหมด
+          </p>
+        </DialogHeader>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1">
+            <div className="text-xs text-muted-foreground">ชั่วโมง</div>
+            <Input value={hours} onChange={(e) => setHours(e.target.value)} />
+          </div>
+
+          <div className="space-y-1">
+            <div className="text-xs text-muted-foreground">นาที</div>
+            <Input
+              value={minutes}
+              onChange={(e) => setMinutes(e.target.value)}
+            />
+          </div>
+        </div>
+
+        <div className="text-xs text-muted-foreground">
+          รวม: <span className="font-medium">{addSeconds}</span> วินาที
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>
+            ยกเลิก
+          </Button>
+          <Button onClick={handleSubmit} disabled={loading}>
+            {loading ? "กำลังเพิ่ม..." : "ยืนยันเพิ่มเวลา"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}

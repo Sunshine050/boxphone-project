@@ -1,34 +1,43 @@
-"use client"
+"use client";
 
-import { useState } from "react"
-import { Card, CardContent, CardHeader } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { Smartphone } from "lucide-react"
-import { motion } from "framer-motion"
-import { AssignUserDialog } from "./assign-user-dialog"
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Smartphone } from "lucide-react";
+import { motion } from "framer-motion";
+import { AssignUserDialog } from "./assign-user-dialog";
+import { AvailableDevice } from "@/app/admin/available/page";
 
-/* ================= TYPES ================= */
+interface Props {
+  loading: boolean;
+  devices: AvailableDevice[];
 
-interface AvailableDevice {
-  id: string
-  name: string
-  androidVersion: string
+  selected: AvailableDevice | null;
+  onSelect: (device: AvailableDevice) => void;
+  onCloseDialog: () => void;
+
+  onSuccess?: () => void;
 }
 
-/* ================= MOCK DATA ================= */
+export function AvailableDevicesGrid({
+  loading,
+  devices,
+  selected,
+  onSelect,
+  onCloseDialog,
+  onSuccess,
+}: Props) {
+  if (loading) {
+    return <div className="text-muted-foreground">กำลังโหลดอุปกรณ์...</div>;
+  }
 
-const mockDevices: AvailableDevice[] = [
-  { id: "1", name: "Android-002", androidVersion: "Android 13" },
-  { id: "2", name: "Android-005", androidVersion: "Android 14" },
-  { id: "3", name: "Android-007", androidVersion: "Android 13" },
-  { id: "4", name: "Android-009", androidVersion: "Android 12" },
-]
-
-/* ================= COMPONENT ================= */
-
-export function AvailableDevicesGrid() {
-  const [selected, setSelected] = useState<AvailableDevice | null>(null)
+  if (devices.length === 0) {
+    return (
+      <div className="text-muted-foreground">
+        ยังไม่มีอุปกรณ์ที่พร้อมใช้งาน (AVAILABLE)
+      </div>
+    );
+  }
 
   return (
     <>
@@ -40,7 +49,7 @@ export function AvailableDevicesGrid() {
         }}
         className="grid gap-5 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
       >
-        {mockDevices.map((device) => (
+        {devices.map((device) => (
           <motion.div
             key={device.id}
             variants={{
@@ -53,9 +62,14 @@ export function AvailableDevicesGrid() {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <Smartphone className="w-5 h-5 text-muted-foreground" />
-                    <h3 className="font-mono text-sm font-medium">
-                      {device.name}
-                    </h3>
+                    <div className="flex flex-col">
+                      <h3 className="font-mono text-sm font-medium">
+                        {device.name}
+                      </h3>
+                      <span className="text-xs text-muted-foreground font-mono">
+                        SN: {device.serial_number}
+                      </span>
+                    </div>
                   </div>
 
                   <Badge className="bg-green-500/10 text-green-500 border-green-500/30">
@@ -66,18 +80,14 @@ export function AvailableDevicesGrid() {
 
               <CardContent className="space-y-4">
                 <div className="text-xs">
-                  <p className="text-muted-foreground">
-                    เวอร์ชัน Android
-                  </p>
+                  <p className="text-muted-foreground">ข้อมูลเครื่อง</p>
                   <p className="font-medium">
-                    {device.androidVersion}
+                    {device.model ? device.model : "-"}{" "}
+                    {device.sdk_version ? `(SDK ${device.sdk_version})` : ""}
                   </p>
                 </div>
 
-                <Button
-                  className="w-full cursor-pointer"
-                  onClick={() => setSelected(device)}
-                >
+                <Button className="w-full cursor-pointer" onClick={() => onSelect(device)}>
                   มอบหมายผู้ใช้งาน
                 </Button>
               </CardContent>
@@ -86,13 +96,14 @@ export function AvailableDevicesGrid() {
         ))}
       </motion.div>
 
-      {/* Dialog มอบหมายผู้ใช้ */}
+      {/* ✅ Dialog */}
       {selected && (
         <AssignUserDialog
           device={selected}
-          onClose={() => setSelected(null)}
+          onClose={onCloseDialog}
+          onSuccess={onSuccess}
         />
       )}
     </>
-  )
+  );
 }

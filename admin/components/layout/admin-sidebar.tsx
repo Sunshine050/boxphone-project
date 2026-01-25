@@ -11,6 +11,7 @@ import {
   ChevronLeft,
   ChevronRight,
   LogOut,
+  ScrollText,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useSidebar } from "@/components/layout/admin-sidebar-context";
@@ -39,6 +40,11 @@ const navigation = [
     name: "จัดการอุปกรณ์",
     href: "/admin/devices",
     icon: MonitorSmartphone,
+  },
+  {
+    name: "Logs / Activity",
+    href: "/admin/logs",
+    icon: ScrollText,
   },
 ];
 

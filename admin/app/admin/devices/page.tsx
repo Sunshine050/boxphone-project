@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   DeviceManagementTable,
   Device,
@@ -15,6 +15,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { DevicesService } from "@/services/devices.service";
 
 export default function DeviceManagementPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -23,7 +24,42 @@ export default function DeviceManagementPage() {
 
   // 👁️ View dialog
   const [viewDevice, setViewDevice] = useState<Device | null>(null);
-  const [devices] = useState<Device[]>([]); // TODO: will be filled from API later
+
+  // ✅ API devices
+  const [devices, setDevices] = useState<Device[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchDevices = async () => {
+    setLoading(true);
+    try {
+      const data: any[] = await DevicesService.getAll();
+
+      const mapped: Device[] = data.map((d) => ({
+        id: d.id || d._id,
+        name: d.name,
+        serial_number: d.serial_number,
+        status: d.status,
+        current_user_id: d.current_user_id ?? null,
+      }));
+
+      setDevices(mapped);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchDevices();
+  }, []);
+
+  // ✅ ย้าย logic มาไว้ตรงนี้แทน
+  const handleDeleteDevice = async (device: Device) => {
+    const ok = confirm(`ต้องการลบอุปกรณ์ "${device.name}" จริงไหม?`);
+    if (!ok) return;
+
+    await DevicesService.delete(device.id);
+    await fetchDevices();
+  };
 
   return (
     <motion.div
@@ -41,7 +77,7 @@ export default function DeviceManagementPage() {
 
         {/* CREATE */}
         <Button
-          className=" cursor-pointer"
+          className="cursor-pointer"
           onClick={() => {
             setMode("create");
             setSelected(null);
@@ -53,18 +89,21 @@ export default function DeviceManagementPage() {
         </Button>
       </div>
 
-      {/* Table */}
-      <DeviceManagementTable
-        devices={devices}
-        onView={(device) => {
-          setViewDevice(device);
-        }}
-        onEdit={(device) => {
-          setMode("edit");
-          setSelected(device);
-          setDialogOpen(true);
-        }}
-      />
+      {/* Loading */}
+      {loading ? (
+        <div className="text-muted-foreground">กำลังโหลดอุปกรณ์...</div>
+      ) : (
+        <DeviceManagementTable
+          devices={devices}
+          onView={(device) => setViewDevice(device)}
+          onEdit={(device) => {
+            setMode("edit");
+            setSelected(device);
+            setDialogOpen(true);
+          }}
+          onDelete={handleDeleteDevice}
+        />
+      )}
 
       {/* Create / Edit Dialog */}
       <DeviceFormDialog
@@ -72,6 +111,7 @@ export default function DeviceManagementPage() {
         mode={mode}
         device={selected}
         onClose={() => setDialogOpen(false)}
+        onSuccess={fetchDevices}
       />
 
       {/* View Dialog */}
@@ -87,13 +127,14 @@ export default function DeviceManagementPage() {
                 <strong>ชื่ออุปกรณ์:</strong> {viewDevice.name}
               </div>
               <div>
-                <strong>Serial:</strong> {viewDevice.serialNumber}
+                <strong>Serial:</strong> {viewDevice.serial_number}
               </div>
               <div>
-                <strong>สถานะ:</strong>{" "}
-                {viewDevice.status === "available"
-                  ? "พร้อมใช้งาน"
-                  : "กำลังใช้งาน"}
+                <strong>สถานะ:</strong> {viewDevice.status}
+              </div>
+              <div>
+                <strong>ผู้ใช้งาน:</strong>{" "}
+                {viewDevice.current_user_id || "-"}
               </div>
             </div>
           )}

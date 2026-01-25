@@ -45,7 +45,7 @@ export function OverviewPhoneGrid({
     <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-6">
       {filteredDevices.length === 0 && (
         <div className="col-span-full text-center text-sm text-muted-foreground py-10">
-          ยังไม่มีข้อมูลอุปกรณ์ (รอเชื่อมต่อ API)
+          ยังไม่มีข้อมูลอุปกรณ์
         </div>
       )}
 
@@ -82,7 +82,6 @@ export function OverviewPhoneGrid({
               <StatusBadge status={d.status} />
             </div>
 
-            {d.name}
           </div>
 
           {/* ================= INFO ================= */}

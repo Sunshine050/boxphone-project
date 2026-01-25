@@ -2,11 +2,11 @@ import { apiFetch } from "./api";
 import { User } from "@/types/user";
 
 export const UsersService = {
-  getAll: (): Promise<User[]> => apiFetch("/users"),
+  getAll: (): Promise<User[]> => apiFetch<User[]>("/users"),
 
-  getById: (id: string): Promise<User> => apiFetch(`/users/${id}`),
+  getById: (id: string): Promise<User> => apiFetch<User>(`/users/${id}`),
 
-  getMe: (): Promise<User> => apiFetch("/users/me"),
+  getMe: (): Promise<User> => apiFetch<User>("/users/me"),
 
   createByAdmin: (payload: {
     name: string;
@@ -18,28 +18,24 @@ export const UsersService = {
       body: payload,
     }),
 
-  connectDevice: (userId: string, deviceId: string) =>
-    apiFetch(`/users/${userId}/connect-device`, {
+  assignDevices: (
+    userId: string,
+    items: { device_id: string; assign_seconds?: number }[]
+  ) =>
+    apiFetch(`/users/${userId}/assign-devices`, {
       method: "POST",
-      body: { device_id: deviceId },
+      body: { items },
+    }),
+
+  bulkAddTimeToInuse: (addSeconds: number) =>
+    apiFetch(`/users/bulk-add-time`, {
+      method: "POST",
+      body: { add_seconds: addSeconds },
     }),
 
   disconnectDevice: (userId: string) =>
     apiFetch(`/users/${userId}/disconnect-device`, {
       method: "POST",
-    }),
-
-  addTime: (
-    userId: string,
-    packageKey: "1h" | "1d" | "1w" | "1m" | "1y",
-    startTime?: string
-  ) =>
-    apiFetch(`/users/${userId}/add-time`, {
-      method: "POST",
-      body: {
-        duration: packageKey,
-        ...(startTime ? { start_time: new Date(startTime).toISOString() } : {}),
-      },
     }),
 
   delete: (id: string) =>

@@ -5,7 +5,7 @@ export type DeviceDocument = HydratedDocument<Device>;
 
 export enum DeviceStatus {
     AVAILABLE = 'AVAILABLE',
-    BUSY = 'BUSY',
+    BUSY = 'INUSE',
     OFFLINE = 'OFFLINE',
 }
 

@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Smartphone } from "lucide-react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { DevicesService } from "@/services/devices.service";
 
 /* ================= TYPES ================= */
@@ -47,7 +47,7 @@ export function StatusSummaryCards() {
       try {
         setLoading(true);
         const data = await DevicesService.getAll();
-        setDevices(data as BackendDevice[]);
+        setDevices((data || []) as BackendDevice[]);
       } catch (error) {
         console.error("Failed to fetch devices:", error);
         setDevices([]);
@@ -59,21 +59,18 @@ export function StatusSummaryCards() {
     fetchDevices();
   }, []);
 
-  // Map backend status to UI status and count
-  const countByStatus = {
-    inUse: devices.filter((d) => d.status === "BUSY").length,
-    available: devices.filter((d) => d.status === "AVAILABLE").length,
-    error: devices.filter((d) => d.status === "OFFLINE").length,
-    maintenance: 0, // TODO: Add maintenance status in backend if needed
-  };
+  const countByStatus = useMemo(() => {
+    return {
+      inUse: devices.filter((d) => d.status === "BUSY").length,
+      available: devices.filter((d) => d.status === "AVAILABLE").length,
+      error: devices.filter((d) => d.status === "OFFLINE").length,
+      maintenance: 0, // TODO: add status in backend later
+    };
+  }, [devices]);
 
   const items: StatusItem[] = [
     { label: "กำลังใช้งาน", count: countByStatus.inUse, variant: "inUse" },
-    {
-      label: "พร้อมใช้งาน",
-      count: countByStatus.available,
-      variant: "available",
-    },
+    { label: "พร้อมใช้งาน", count: countByStatus.available, variant: "available" },
     { label: "เกิดข้อผิดพลาด", count: countByStatus.error, variant: "error" },
     {
       label: "อยู่ระหว่างซ่อมบำรุง",
@@ -84,11 +81,18 @@ export function StatusSummaryCards() {
 
   if (loading) {
     return (
-      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
+      <div
+        className="
+          grid gap-4
+          grid-cols-2
+          md:grid-cols-4
+          items-stretch
+        "
+      >
         {[1, 2, 3, 4].map((i) => (
-          <Card key={i} className="bg-card border-border/70">
-            <CardContent className="p-5">
-              <div className="animate-pulse">
+          <Card key={i} className="bg-card border-border/70 h-full">
+            <CardContent className="p-5 h-full min-h-[104px] flex items-center">
+              <div className="animate-pulse w-full">
                 <div className="h-4 bg-muted rounded w-24 mb-2"></div>
                 <div className="h-8 bg-muted rounded w-16"></div>
               </div>
@@ -103,9 +107,9 @@ export function StatusSummaryCards() {
     <div
       className="
         grid gap-4
-        grid-cols-1
-        sm:grid-cols-2
-        lg:grid-cols-4
+        grid-cols-2
+        md:grid-cols-4
+        items-stretch
       "
     >
       {items.map((item, i) => (
@@ -114,6 +118,7 @@ export function StatusSummaryCards() {
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: i * 0.06 }}
+          className="h-full"
         >
           <Card
             className="
@@ -122,6 +127,7 @@ export function StatusSummaryCards() {
               ring-1 ring-border/40
               transition
               hover:ring-border
+              h-full
             "
           >
             {/* Accent gradient */}
@@ -132,21 +138,36 @@ export function StatusSummaryCards() {
               )}
             />
 
-            <CardContent className="relative p-5 flex items-center justify-between">
+            <CardContent
+              className="
+                relative
+                p-4 sm:p-5
+                h-full min-h-[104px]
+                flex items-center justify-between gap-3
+              "
+            >
               {/* Left */}
-              <div>
-                <p className="text-sm text-muted-foreground mb-1">
+              <div className="min-w-0">
+                <p className="text-xs sm:text-sm text-muted-foreground mb-1 truncate">
                   {item.label}
                 </p>
-                <p className="text-3xl font-semibold tracking-tight">
+
+                <p className="text-2xl sm:text-3xl font-semibold tracking-tight leading-none">
                   {item.count}
                 </p>
               </div>
 
               {/* Right */}
-              <div className="flex flex-col items-end gap-2">
-                <Badge variant={item.variant}>{item.label}</Badge>
-                <Smartphone className="w-5 h-5 text-muted-foreground" />
+              <div className="flex flex-col items-end gap-2 shrink-0">
+                <Badge
+                  variant={item.variant as any}
+                  className="max-w-[140px] truncate whitespace-nowrap"
+                  title={item.label}
+                >
+                  {item.label}
+                </Badge>
+
+                <Smartphone className="w-4 h-4 sm:w-5 sm:h-5 text-muted-foreground" />
               </div>
             </CardContent>
           </Card>

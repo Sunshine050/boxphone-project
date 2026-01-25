@@ -1,24 +1,29 @@
 export type UserStatus = "PENDING" | "INUSE" | "INACTIVE";
 export type UserRole = "ADMIN" | "USER";
 
-export type UserAction = "assign" | "disconnect" | "delete" | "time";
+export type UserDeviceItem = {
+  device_id: string;
+  total_seconds: number;
+  remaining_seconds: number;
+  started_at: string | null;
+  status: UserStatus;
+};
 
-export interface User {
+export type User = {
   id: string;
-  _id?: string;
-
   name: string;
   username: string;
-  password_plain?: string;
-
   role: UserRole;
   status: UserStatus;
 
-  total_seconds: number;
-  remaining_seconds: number;
+  total_seconds?: number;
+  remaining_seconds?: number;
 
-  device_id: string | null;
+  password_plain?: string;
 
-  createdAt?: string;
-  updatedAt?: string;
-}
+  devices?: UserDeviceItem[];
+
+  device_id?: string | null;
+};
+
+export type UserAction = "assign" | "disconnect" | "delete" | "time";
