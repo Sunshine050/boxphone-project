@@ -9,7 +9,7 @@ function getBackendUrl(): string {
       return env.NEXT_PUBLIC_BACKEND_URL;
     }
   }
-  return "http://localhost:3001";
+  return "http://localhost:3031";
 }
 
 const BACKEND_URL = getBackendUrl();

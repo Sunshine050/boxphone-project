@@ -23,7 +23,7 @@ npm run start:dev
 
 **Backend .env Setup:**
 ```env
-PORT=3001
+PORT=3031
 DB_HOST=localhost
 DB_PORT=5432
 DB_USERNAME=admin
@@ -53,10 +53,46 @@ npm run dev
 ---
 
 ### 3. Mobile Agent (Android)
+
+**เลือกวิธีเชื่อมต่อ:**
+
+#### วิธีที่ 1: Android Agent (Kotlin App) - เชื่อมต่อผ่าน Network
 1. เปิด **Android Studio**
 2. Open Project ไปที่โฟลเดอร์ `android-agent`
 3. แก้ไข IP Address ในไฟล์ `SocketManager.kt` ให้เป็น IP ภายในวง LAN ของเครื่อง Server (เช่น `192.168.1.xxx`) *อย่าใช้ localhost บนมือถือ*
 4. Run App ลงเครื่องจริง
+
+#### วิธีที่ 2: USB Bridge (เสี่ยวเหว๋ย) - เชื่อมต่อผ่าน USB ⭐
+1. **ติดตั้ง ADB** (Android Debug Bridge)
+   - Windows: ดาวน์โหลดจาก [Android SDK Platform Tools](https://developer.android.com/studio/releases/platform-tools)
+   - หรือติดตั้งผ่าน Android Studio SDK Manager
+2. **เปิด USB Debugging** บนมือถือ:
+   - Settings → About phone → แตะ "Build number" 7 ครั้ง
+   - Settings → Developer options → เปิด "USB debugging"
+3. **เสียบ USB** เข้ากับคอมพิวเตอร์
+4. **ตรวจสอบการเชื่อมต่อ:**
+   ```bash
+   adb devices
+   ```
+   ควรเห็นอุปกรณ์แสดงในรายการ
+5. **รัน USB Bridge Service:**
+   ```bash
+   # จากโฟลเดอร์ root ของโปรเจกต์
+   node tools/usb-bridge.js
+   ```
+6. **ตั้งค่า Environment Variables (ถ้าต้องการ):**
+   ```bash
+   # Windows (PowerShell)
+   $env:BACKEND_URL="http://localhost:3031"
+   $env:DEVICE_ID="usb_device_1"
+   $env:STREAM_FPS="5"
+   node tools/usb-bridge.js
+   
+   # Linux/Mac
+   BACKEND_URL=http://localhost:3031 DEVICE_ID=usb_device_1 STREAM_FPS=5 node tools/usb-bridge.js
+   ```
+
+**ดูคู่มือเพิ่มเติม:** [XIAOWEI_CONNECTION_GUIDE.md](./XIAOWEI_CONNECTION_GUIDE.md)
 
 ---
 

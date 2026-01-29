@@ -2,7 +2,7 @@ const { io } = require('socket.io-client');
 const { execSync } = require('child_process');
 const fs = require('fs');
 
-const BACKEND_URL = 'http://localhost:3001';
+const BACKEND_URL = 'http://localhost:3031';
 const DEVICE_ID = 'android_device_1';
 
 console.log('🚀 Starting Emulator Streamer...');

@@ -1,0 +1,15 @@
+{
+  "name": "boxphon-project",
+  "version": "1.0.0",
+  "description": "Remote Control Android System",
+  "private": true,
+  "scripts": {
+    "usb-bridge": "node tools/usb-bridge.js",
+    "usb-bridge:dev": "BACKEND_URL=http://localhost:3001 node tools/usb-bridge.js",
+    "emulator-streamer": "node tools/emulator-streamer.js"
+  },
+  "dependencies": {
+    "socket.io-client": "^4.8.3"
+  },
+  "devDependencies": {}
+}

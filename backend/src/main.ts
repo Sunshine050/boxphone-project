@@ -28,8 +28,21 @@ async function bootstrap() {
   // Validation Pipe Configuration
   app.useGlobalPipes(new ValidationPipe(getValidationPipeConfig()));
 
-  // CORS Configuration
-  app.enableCors(getCorsConfig(configService));
+  // CORS Configuration - Enable CORS with permissive settings for development
+  // IMPORTANT: This must be called BEFORE routes are registered
+  app.enableCors({
+    origin: (origin, callback) => {
+      // Allow all origins in development
+      callback(null, true);
+    },
+    methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
+    credentials: true,
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin', 'Access-Control-Request-Method', 'Access-Control-Request-Headers'],
+    exposedHeaders: [],
+    maxAge: 86400,
+    preflightContinue: false,
+    optionsSuccessStatus: 204,
+  });
 
   const port = configService.get<number>("PORT");
   if (!port) {
