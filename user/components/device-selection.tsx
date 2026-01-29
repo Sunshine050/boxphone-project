@@ -26,6 +26,9 @@ export function DeviceSelection() {
   const [devices] = useState<Device[]>([]); // TODO: จะเชื่อมกับ API ภายหลัง
 
   useEffect(() => {
+    // Check if we're in browser
+    if (typeof window === "undefined") return;
+    
     // Check if user is logged in
     const user = localStorage.getItem("user");
     if (!user) {
@@ -43,11 +46,13 @@ export function DeviceSelection() {
       duration: 30, // 30 minutes
     };
 
-    // Save to localStorage
-    const savedSessions = localStorage.getItem("sessions");
-    const sessions = savedSessions ? JSON.parse(savedSessions) : [];
-    sessions.push(newSession);
-    localStorage.setItem("sessions", JSON.stringify(sessions));
+    // Save to localStorage (only in browser)
+    if (typeof window !== "undefined") {
+      const savedSessions = localStorage.getItem("sessions");
+      const sessions = savedSessions ? JSON.parse(savedSessions) : [];
+      sessions.push(newSession);
+      localStorage.setItem("sessions", JSON.stringify(sessions));
+    }
 
     // Navigate to control page
     router.push(`/control/${newSession.id}`);

@@ -21,13 +21,19 @@ export function SessionDashboard() {
   const [sessions, setSessions] = useState<Session[]>([])
   const [currentTime, setCurrentTime] = useState(Date.now())
   const [selectedSession, setSelectedSession] = useState<Session | null>(null)
+  const [username, setUsername] = useState<string>("User")
 
   useEffect(() => {
+    // Check if we're in browser
+    if (typeof window === "undefined") return
+
     const user = localStorage.getItem("user")
     if (!user) {
       router.push("/login")
       return
     }
+
+    setUsername(user)
 
     const savedSessions = localStorage.getItem("sessions")
     if (savedSessions) {
@@ -57,7 +63,10 @@ export function SessionDashboard() {
   }
 
   const handleLogout = () => {
-    localStorage.removeItem("user")
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("user")
+      localStorage.removeItem("access_token")
+    }
     router.push("/login")
   }
 
@@ -84,7 +93,7 @@ export function SessionDashboard() {
             <div>
               <h1 className="text-xl md:text-2xl font-bold text-white">CloudPhone Devices</h1>
               <p className="text-xs md:text-sm text-slate-400">
-                {localStorage.getItem("user") || "User"} ({sessions.length} device{sessions.length !== 1 ? "s" : ""})
+                {username} ({sessions.length} device{sessions.length !== 1 ? "s" : ""})
               </p>
             </div>
           </div>

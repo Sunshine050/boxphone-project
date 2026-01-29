@@ -3,13 +3,18 @@
 import { io, Socket } from "socket.io-client";
 
 function getBackendUrl(): string {
+  // Use environment variable, no hardcode
   if (typeof window !== "undefined") {
     const env = (window as any).__NEXT_DATA__?.env;
     if (env?.NEXT_PUBLIC_BACKEND_URL) {
       return env.NEXT_PUBLIC_BACKEND_URL;
     }
   }
-  return "http://localhost:3031";
+  // Fallback to process.env for server-side
+  if (typeof process !== "undefined" && process.env.NEXT_PUBLIC_BACKEND_URL) {
+    return process.env.NEXT_PUBLIC_BACKEND_URL;
+  }
+  throw new Error("NEXT_PUBLIC_BACKEND_URL is not configured");
 }
 
 const BACKEND_URL = getBackendUrl();

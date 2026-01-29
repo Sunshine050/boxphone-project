@@ -16,12 +16,26 @@ export function LoginForm() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Mock authentication - in production, this would validate against a backend
+    // Use API for authentication
     if (username && password) {
-      localStorage.setItem("user", username);
-      router.push("/dashboard");
+      try {
+        // TODO: Replace with actual API call
+        // const result = await AuthService.login(username, password);
+        // if (typeof window !== "undefined") {
+        //   localStorage.setItem("access_token", result.access_token);
+        //   localStorage.setItem("user", username);
+        // }
+        
+        // Temporary: Mock authentication
+        if (typeof window !== "undefined") {
+          localStorage.setItem("user", username);
+        }
+        router.push("/dashboard");
+      } catch (error) {
+        console.error("Login failed:", error);
+      }
     }
   };
   const fillDemo = () => {

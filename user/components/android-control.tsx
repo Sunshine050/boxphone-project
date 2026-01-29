@@ -27,6 +27,9 @@ export function AndroidControl({ paramsPromise }: { paramsPromise: Promise<{ ses
   const [isConnecting, setIsConnecting] = useState(true)
 
   useEffect(() => {
+    // Check if we're in browser
+    if (typeof window === "undefined") return;
+    
     // Check if user is logged in
     const user = localStorage.getItem("user")
     if (!user) {
@@ -112,12 +115,14 @@ export function AndroidControl({ paramsPromise }: { paramsPromise: Promise<{ ses
   }
 
   const handleEndSession = () => {
-    // Remove session
-    const savedSessions = localStorage.getItem("sessions")
-    if (savedSessions) {
-      const sessions: Session[] = JSON.parse(savedSessions)
-      const updatedSessions = sessions.filter((s) => s.id !== params.sessionId)
-      localStorage.setItem("sessions", JSON.stringify(updatedSessions))
+    // Remove session (only in browser)
+    if (typeof window !== "undefined") {
+      const savedSessions = localStorage.getItem("sessions")
+      if (savedSessions) {
+        const sessions: Session[] = JSON.parse(savedSessions)
+        const updatedSessions = sessions.filter((s) => s.id !== params.sessionId)
+        localStorage.setItem("sessions", JSON.stringify(updatedSessions))
+      }
     }
     router.push("/dashboard")
   }
