@@ -24,7 +24,22 @@ import { MoveSessionDto } from "./dto/move-session.dto";
 export class SessionsController {
   private readonly logger = new Logger(SessionsController.name);
 
-  constructor(private readonly sessionsService: SessionsService) {}
+  constructor(private readonly sessionsService: SessionsService) { }
+  /**
+   * USER: ดึง session ของตัวเอง
+   * GET /sessions/me
+   */
+  @Get("me")
+  @HttpCode(HttpStatus.OK)
+  async getMySessions(@CurrentUser() currentUser: any) {
+    const userId =
+      currentUser?.userId ||
+      currentUser?.id ||
+      currentUser?._id?.toString();
+
+    return this.sessionsService.getActiveSessionsByUser(userId);
+  }
+
 
   /**
    * สร้าง Session ใหม่
@@ -70,7 +85,7 @@ export class SessionsController {
     }
   }
 
- 
+
   @Get()
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN)
@@ -78,7 +93,7 @@ export class SessionsController {
     return this.sessionsService.findAll();
   }
 
- 
+
   @Get(":id")
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN)
@@ -90,7 +105,7 @@ export class SessionsController {
     return session;
   }
 
-  
+
   @Get("user/:userId")
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN)
@@ -102,17 +117,17 @@ export class SessionsController {
     return session;
   }
 
-  
+
   @Get("device/:deviceId")
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN)
   async getActiveSessionByDevice(@Param("deviceId") deviceId: string) {
     const session =
       await this.sessionsService.getActiveSessionByDevice(deviceId);
-    return session; 
+    return session;
   }
 
- 
+
   @Get(":id/remaining")
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN)
@@ -141,7 +156,7 @@ export class SessionsController {
     }
   }
 
-  
+
   @Post(":id/pause")
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN)
@@ -177,7 +192,7 @@ export class SessionsController {
     }
   }
 
-  
+
   @Post(":id/resume")
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN)
@@ -209,7 +224,7 @@ export class SessionsController {
     }
   }
 
-  
+
   @Post(":id/move")
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN)
@@ -256,7 +271,7 @@ export class SessionsController {
     }
   }
 
-  
+
   @Post(":id/cancel")
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN)
@@ -272,7 +287,7 @@ export class SessionsController {
     };
   }
 
-  
+
   @Get(":id/move-logs")
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN)
@@ -280,7 +295,7 @@ export class SessionsController {
     return this.sessionsService.getMoveLogs(id);
   }
 
-  
+
   private formatTime(seconds: number): string {
     const hours = Math.floor(seconds / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);

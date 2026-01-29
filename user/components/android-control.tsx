@@ -1,269 +1,88 @@
 "use client"
 
-import { useEffect, useState, use } from "react"
-import { useRouter } from "next/navigation"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { ArrowLeft, Home, RotateCcw, Square, Volume2, Clock, Smartphone, Power } from "lucide-react"
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { useEffect, useState } from "react"
+import { useRouter, useParams } from "next/navigation"
+import { apiFetch } from "@/lib/api"
+import { Smartphone, Clock } from "lucide-react"
 
 interface Session {
-  id: string
-  deviceName: string
-  status: "running" | "expired"
-  startTime: number
-  duration: number
+  _id: string
+  status: "ACTIVE" | "PAUSED" | "EXPIRED"
+  start_time: string
+  resume_time?: string
+  remaining_seconds: number
+  device_id: {
+    _id: string
+    name: string
+  }
 }
 
-export function AndroidControl({ paramsPromise }: { paramsPromise: Promise<{ sessionId: string }> }) {
-  const params = use(paramsPromise)
+export function AndroidControl() {
   const router = useRouter()
+  const { sessionId } = useParams<{ sessionId: string }>()
+
   const [session, setSession] = useState<Session | null>(null)
-  const [currentTime, setCurrentTime] = useState(Date.now())
-  const [showExpiredModal, setShowExpiredModal] = useState(false)
-  const [mousePos, setMousePos] = useState({ x: 0, y: 0 })
-  const [screenImage, setScreenImage] = useState<string | null>(null)
-  const [isConnecting, setIsConnecting] = useState(true)
+  const [now, setNow] = useState(Date.now())
 
+  /* =====================
+     LOAD SESSION FROM SERVER
+  ===================== */
   useEffect(() => {
-    // Check if user is logged in
-    const user = localStorage.getItem("user")
-    if (!user) {
-      router.push("/login")
-      return
-    }
+    async function load() {
+      try {
+        const data = await apiFetch<Session[] | null>("/sessions/me")
+        const found = data?.find((s) => s._id === sessionId)
 
-    // Load session
-    const savedSessions = localStorage.getItem("sessions")
-    if (savedSessions) {
-      const sessions: Session[] = JSON.parse(savedSessions)
-      const currentSession = sessions.find((s) => s.id === params.sessionId)
-      if (currentSession) {
-        setSession(currentSession)
-
-        // Connect to socket for real-time control
-        // Note: For demo, we might need a fixed deviceId or get it from session
-        // Let's assume currentSession has deviceId, otherwise use a fallback
-        const deviceId = (currentSession as any).deviceId || "android_device_1"
-
-        // Use dynamic import to avoid SSR issues
-        if (typeof window !== "undefined") {
-          import("@/lib/socket-client").then(({ socketClient }) => {
-            socketClient.connect(deviceId)
-            socketClient.onScreenFrame((imageData) => {
-              setScreenImage(imageData)
-              setIsConnecting(false)
-            })
-            // Simulate connection after 2 seconds for demo
-            setTimeout(() => {
-              setIsConnecting(false)
-            }, 2000)
-          }).catch((err) => {
-            console.warn("Socket client not available, using demo mode:", err)
-            setIsConnecting(false)
-          })
+        if (!found) {
+          router.push("/dashboard")
+          return
         }
-      } else {
-        router.push("/dashboard")
+
+        setSession(found)
+      } catch {
+        router.push("/login")
       }
     }
 
-    // Update time every second
-    const interval = setInterval(() => {
-      setCurrentTime(Date.now())
-    }, 1000)
+    load()
+    const timer = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(timer)
+  }, [sessionId, router])
 
-    return () => {
-      clearInterval(interval)
-      if (typeof window !== "undefined") {
-        import("@/lib/socket-client").then(({ socketClient }) => {
-          socketClient.disconnect()
-        }).catch(() => {
-          // Ignore errors on cleanup
-        })
-      }
-    }
-  }, [params.sessionId, router])
+  if (!session) return null
 
-  useEffect(() => {
-    if (session) {
-      const elapsed = Math.floor((currentTime - session.startTime) / 1000)
-      const totalSeconds = session.duration * 60
-      const remaining = Math.max(0, totalSeconds - elapsed)
+  /* =====================
+     TIME (SERVER-BASED)
+  ===================== */
+  let remaining = session.remaining_seconds
 
-      if (remaining === 0 && !showExpiredModal) {
-        setShowExpiredModal(true)
-      }
-    }
-  }, [currentTime, session, showExpiredModal])
-
-  const getRemainingTime = () => {
-    if (!session) return { minutes: 0, seconds: 0 }
-
-    const elapsed = Math.floor((currentTime - session.startTime) / 1000)
-    const totalSeconds = session.duration * 60
-    const remaining = Math.max(0, totalSeconds - elapsed)
-
-    const minutes = Math.floor(remaining / 60)
-    const seconds = remaining % 60
-
-    return { minutes, seconds }
+  if (session.status === "ACTIVE") {
+    const base = new Date(session.resume_time ?? session.start_time).getTime()
+    const elapsed = Math.floor((now - base) / 1000)
+    remaining = Math.max(0, session.remaining_seconds - elapsed)
   }
 
-  const handleEndSession = () => {
-    // Remove session
-    const savedSessions = localStorage.getItem("sessions")
-    if (savedSessions) {
-      const sessions: Session[] = JSON.parse(savedSessions)
-      const updatedSessions = sessions.filter((s) => s.id !== params.sessionId)
-      localStorage.setItem("sessions", JSON.stringify(updatedSessions))
-    }
-    router.push("/dashboard")
-  }
-
-  const handleReturnToDashboard = () => {
-    router.push("/dashboard")
-  }
-
-  const handleScreenClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    const rect = e.currentTarget.getBoundingClientRect()
-    const x = ((e.clientX - rect.left) / rect.width) * 100
-    const y = ((e.clientY - rect.top) / rect.height) * 100
-
-    if (typeof window !== "undefined") {
-      import("@/lib/socket-client").then(({ socketClient }) => {
-        socketClient.sendAction("click", { x, y })
-      }).catch(() => {
-        // Demo mode - action logged in console
-        console.log("Demo: Click at", { x, y })
-      })
-    }
-  }
-
-  if (!session) {
-    return null
-  }
-
-  const { minutes, seconds } = getRemainingTime()
+  const minutes = Math.floor(remaining / 60)
+  const seconds = remaining % 60
 
   return (
-    <>
-      <div className="flex min-h-screen bg-gradient-to-br from-slate-950 via-blue-950 to-slate-900">
-        {/* Sidebar */}
-        <div className="w-80 border-r border-slate-800 bg-slate-900/50 p-6 backdrop-blur-xl">
-          <Button variant="ghost" onClick={handleReturnToDashboard} className="mb-6 text-slate-400 hover:text-white">
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Dashboard
-          </Button>
+    <div className="min-h-screen flex items-center justify-center bg-slate-950 text-white">
+      <div className="text-center">
+        <Smartphone className="mx-auto mb-4 h-16 w-16 text-cyan-400" />
+        <h2 className="text-xl mb-2">{session.device_id.name}</h2>
 
-          <div className="space-y-6">
-            <Card className="border-slate-800 bg-slate-950/50">
-              <CardContent className="p-4">
-                <div className="mb-4 flex items-center gap-3">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-gradient-to-br from-cyan-500/20 to-blue-600/20">
-                    <Smartphone className="h-6 w-6 text-cyan-400" />
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-white">{session.deviceName}</h3>
-                    <p className="text-sm text-slate-400">Session {session.id}</p>
-                  </div>
-                </div>
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-slate-400">Status</span>
-                    <Badge className="bg-green-500/20 text-green-400">Running</Badge>
-                  </div>
-                  <div className="flex items-center justify-between rounded-lg border border-slate-800 bg-slate-900/50 p-3">
-                    <span className="text-sm text-slate-400">Time Remaining</span>
-                    <div className="flex items-center gap-2">
-                      <Clock className="h-4 w-4 text-cyan-400" />
-                      <span className="font-mono text-lg font-semibold text-white">
-                        {minutes.toString().padStart(2, "0")}:{seconds.toString().padStart(2, "0")}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        </div>
+        <p className="font-mono text-3xl flex items-center justify-center gap-2">
+          <Clock className="h-5 w-5 text-cyan-400" />
+          {minutes.toString().padStart(2, "0")}:
+          {seconds.toString().padStart(2, "0")}
+        </p>
 
-        {/* Main Screen Area */}
-        <div className="flex flex-1 items-center justify-center p-8">
-          <div className="relative">
-            {/* Android Screen */}
-            <div
-              className="relative h-[720px] w-[360px] cursor-crosshair overflow-hidden rounded-3xl border-8 border-slate-800 bg-slate-950 shadow-2xl"
-              onMouseMove={(e) => {
-                const rect = e.currentTarget.getBoundingClientRect()
-                setMousePos({
-                  x: e.clientX - rect.left,
-                  y: e.clientY - rect.top,
-                })
-              }}
-              onClick={handleScreenClick}
-            >
-              {screenImage ? (
-                <img
-                  src={screenImage}
-                  alt="Android Screen"
-                  className="h-full w-full object-contain"
-                />
-              ) : (
-                <div className="flex h-full w-full flex-col items-center justify-center bg-slate-900 text-center p-6">
-                  {isConnecting ? (
-                    <>
-                      <div className="mb-4 h-12 w-12 animate-spin rounded-full border-4 border-cyan-500 border-t-transparent"></div>
-                      <p className="text-cyan-400">Connecting to device...</p>
-                    </>
-                  ) : (
-                    <>
-                      <Smartphone className="mb-4 h-16 w-16 text-slate-700 animate-pulse" />
-                      <p className="text-slate-500">Waiting for screen stream...</p>
-                    </>
-                  )}
-                </div>
-              )}
-
-              {/* Touch Indicator */}
-              <div
-                className="pointer-events-none absolute h-6 w-6 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-cyan-400/50 bg-cyan-400/20 mix-blend-screen"
-                style={{
-                  left: mousePos.x,
-                  top: mousePos.y,
-                }}
-              />
-            </div>
-
-            {/* Screen Label */}
-            <div className="mt-4 text-center">
-              <p className="text-sm text-slate-400">Click to tap • Real-time Stream</p>
-            </div>
-          </div>
-        </div>
+        {session.status !== "ACTIVE" && (
+          <p className="mt-2 text-sm text-slate-400">
+            Session {session.status.toLowerCase()}
+          </p>
+        )}
       </div>
-
-      {/* Session Expired Modal */}
-      <Dialog open={showExpiredModal} onOpenChange={setShowExpiredModal}>
-        <DialogContent className="border-slate-800 bg-slate-900 sm:max-w-md">
-          <DialogHeader>
-            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-red-500/20">
-              <Clock className="h-8 w-8 text-red-400" />
-            </div>
-            <DialogTitle className="text-center text-2xl text-white">Session Expired</DialogTitle>
-            <DialogDescription className="text-center text-slate-400">
-              Your device session has ended and the device has been released.
-            </DialogDescription>
-          </DialogHeader>
-          <Button
-            onClick={handleReturnToDashboard}
-            className="w-full bg-gradient-to-r from-cyan-500 to-blue-600 text-white hover:from-cyan-600 hover:to-blue-700"
-          >
-            Return to Dashboard
-          </Button>
-        </DialogContent>
-      </Dialog>
-    </>
+    </div>
   )
 }

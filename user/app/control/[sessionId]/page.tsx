@@ -1,9 +1,5 @@
 import { AndroidControl } from "@/components/android-control"
 
-export default function ControlPage({
-  params,
-}: {
-  params: Promise<{ sessionId: string }>
-}) {
-  return <AndroidControl paramsPromise={params} />
+export default function ControlPage() {
+  return <AndroidControl />
 }

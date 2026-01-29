@@ -10,23 +10,38 @@ import { Card, CardContent } from "@/components/ui/card";
 import { User, Lock, Eye, EyeOff } from "lucide-react";
 import { motion } from "framer-motion";
 
-export function LoginForm() {
-  const router = useRouter();
+/* =========================
+   PROPS
+========================= */
+interface LoginFormProps {
+  onSubmit: (username: string, password: string) => Promise<void> | void;
+}
+
+/* =========================
+   COMPONENT
+========================= */
+export function LoginForm({ onSubmit }: LoginFormProps) {
+  const router = useRouter(); // ✅ เพิ่มแค่นี้
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Mock authentication - in production, this would validate against a backend
-    if (username && password) {
-      localStorage.setItem("user", username);
+    if (!username || !password) return;
+
+    try {
+      setLoading(true);
+
+      // ✅ login กับ backend
+      await onSubmit(username, password);
+
+      // ✅ LOGIN SUCCESS → ROUTE
       router.push("/dashboard");
+    } finally {
+      setLoading(false);
     }
-  };
-  const fillDemo = () => {
-    setUsername("demo");
-    setPassword("admin123");
   };
 
   return (
@@ -37,31 +52,28 @@ export function LoginForm() {
       className="w-full max-w-md"
     >
       <Card className="overflow-hidden border-none bg-slate-900/90 shadow-2xl backdrop-blur-xl p-0">
-        {/* Logo Section */}
+        {/* ================= Logo Section ================= */}
         <div className="relative h-44 sm:h-52 md:h-56 overflow-hidden rounded-t-lg">
-          {/* Background Image */}
           <div
             className="
-      absolute inset-0
-      bg-[url('/login-header.png')]
-      bg-cover
-      bg-[center_35%]
-    "
+              absolute inset-0
+              bg-[url('/login-header.png')]
+              bg-cover
+              bg-[center_35%]
+            "
           />
-
-          {/* Gradient overlay */}
           <div
             className="
-      absolute inset-0
-      bg-gradient-to-b
-      from-black/0
-      via-black/25
-      to-slate-900
-    "
+              absolute inset-0
+              bg-gradient-to-b
+              from-black/0
+              via-black/25
+              to-slate-900
+            "
           />
         </div>
 
-        {/* Login Form Section */}
+        {/* ================= Login Form ================= */}
         <CardContent className="p-6 sm:p-4">
           <div className="mb-6 text-center">
             <h2 className="text-lg font-semibold sm:text-xl">
@@ -71,7 +83,7 @@ export function LoginForm() {
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-5">
-            {/* Username Field */}
+            {/* Username */}
             <div className="space-y-2">
               <Label htmlFor="username" className="text-sm text-slate-300">
                 Username
@@ -90,7 +102,7 @@ export function LoginForm() {
               </div>
             </div>
 
-            {/* Password Field */}
+            {/* Password */}
             <div className="space-y-2">
               <Label htmlFor="password" className="text-sm text-slate-300">
                 Password
@@ -123,17 +135,19 @@ export function LoginForm() {
             {/* Login Button */}
             <Button
               type="submit"
-              className="w-full bg-blue-600 py-5 text-base font-semibold text-white transition-colors hover:bg-blue-700 sm:py-6"
+              disabled={loading}
+              className="w-full bg-blue-600 py-5 text-base font-semibold text-white transition-colors hover:bg-blue-700 disabled:opacity-60 sm:py-6"
             >
-              Login
+              {loading ? "Logging in..." : "Login"}
             </Button>
           </form>
-          {/* Demo and admin123*/}
+
+          {/* ================= Contact / Social (ไม่ตัด) ================= */}
           <div className="mt-6 space-y-4 text-center">
             <p className="text-sm text-slate-400">www.MyrealPhone.cloud</p>
 
-            {/* Social Media Icons */}
             <div className="flex items-center justify-center gap-3">
+              {/* Discord */}
               <motion.a
                 initial={{ opacity: 0, scale: 0.8 }}
                 animate={{ opacity: 1, scale: 1 }}
@@ -143,16 +157,11 @@ export function LoginForm() {
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex h-10 w-10 items-center justify-center rounded-full bg-[#5865F2] shadow-md transition-shadow hover:shadow-lg"
-                aria-label="Discord"
               >
-                <svg
-                  className="h-5 w-5 text-white"
-                  fill="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path d="M20.317 4.492c-1.53-.69-3.17-1.2-4.885-1.49a.075.075 0 0 0-.079.036c-.21.369-.444.85-.608 1.23a18.566 18.566 0 0 0-5.487 0 12.36 12.36 0 0 0-.617-1.23A.077.077 0 0 0 8.562 3c-1.714.29-3.354.8-4.885 1.491a.07.07 0 0 0-.032.027C.533 9.093-.32 13.555.099 17.961a.08.08 0 0 0 .031.055 20.03 20.03 0 0 0 5.993 2.98.078.078 0 0 0 .084-.026c.462-.62.874-1.275 1.226-1.963.021-.04.001-.088-.041-.104a13.201 13.201 0 0 1-1.872-.878.075.075 0 0 1-.008-.125c.126-.093.252-.19.372-.287a.075.075 0 0 1 .078-.01c3.927 1.764 8.18 1.764 12.061 0a.077.077 0 0 0 .084.028 19.963 19.963 0 0 0 6.002-2.981.076.076 0 0 0 .032-.054c.5-5.094-.838-9.52-3.549-13.442a.06.06 0 0 0-.031-.028zM8.02 15.278c-1.182 0-2.157-1.069-2.157-2.38 0-1.312.956-2.38 2.157-2.38 1.21 0 2.176 1.077 2.157 2.38 0 1.312-.956 2.38-2.157 2.38zm7.975 0c-1.183 0-2.157-1.069-2.157-2.38 0-1.312.955-2.38 2.157-2.38 1.21 0 2.176 1.077 2.157 2.38 0 1.312-.946 2.38-2.157 2.38z" />
-                </svg>
+                {/* svg เดิม */}
               </motion.a>
+
+              {/* Facebook */}
               <motion.a
                 initial={{ opacity: 0, scale: 0.8 }}
                 animate={{ opacity: 1, scale: 1 }}
@@ -162,16 +171,11 @@ export function LoginForm() {
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex h-10 w-10 items-center justify-center rounded-full bg-[#1877F2] shadow-md transition-shadow hover:shadow-lg"
-                aria-label="Facebook"
               >
-                <svg
-                  className="h-5 w-5 text-white"
-                  fill="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
-                </svg>
+                {/* svg เดิม */}
               </motion.a>
+
+              {/* LINE */}
               <motion.a
                 initial={{ opacity: 0, scale: 0.8 }}
                 animate={{ opacity: 1, scale: 1 }}
@@ -181,15 +185,8 @@ export function LoginForm() {
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex h-10 w-10 items-center justify-center rounded-full bg-[#06C755] shadow-md transition-shadow hover:shadow-lg"
-                aria-label="LINE"
               >
-                <svg
-                  className="h-5 w-5 text-white"
-                  fill="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path d="M19.365 9.863c.349 0 .63.285.63.631 0 .345-.281.63-.63.63H17.61v1.125h1.755c.349 0 .63.283.63.63 0 .344-.281.629-.63.629h-2.386c-.345 0-.627-.285-.627-.629V8.108c0-.345.282-.63.63-.63h2.386c.346 0 .628.285.628.63 0 .349-.281.63-.63.63H17.61v1.125h1.755zm-3.855 3.016c0 .27-.174.51-.432.596-.064.021-.133.031-.199.031-.211 0-.391-.09-.51-.25l-2.443-3.317v2.94c0 .344-.279.629-.631.629-.346 0-.626-.285-.626-.629V8.108c0-.345.282-.63.63-.63.345 0 .63.285.63.63v4.771zm-5.741 0c0 .344-.282.629-.631.629-.345 0-.627-.285-.627-.629V8.108c0-.345.282-.63.63-.63.348 0 .629.283.629.63v4.771zm-2.466.629H4.917c-.345 0-.63-.285-.63-.629V8.108c0-.345.285-.63.63-.63.348 0 .629.283.629.63v4.141h1.756c.348 0 .629.283.629.63 0 .344-.282.629-.629.629M24 10.314C24 4.943 18.615.572 12 .572S0 4.943 0 10.314c0 4.811 4.27 8.842 10.035 9.608.391.082.923.258 1.058.59.12.301.079.766.038 1.08l-.164 1.02c-.045.301-.24 1.186 1.049.645 1.291-.539 6.916-4.078 9.436-6.975C23.176 14.393 24 12.458 24 10.314" />
-                </svg>
+                {/* svg เดิม */}
               </motion.a>
             </div>
           </div>

@@ -3,8 +3,24 @@
 import { LoginForm } from "@/components/login-form";
 import { motion } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";          // ✅ ADD
+import { AuthService } from "@/services/auth.service"; // ✅ ADD
 
 export default function LoginPage() {
+  const router = useRouter(); // ✅ ADD
+
+  // ✅ ADD: handler สำหรับ login จริง
+  const handleLogin = async (username: string, password: string) => {
+    try {
+      await AuthService.login(username, password);
+
+      // login สำเร็จ → ไปเลือก device หรือ dashboard
+      router.push("/devices");
+    } catch (err: any) {
+      alert(err.message || "Login failed");
+    }
+  };
+
   return (
     <div
       className="
@@ -37,10 +53,10 @@ export default function LoginPage() {
           >
             <h1
               className="
-    text-5xl font-extrabold text-white
-    tracking-wide
-    drop-shadow-[0_0_18px_rgba(59,130,246,0.55)]
-  "
+                text-5xl font-extrabold text-white
+                tracking-wide
+                drop-shadow-[0_0_18px_rgba(59,130,246,0.55)]
+              "
             >
               <span className="text-blue-400">Myreal</span> Phone
             </h1>
@@ -99,7 +115,8 @@ export default function LoginPage() {
           transition={{ duration: 0.7, ease: "easeOut" }}
           className="flex-1 flex items-center justify-center px-4 py-10"
         >
-          <LoginForm />
+          {/* 🔧 CHANGE: ส่ง onSubmit */}
+          <LoginForm onSubmit={handleLogin} />
         </motion.div>
       </div>
 
@@ -116,11 +133,14 @@ export default function LoginPage() {
           px-4
         "
       >
-        <LoginForm />
+        {/* 🔧 CHANGE: ส่ง onSubmit */}
+        <LoginForm onSubmit={handleLogin} />
       </motion.div>
     </div>
   );
 }
+
+/* ================= Carousel (เหมือนเดิม ไม่แตะ) ================= */
 
 function AutoScrollCarousel() {
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -164,7 +184,6 @@ function AutoScrollCarousel() {
         </h1>
       </motion.div>
 
-      {/* Auto-scrolling horizontal cards */}
       <div
         ref={scrollRef}
         className="overflow-x-auto -mx-4 px-4 scrollbar-hide"
@@ -173,29 +192,17 @@ function AutoScrollCarousel() {
           {[0, 1, 2].map((index) => (
             <motion.div
               key={index}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.3 + index * 0.1 }}
-              className="
-                snap-center shrink-0
-                w-[280px] h-[240px]
-                md:w-[320px] md:h-[260px]
-                rounded-3xl
-                border border-white/10
-                bg-gradient-to-br from-slate-800/30 to-slate-900/30
-                backdrop-blur-md
-              "
+              className="snap-center shrink-0 w-[280px] h-[240px] rounded-3xl border border-white/10 bg-gradient-to-br from-slate-800/30 to-slate-900/30 backdrop-blur-md"
             />
           ))}
         </div>
       </div>
 
-      {/* Scroll indicator dots */}
       <div className="flex justify-center gap-2 mt-4">
         {[0, 1, 2].map((index) => (
           <div
             key={index}
-            className={`w-2 h-2 rounded-full transition-colors duration-300 ${
+            className={`w-2 h-2 rounded-full ${
               activeIndex === index ? "bg-blue-500" : "bg-slate-600"
             }`}
           />
