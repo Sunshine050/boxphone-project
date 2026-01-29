@@ -1,6 +1,11 @@
-// src/services/api.ts
+// Admin Panel API Service
+// Uses environment variable for BASE_URL, no hardcode
 
-const BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
+const BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || process.env.NEXT_PUBLIC_BACKEND_URL;
+
+if (!BASE_URL) {
+  throw new Error("NEXT_PUBLIC_API_BASE_URL or NEXT_PUBLIC_BACKEND_URL must be configured");
+}
 
 type HttpMethod = "GET" | "POST" | "PATCH" | "DELETE";
 
@@ -14,9 +19,6 @@ export async function apiFetch<T>(
   path: string,
   options: FetchOptions = {}
 ): Promise<T> {
-  if (!BASE_URL) {
-    throw new Error("NEXT_PUBLIC_API_BASE_URL is not configured");
-  }
 
   const { method = "GET", body } = options;
 
