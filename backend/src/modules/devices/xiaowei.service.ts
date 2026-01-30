@@ -173,13 +173,19 @@ export class XiaoweiService {
       
       // ตามเอกสาร 8.2.1: GET /api/devices หรือ POST /api/devices
       let response;
+      let lastError: any = null;
       try {
         response = await this.apiClient.get('/api/devices');
-      } catch (error) {
+      } catch (error: any) {
+        lastError = error;
+        this.logger.debug(`GET /api/devices failed: ${error?.message || error?.code || 'Unknown error'}`);
         try {
           response = await this.apiClient.post('/api/devices', {});
-        } catch (error2) {
-          throw new Error(`Failed to fetch device list: ${error?.message || error2?.message}`);
+        } catch (error2: any) {
+          const errorMsg = error2?.message || error2?.code || error?.message || error?.code || 'Unknown error';
+          const errorDetails = error2?.response?.data ? JSON.stringify(error2.response.data) : '';
+          this.logger.error(`Both GET and POST /api/devices failed. Last error: ${errorMsg}${errorDetails ? `, Details: ${errorDetails}` : ''}`);
+          throw new Error(`Failed to fetch device list: ${errorMsg}${errorDetails ? ` (${errorDetails})` : ''}`);
         }
       }
 
