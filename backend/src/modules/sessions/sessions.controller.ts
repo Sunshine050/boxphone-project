@@ -9,6 +9,7 @@ import {
   HttpStatus,
   NotFoundException,
   Logger,
+  UnauthorizedException,
 } from "@nestjs/common";
 import { SessionsService } from "./sessions.service";
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
@@ -37,7 +38,16 @@ export class SessionsController {
       currentUser?.id ||
       currentUser?._id?.toString();
 
-    return this.sessionsService.getActiveSessionsByUser(userId);
+    // 1. หา session ที่มีอยู่ก่อน
+    const sessions =
+      await this.sessionsService.getActiveSessionsByUser(userId);
+
+    if (sessions.length > 0) {
+      return sessions;
+    }
+
+    // 2. ค่อย start assigned (สร้างได้ครั้งเดียว)
+    return this.sessionsService.startAssignedSessionsByUser(userId);
   }
 
 

@@ -7,11 +7,11 @@ export const AuthService = {
       user: { id: string; username: string; role: string };
     }>("/auth/login", {
       method: "POST",
-      body: JSON.stringify({ username, password }),
-      auth: false, // login ยังไม่มี token
+      body: { username, password },
+      auth: false, // ❗ login ไม่มี token
     });
 
-    localStorage.setItem("token", res.access_token);
+    localStorage.setItem("access_token", res.access_token);
     localStorage.setItem("user", JSON.stringify(res.user));
 
     return res.user;
@@ -23,7 +23,7 @@ export const AuthService = {
   },
 
   logout() {
-    localStorage.removeItem("token");
+    localStorage.removeItem("access_token");
     localStorage.removeItem("user");
   },
 };

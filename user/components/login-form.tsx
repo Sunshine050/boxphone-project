@@ -29,10 +29,13 @@ export function LoginForm({ onSubmit }: LoginFormProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Mock authentication - in production, this would validate against a backend
-    if (username && password) {
-      localStorage.setItem("user", username);
-      router.push("/dashboard");
+    setLoading(true);
+
+    try {
+      // ✅ เรียกของจริง
+      await onSubmit(username, password);
+    } finally {
+      setLoading(false);
     }
   };
 

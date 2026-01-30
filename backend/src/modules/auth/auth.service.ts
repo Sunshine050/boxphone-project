@@ -21,36 +21,58 @@ export class AuthService {
      * Login - ตรวจสอบ Username/Password
      * @returns JWT Access Token และข้อมูล User
      */
+
     async login(loginDto: LoginDto) {
-        this.logger.debug(`[LOGIN] Checking user: ${loginDto.username}`);
-        const user = await this.usersService.findByUsername(loginDto.username);
+        const { username } = loginDto;
+
+        this.logger.log(`[LOGIN] Attempt username="${username}"`);
+
+        // 1. หา user
+        const user = await this.usersService.findByUsername(username);
 
         if (!user) {
-            this.logger.warn(`[LOGIN] ❌ User not found: ${loginDto.username}`);
-            throw new UnauthorizedException('Invalid credentials');
+            this.logger.warn(`[LOGIN] ❌ User not found: "${username}"`);
+            throw new UnauthorizedException("Invalid credentials");
         }
 
-        this.logger.debug(`[LOGIN] User found, validating password for: ${loginDto.username}`);
-        const isPasswordValid = await bcrypt.compare(
-            loginDto.password,
-            user.password_hash,
+        this.logger.debug(
+            `[LOGIN] User found id=${(user as any)._id.toString()} role=${user.role}`
         );
 
-        if (!isPasswordValid) {
-            this.logger.warn(`[LOGIN] ❌ Invalid password for: ${loginDto.username}`);
-            throw new UnauthorizedException('Invalid credentials');
+        // 2. ตรวจ password
+        const isValid = await bcrypt.compare(
+            loginDto.password,
+            user.password_hash
+        );
+
+        if (!isValid) {
+            this.logger.warn(
+                `[LOGIN] ❌ Invalid password for username="${username}"`
+            );
+            throw new UnauthorizedException("Invalid credentials");
         }
 
-        const userId = (user as any).id || (user as any)._id.toString();
-        const payload = { sub: userId, username: user.username, role: user.role };
+        // 3. สร้าง JWT payload
+        const userId = (user as any)._id.toString();
+
+        const payload = {
+            sub: userId,           // ✅ ใช้ sub แค่ใน token
+            username: user.username,
+            role: user.role,
+        };
+
+        // 4. sign token
         const token = this.jwtService.sign(payload);
 
-        this.logger.log(`[LOGIN] ✅ Token generated for user: ${loginDto.username} (ID: ${userId})`);
+        this.logger.log(
+            `[LOGIN] ✅ Success username="${username}" id=${userId} role=${user.role}`
+        );
 
+        // 5. response (❗ frontend จะใช้ id ไม่ใช่ sub)
         return {
             access_token: token,
             user: {
-                id: userId,
+                id: userId,          // ✅ frontend / controller ใช้ id
                 username: user.username,
                 role: user.role,
             },
@@ -90,7 +112,7 @@ export class AuthService {
         };
     }
 
-    
+
     async validateUser(userId: string) {
         return await this.usersService.findById(userId);
     }

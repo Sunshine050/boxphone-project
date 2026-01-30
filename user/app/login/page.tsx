@@ -15,7 +15,7 @@ export default function LoginPage() {
       await AuthService.login(username, password);
 
       // login สำเร็จ → ไปเลือก device หรือ dashboard
-      router.push("/devices");
+      router.push("/dashboard");
     } catch (err: any) {
       alert(err.message || "Login failed");
     }
@@ -25,11 +25,13 @@ export default function LoginPage() {
     <div
       className="
         relative
-        h-screen w-screen
-        overflow-hidden
-        grid grid-cols-1
-        bg-gradient-to-br from-slate-950 via-blue-950 to-slate-900
-        lg:grid-cols-[60%_40%]
+    min-h-screen w-screen        
+    overflow-y-auto              
+    grid grid-cols-1
+    bg-gradient-to-br from-slate-950 via-blue-950 to-slate-900
+    lg:h-screen                 
+    lg:overflow-hidden            
+    lg:grid-cols-[60%_40%]
       "
     >
       {/* ================= Left Banner Section (Desktop) ================= */}
