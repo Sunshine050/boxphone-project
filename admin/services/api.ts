@@ -1,7 +1,7 @@
 // Admin Panel API Service
 // Uses environment variable for BASE_URL, no hardcode
 
-const BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || process.env.NEXT_PUBLIC_BACKEND_URL;
+export const BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:3031";
 
 if (!BASE_URL) {
   throw new Error("NEXT_PUBLIC_API_BASE_URL or NEXT_PUBLIC_BACKEND_URL must be configured");

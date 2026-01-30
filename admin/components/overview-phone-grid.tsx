@@ -1,9 +1,11 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
-import { Eye, Power } from "lucide-react";
+import { Eye, Power, RefreshCw } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { DevicesService } from "@/services/devices.service";
 
 /* ================= TYPES ================= */
 
@@ -75,6 +77,7 @@ export function OverviewPhoneGrid({
               flex items-center justify-center
               text-muted-foreground text-xs
               ring-1 ring-inset ring-white/10
+              overflow-hidden
             "
           >
             {/* ✅ STATUS BADGE (อยู่บนจอโทรศัพท์) */}
@@ -82,6 +85,8 @@ export function OverviewPhoneGrid({
               <StatusBadge status={d.status} />
             </div>
 
+            {/* ✅ ภาพหน้าจอจากเสี่ยวเหว๋ย */}
+            <DeviceScreenshot deviceId={d.id} status={d.status} />
           </div>
 
           {/* ================= INFO ================= */}
@@ -114,6 +119,137 @@ export function OverviewPhoneGrid({
         </motion.div>
       ))}
     </div>
+  );
+}
+
+/* ================= DEVICE SCREENSHOT ================= */
+
+function DeviceScreenshot({ deviceId, status }: { deviceId: string; status: DeviceStatus }) {
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string>("");
+
+  const fetchScreenshot = async () => {
+    if (status === "maintenance" || status === "error") {
+      return; // ไม่ดึงหน้าจอถ้าเครื่องไม่พร้อม
+    }
+
+    setLoading(true);
+    setError(false);
+    setErrorMessage("");
+    
+    try {
+      // สร้าง URL พร้อม timestamp เพื่อ bypass cache
+      const url = DevicesService.getScreenshotUrl(deviceId);
+      
+      // ดึง token จาก localStorage
+      const token = typeof window !== "undefined" 
+        ? localStorage.getItem("access_token") 
+        : null;
+
+      // ใช้ fetch เพื่อส่ง Authorization header
+      const response = await fetch(url, {
+        method: "GET",
+        headers: {
+          ...(token && { Authorization: `Bearer ${token}` }),
+        },
+        cache: "no-store",
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`HTTP ${response.status}: ${errorText || response.statusText}`);
+      }
+
+      // สร้าง blob URL จาก response
+      const blob = await response.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      
+      // ลบ blob URL เก่า (ถ้ามี)
+      if (imageUrl && imageUrl.startsWith("blob:")) {
+        URL.revokeObjectURL(imageUrl);
+      }
+      
+      setImageUrl(blobUrl);
+      setLoading(false);
+    } catch (err: any) {
+      console.error("Failed to fetch screenshot:", err);
+      setError(true);
+      setErrorMessage(err.message || "ไม่สามารถดึงหน้าจอได้");
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchScreenshot();
+    // Auto-refresh ทุก 5 วินาที (optional - สามารถปิดได้)
+    const interval = setInterval(fetchScreenshot, 5000);
+    return () => {
+      clearInterval(interval);
+      // Cleanup blob URL เมื่อ component unmount
+      if (imageUrl && imageUrl.startsWith("blob:")) {
+        URL.revokeObjectURL(imageUrl);
+      }
+    };
+  }, [deviceId, status]);
+
+  if (status === "maintenance" || status === "error") {
+    return (
+      <div className="w-full h-full flex items-center justify-center">
+        <p className="text-xs text-muted-foreground">ไม่สามารถดึงหน้าจอได้</p>
+      </div>
+    );
+  }
+
+  if (loading && !imageUrl) {
+    return (
+      <div className="w-full h-full flex items-center justify-center">
+        <RefreshCw className="w-4 h-4 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (error || !imageUrl) {
+    return (
+      <div className="w-full h-full flex flex-col items-center justify-center gap-2 p-2">
+        <p className="text-xs text-muted-foreground text-center">
+          {errorMessage || "ไม่สามารถดึงหน้าจอได้"}
+        </p>
+        <Button
+          size="sm"
+          variant="ghost"
+          className="h-6 text-xs"
+          onClick={fetchScreenshot}
+        >
+          <RefreshCw className="w-3 h-3 mr-1" />
+          รีเฟรช
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <img
+        src={imageUrl}
+        alt={`Device ${deviceId} screenshot`}
+        className="w-full h-full object-contain"
+        onError={() => setError(true)}
+      />
+      {/* ปุ่ม refresh แบบ manual */}
+      <div className="absolute bottom-2 right-2 z-10">
+        <Button
+          size="icon"
+          variant="secondary"
+          className="h-7 w-7 opacity-80 hover:opacity-100"
+          onClick={fetchScreenshot}
+          title="รีเฟรชหน้าจอ"
+        >
+          <RefreshCw className="w-3 h-3" />
+        </Button>
+      </div>
+    </>
   );
 }
 

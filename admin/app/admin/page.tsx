@@ -83,15 +83,38 @@ export default function AdminOverviewPage() {
           </p>
         </div>
 
-        {/* ✅ refresh button */}
-        <Button
-          variant="outline"
-          onClick={fetchDevices}
-          disabled={loading}
-          className="shrink-0"
-        >
-          {loading ? "กำลังโหลด..." : "รีเฟรช"}
-        </Button>
+        <div className="flex gap-2">
+          {/* ✅ Sync from Xiaowei button */}
+          <Button
+            variant="default"
+            onClick={async () => {
+              try {
+                setLoading(true);
+                const result = await DevicesService.syncFromXiaowei();
+                alert(`Sync สำเร็จ! พบ ${result.total} เครื่อง, Sync แล้ว ${result.synced} เครื่อง`);
+                await fetchDevices();
+              } catch (error: any) {
+                alert(`Sync ไม่สำเร็จ: ${error.message}`);
+              } finally {
+                setLoading(false);
+              }
+            }}
+            disabled={loading}
+            className="shrink-0"
+          >
+            {loading ? "กำลัง Sync..." : "Sync จากเสี่ยวเหว๋ย"}
+          </Button>
+
+          {/* ✅ refresh button */}
+          <Button
+            variant="outline"
+            onClick={fetchDevices}
+            disabled={loading}
+            className="shrink-0"
+          >
+            {loading ? "กำลังโหลด..." : "รีเฟรช"}
+          </Button>
+        </div>
       </div>
 
       {/* สรุปสถานะ */}
