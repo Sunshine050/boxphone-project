@@ -231,6 +231,26 @@ export class UsersService {
       if (!device) {
         throw new NotFoundException(`Device not found: ${item.device_id}`);
       }
+
+      // ✅ NEW: device ต้อง AVAILABLE เท่านั้น
+      if (device.status !== DeviceStatus.AVAILABLE) {
+        throw new ConflictException(
+          `Device ${device.name || item.device_id} is not available`
+        );
+      }
+
+      // ✅ NEW: device ห้ามถูก assign ให้ user คนอื่น
+      const assignedUser = await this.userModel.findOne({
+        _id: { $ne: userId },
+        "devices.device_id": item.device_id,
+      });
+
+      if (assignedUser) {
+        throw new ConflictException(
+          `Device ${device.name || item.device_id} is already assigned`
+        );
+      }
+
     }
 
     const devicesArr = Array.isArray(user.devices) ? user.devices : [];

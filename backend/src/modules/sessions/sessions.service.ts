@@ -15,6 +15,7 @@ import {
 import { CreateSessionDto } from "./dto/create-session.dto";
 import { MoveSessionDto } from "./dto/move-session.dto";
 import { User, UserDocument, UserStatus } from "../users/user.schema";
+import { Device, DeviceDocument, DeviceStatus } from "../devices/device.schema";
 
 @Injectable()
 export class SessionsService {
@@ -23,6 +24,9 @@ export class SessionsService {
     private sessionModel: Model<SessionDocument>,
     @InjectModel(User.name)
     private userModel: Model<UserDocument>,
+
+    @InjectModel(Device.name)
+    private deviceModel: Model<DeviceDocument>,
 
     @InjectModel(SessionMoveLog.name)
     private sessionMoveLogModel: Model<SessionMoveLogDocument>,
@@ -265,62 +269,24 @@ export class SessionsService {
   }
 
   async getActiveSessionsByUser(userId: string): Promise<Session[]> {
-    // 1. หา session ที่ ACTIVE อยู่แล้ว
-    const existing = await this.sessionModel
-      .find({
-        user_id: userId,
-        status: SessionStatus.ACTIVE,
-      })
-      .populate("device_id");
-
-    if (existing.length > 0) {
-      return existing;
-    }
-
-    // 2. ไม่มี session → ไปดู assignment ที่ user
-    const user = await this.userModel.findById(userId);
-    if (!user || !user.devices?.length) {
+    if (!userId) {
       return [];
     }
 
-    const createdSessions: Session[] = [];
-
-    for (const d of user.devices) {
-      if (d.status !== "PENDING") continue;
-
-      const session = await this.sessionModel.create({
+    return this.sessionModel
+      .find({
         user_id: userId,
-        device_id: d.device_id,
-
-        // ✅ สำคัญมาก
-        package: "ASSIGNED_BY_ADMIN", // หรือ d.package ถ้ามี
-
-        total_seconds: d.total_seconds,
-        remaining_seconds: d.remaining_seconds,
-
-        status: SessionStatus.ACTIVE,
-        start_time: new Date(),
-        pause_time: null,
-        resume_time: null,
-        moved_count: 0,
-        max_move_count: this.configService.get<number>("SESSION_MAX_MOVE_COUNT"),
-      });
-
-
-      // update assignment
-      d.status = UserStatus.INUSE;
-      d.started_at = new Date();
-
-      createdSessions.push(
-        await session.populate("device_id")
-      );
-    }
-
-    await user.save();
-
-    return createdSessions;
+        status: {
+          $in: [
+            SessionStatus.ACTIVE,
+            SessionStatus.PAUSED,
+            SessionStatus.DISCONNECTED,
+          ],
+        },
+      })
+      .populate("device_id")
+      .exec();
   }
-
 
 
   /**
@@ -440,26 +406,69 @@ export class SessionsService {
  * - ใช้ session ที่ admin create ไว้แล้ว
  * - เคารพ remaining_seconds + resume_time
  */
-  async startSessionByUser(userId: string): Promise<Session> {
-    // 1. หา session ที่ admin assign มาแล้ว
-    const session = await this.sessionModel.findOne({
+  async startAssignedSessionsByUser(userId: string): Promise<Session[]> {
+    // 🔒 กัน session ซ้ำทุกสถานะที่ยังไม่จบ
+    const existing = await this.sessionModel.find({
       user_id: userId,
-      status: { $in: [SessionStatus.PAUSED, SessionStatus.DISCONNECTED] },
+      status: {
+        $in: [
+          SessionStatus.ACTIVE,
+          SessionStatus.PAUSED,
+          SessionStatus.DISCONNECTED,
+        ],
+      },
     });
 
-    if (!session) {
-      throw new BadRequestException("No assigned session for this user");
+    if (existing.length > 0) {
+      return existing;
     }
 
-    // 2. resume เท่านั้น (ไม่ save field ใหม่)
-    session.status = SessionStatus.ACTIVE;
-    session.resume_time = new Date();
-    session.disconnect_reason = null;
+    const user: any = await this.userModel.findById(userId);
+    if (!user || !Array.isArray(user.devices)) return [];
 
-    // ❗ ไม่แตะ package / total_seconds / remaining_seconds
-    await session.save();
+    const created: Session[] = [];
 
-    return session;
+    const maxMove =
+      this.configService.get<number>("SESSION_MAX_MOVE_COUNT") ?? 3;
+
+    for (const d of user.devices) {
+      if (d.status !== UserStatus.PENDING) continue;
+      if (!d.device_id) continue;
+
+      // 🔒 กันซ้ำระดับ device
+      const deviceSession = await this.sessionModel.findOne({
+        user_id: userId,
+        device_id: d.device_id,
+        status: { $ne: SessionStatus.COMPLETED },
+      });
+
+      if (deviceSession) continue;
+
+      const session = await this.sessionModel.create({
+        user_id: userId,
+        device_id: d.device_id,
+        package: "ASSIGNED_BY_ADMIN",
+        total_seconds: d.total_seconds,
+        remaining_seconds: d.remaining_seconds,
+        status: SessionStatus.ACTIVE,
+        start_time: new Date(),
+        moved_count: 0,
+        max_move_count: maxMove,
+      });
+
+      // update assignment
+      d.status = UserStatus.INUSE;
+      d.started_at = new Date();
+
+      await this.deviceModel.findByIdAndUpdate(d.device_id, {
+        status: "BUSY",
+        current_user_id: userId,
+      });
+
+      created.push(await session.populate("device_id"));
+    }
+
+    await user.save();
+    return created;
   }
-
 }

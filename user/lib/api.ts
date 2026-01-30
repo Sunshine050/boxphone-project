@@ -1,42 +1,54 @@
-const API_BASE =
-  process.env.NEXT_PUBLIC_API_URL
+const BASE_URL =
+  process.env.NEXT_PUBLIC_API_BASE_URL ||
+  process.env.NEXT_PUBLIC_BACKEND_URL;
 
-type ApiOptions = RequestInit & {
-  auth?: boolean;
-};
+if (!BASE_URL) {
+  throw new Error("NEXT_PUBLIC_API_BASE_URL must be configured");
+}
+
+type HttpMethod = "GET" | "POST" | "PATCH" | "DELETE";
+
+interface FetchOptions {
+  method?: HttpMethod;
+  body?: any;
+  auth?: boolean; // ✅ เพิ่ม
+}
 
 export async function apiFetch<T>(
   path: string,
-  options: ApiOptions = {}
+  options: FetchOptions = {}
 ): Promise<T> {
+  const { method = "GET", body, auth = true } = options;
+
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
-    ...(options.headers as Record<string, string> | undefined),
   };
 
-  if (options.auth !== false) {
-    const token = localStorage.getItem("token");
+  if (auth) {
+    const token =
+      typeof window !== "undefined"
+        ? localStorage.getItem("access_token")
+        : null;
+
     if (token) {
-      headers["Authorization"] = `Bearer ${token}`;
+      headers.Authorization = `Bearer ${token}`;
     }
   }
 
-  const res = await fetch(`${API_BASE}${path}`, {
-    ...options,
+  const res = await fetch(`${BASE_URL}${path}`, {
+    method,
     headers,
+    body: body ? JSON.stringify(body) : undefined,
+    cache: "no-store",
   });
 
   if (!res.ok) {
-    let message = "Request failed";
+    let message = "API Error";
     try {
       const err = await res.json();
       message = err.message || message;
     } catch {}
     throw new Error(message);
-  }
-
-  if (res.status === 204) {
-    return null as T;
   }
 
   return res.json();

@@ -45,21 +45,28 @@ interface Props {
   onDelete: (device: Device) => void; // ✅ เพิ่ม onDelete
 }
 
-const statusConfig: Record<DeviceStatus, { label: string; className: string }> =
-  {
-    AVAILABLE: {
-      label: "พร้อมใช้งาน",
-      className: "bg-green-500/10 text-green-500 border-green-500/30",
-    },
-    BUSY: {
-      label: "กำลังใช้งาน",
-      className: "bg-red-500/10 text-red-500 border-red-500/30",
-    },
-    OFFLINE: {
-      label: "ออฟไลน์",
-      className: "bg-gray-500/10 text-gray-500 border-gray-500/30",
-    },
-  };
+const statusConfig: Record<
+  string,
+  { label: string; className: string }
+> = {
+  AVAILABLE: {
+    label: "ว่าง",
+    className: "bg-green-500/10 text-green-600",
+  },
+  BUSY: {
+    label: "กำลังใช้งาน",
+    className: "bg-red-500/10 text-red-600",
+  },
+  OFFLINE: {
+    label: "ออฟไลน์",
+    className: "bg-gray-500/10 text-gray-500",
+  },
+  UNKNOWN: {
+    label: "ไม่ทราบ",
+    className: "bg-muted text-muted-foreground",
+  },
+};
+
 
 /* ================= COMPONENT ================= */
 
@@ -131,8 +138,8 @@ export function DeviceManagementTable({
                   {/* STATUS */}
                   <TableCell className="text-center">
                     <div className="flex justify-center">
-                      <Badge className={statusConfig[d.status].className}>
-                        {statusConfig[d.status].label}
+                      <Badge className={statusConfig[d.status]?.className || statusConfig["UNKNOWN"].className}>
+                        {statusConfig[d.status]?.label || statusConfig["UNKNOWN"].label}
                       </Badge>
                     </div>
                   </TableCell>

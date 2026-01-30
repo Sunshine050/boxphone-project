@@ -5,6 +5,7 @@ import { SessionsController } from "./sessions.controller";
 import { Session, SessionSchema } from "./session.schema";
 import { SessionMoveLog, SessionMoveLogSchema } from "./session-move-log.schema";
 import { User, UserSchema } from "../users/user.schema";
+import { Device, DeviceSchema } from "../devices/device.schema";
 
 @Module({
   imports: [
@@ -12,11 +13,12 @@ import { User, UserSchema } from "../users/user.schema";
       { name: Session.name, schema: SessionSchema },
       { name: SessionMoveLog.name, schema: SessionMoveLogSchema },
       { name: User.name, schema: UserSchema },
+      { name: Device.name, schema: DeviceSchema }
     ]),
   ],
   providers: [SessionsService],
   controllers: [SessionsController],
   exports: [SessionsService],
 })
-export class SessionsModule {}
+export class SessionsModule { }
 
