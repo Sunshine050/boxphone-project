@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   DeviceManagementTable,
   Device,
@@ -16,10 +16,12 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { DevicesService } from "@/services/devices.service";
+import { UsersService } from "@/services/users.service";
 
 export default function DeviceManagementPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [mode, setMode] = useState<"create" | "edit">("create");
+  const [users, setUsers] = useState<any[]>([]);
   const [selected, setSelected] = useState<Device | null>(null);
 
   // 👁️ View dialog
@@ -29,12 +31,23 @@ export default function DeviceManagementPage() {
   const [devices, setDevices] = useState<Device[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const fetchDevices = async () => {
+  const userMap = useMemo(() => {
+    return users.reduce((acc, u) => {
+      acc[u.id || u._id] = u.name;
+      return acc;
+    }, {} as Record<string, string>);
+  }, [users]);
+
+ const fetchDevices = async () => {
     setLoading(true);
     try {
-      const data: any[] = await DevicesService.getAll();
+      // 🎯 ดึงทั้ง Devices และ Users พร้อมกัน
+      const [deviceData, userData] = await Promise.all([
+        DevicesService.getAll(),
+        UsersService.getAll()
+      ]);
 
-      const mapped: Device[] = data.map((d) => ({
+      const mapped: Device[] = deviceData.map((d: any) => ({
         id: d.id || d._id,
         name: d.name,
         serial_number: d.serial_number,
@@ -43,6 +56,7 @@ export default function DeviceManagementPage() {
       }));
 
       setDevices(mapped);
+      setUsers(userData); // เก็บข้อมูล user ลง state
     } finally {
       setLoading(false);
     }
@@ -95,6 +109,7 @@ export default function DeviceManagementPage() {
       ) : (
         <DeviceManagementTable
           devices={devices}
+          userMap={userMap}
           onView={(device) => setViewDevice(device)}
           onEdit={(device) => {
             setMode("edit");
@@ -134,7 +149,7 @@ export default function DeviceManagementPage() {
               </div>
               <div>
                 <strong>ผู้ใช้งาน:</strong>{" "}
-                {viewDevice.current_user_id || "-"}
+                {viewDevice.current_user_id ? (userMap[viewDevice.current_user_id] || "ไม่พบชื่อ") : "-"}
               </div>
             </div>
           )}

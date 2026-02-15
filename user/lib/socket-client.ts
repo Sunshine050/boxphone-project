@@ -2,19 +2,22 @@
 
 import { io, Socket } from "socket.io-client";
 
+// lib/socket-client.ts
+
 function getBackendUrl(): string {
-  // Use environment variable, no hardcode
   if (typeof window !== "undefined") {
     const env = (window as any).__NEXT_DATA__?.env;
-    if (env?.NEXT_PUBLIC_BACKEND_URL) {
-      return env.NEXT_PUBLIC_BACKEND_URL;
+
+    if (env?.NEXT_PUBLIC_API_URL) {
+      return env.NEXT_PUBLIC_API_URL;
     }
   }
-  // Fallback to process.env for server-side
-  if (typeof process !== "undefined" && process.env.NEXT_PUBLIC_BACKEND_URL) {
-    return process.env.NEXT_PUBLIC_BACKEND_URL;
+
+  if (typeof process !== "undefined" && process.env.NEXT_PUBLIC_API_URL) {
+    return process.env.NEXT_PUBLIC_API_URL;
   }
-  throw new Error("NEXT_PUBLIC_BACKEND_URL is not configured");
+  
+  throw new Error("NEXT_PUBLIC_API_URL is not configured");
 }
 
 const BACKEND_URL = getBackendUrl();
@@ -157,3 +160,11 @@ export class SocketClient {
 
 // Singleton instance
 export const socketClient = new SocketClient();
+
+export const getNotificationSocket = (userId: string) => {
+  return io(`${BACKEND_URL}/notifications`, {
+    query: { userId },
+    transports: ["websocket"],
+    reconnection: true,
+  });
+};

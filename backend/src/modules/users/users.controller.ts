@@ -26,6 +26,7 @@ import { AddTimeDto } from "./dto/add-time.dto";
 // ✅ NEW DTOs
 import { AssignDevicesDto } from "./dto/assign-devices.dto";
 import { BulkAddTimeDto } from "./dto/bulk-add-time.dto";
+import { LogService } from "../log/log.service";
 
 @Controller("users")
 export class UsersController {
@@ -33,8 +34,9 @@ export class UsersController {
 
   constructor(
     private readonly usersService: UsersService,
-    private readonly devicesService: DevicesService
-  ) {}
+    private readonly devicesService: DevicesService,
+    private readonly logService: LogService
+  ) { }
 
   /**
    * ✅ สร้าง User ใหม่โดยแอดมิน
@@ -49,8 +51,7 @@ export class UsersController {
     @CurrentUser() currentUser: any
   ) {
     this.logger.log(
-      `[CREATE_USER] Admin: ${currentUser?.username || "unknown"} creating user: ${
-        createUserDto.username
+      `[CREATE_USER] Admin: ${currentUser?.username || "unknown"} creating user: ${createUserDto.username
       }`
     );
 
@@ -61,6 +62,15 @@ export class UsersController {
       this.logger.log(
         `[CREATE_USER] ✅ Success - User ID: ${userId}, Username: ${user.username}`
       );
+
+      await this.logService.createLog({
+        type: 'USER_CREATED',
+        level: 'SUCCESS',
+        message: `สร้างผู้ใช้ใหม่: ${user.username}`,
+        target_user_id: userId,
+        admin_username: currentUser?.username || 'admin',
+        meta: { role: user.role }
+      });
 
       return {
         message: "User created successfully",
@@ -128,10 +138,17 @@ export class UsersController {
     @CurrentUser() currentUser: any
   ) {
     this.logger.log(
-      `[ASSIGN_DEVICES] Admin: ${currentUser?.username || "unknown"} assigning ${
-        dto?.items?.length || 0
+      `[ASSIGN_DEVICES] Admin: ${currentUser?.username || "unknown"} assigning ${dto?.items?.length || 0
       } devices to userId=${userId}`
     );
+    await this.logService.createLog({
+      type: 'DEVICE_ASSIGNED',
+      level: 'SUCCESS',
+      message: `Assign อุปกรณ์ใหม่ ${dto.items.length} เครื่อง ให้ผู้ใช้`,
+      target_user_id: userId,
+      admin_username: currentUser?.username || 'admin',
+      meta: { devices: dto.items }
+    });
 
     return this.usersService.assignDevices(
       userId,
@@ -152,6 +169,13 @@ export class UsersController {
     this.logger.log(
       `[BULK_ADD_TIME] Admin: ${currentUser?.username || "unknown"} adding ${dto.add_seconds}s to INUSE users`
     );
+    await this.logService.createLog({
+    type: 'TIME_ADDED',
+    level: 'INFO',
+    message: `เติมเวลาแบบกลุ่ม (Bulk) จำนวน ${dto.add_seconds} วินาที ให้ผู้ใช้ที่ INUSE`,
+    admin_username: currentUser?.username || 'admin',
+    meta: { seconds_added: dto.add_seconds }
+  });
 
     return this.usersService.bulkAddTimeToInuseUsers(dto.add_seconds);
   }

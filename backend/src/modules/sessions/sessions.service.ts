@@ -3,6 +3,7 @@ import {
   NotFoundException,
   BadRequestException,
   ConflictException,
+  Logger,
 } from "@nestjs/common";
 import { InjectModel } from "@nestjs/mongoose";
 import { Model } from "mongoose";
@@ -16,6 +17,9 @@ import { CreateSessionDto } from "./dto/create-session.dto";
 import { MoveSessionDto } from "./dto/move-session.dto";
 import { User, UserDocument, UserStatus } from "../users/user.schema";
 import { Device, DeviceDocument, DeviceStatus } from "../devices/device.schema";
+import { Cron, CronExpression } from "@nestjs/schedule";
+import { LogService } from "../log/log.service";
+import { NotificationService } from "../notification/notification.service";
 
 @Injectable()
 export class SessionsService {
@@ -30,8 +34,53 @@ export class SessionsService {
 
     @InjectModel(SessionMoveLog.name)
     private sessionMoveLogModel: Model<SessionMoveLogDocument>,
-    private readonly configService: ConfigService
+    private readonly configService: ConfigService,
+
+    private readonly logService: LogService,
+    private readonly notificationService: NotificationService,
   ) { }
+
+  /**
+   * 🎯 ระบบตรวจสอบอัตโนมัติ (เฝ้าบ้าน)
+   * จะรันทุกๆ 10 วินาที เพื่อตรวจสอบว่ามี Session ไหนเวลาหมดแล้วบ้าง
+   */
+  // @Cron(CronExpression.EVERY_10_SECONDS)
+  // async handleAutoCleanup() {
+  //   // 1. ดึงเฉพาะ Session ที่มีสถานะ ACTIVE มาตรวจสอบ
+  //   const activeSessions = await this.sessionModel.find({
+  //     status: SessionStatus.ACTIVE,
+  //   }).exec();
+
+  //   // 2. ส่งไปเช็คเวลาที่เหลือใน getRemainingTime
+  //   // ถ้าเวลา <= 0 ฟังก์ชัน getRemainingTime เดิมที่คุณมีจะจัดการลบและคืนเครื่องให้เอง
+  //   for (const session of activeSessions) {
+  //     await this.getRemainingTime(session._id.toString());
+  //   }
+  // }
+
+  @Cron(CronExpression.EVERY_10_SECONDS)
+async handleAutoCleanup() {
+  // 1. ดึงเฉพาะ Session ที่มีสถานะ ACTIVE มาตรวจสอบ
+  const activeSessions = await this.sessionModel.find({
+    status: SessionStatus.ACTIVE,
+  }).exec();
+
+  for (const session of activeSessions) {
+    // 2. คำนวณเวลาที่เหลือจริง ณ วินาทีนี้
+    const remaining = await this.getRemainingTime(session._id.toString());
+
+    // 🎯 3. เพิ่มเงื่อนไขการแจ้งเตือน (Notification Logic)
+    // เช็คว่าถ้าเหลือเวลาระหว่าง 290 - 300 วินาที (ช่วง 5 นาทีพอดี)
+    if (remaining <= 300 && remaining > 290) {
+      await this.notificationService.createAndSend(
+        session.user_id.toString(), // ส่งหาใคร
+        "เวลาของคุณใกล้หมดแล้ว!",      // หัวข้อ
+        `อุปกรณ์ ${session.device_id} เหลือเวลาใช้งานไม่ถึง 5 นาที`, // ข้อความ
+        "WARNING"                   // ประเภท (สีส้ม/แดงใน UI)
+      );
+    }
+  }
+}
 
   /**
    * สร้าง Session ใหม่
@@ -268,26 +317,59 @@ export class SessionsService {
       .exec();
   }
 
-  async getActiveSessionsByUser(userId: string): Promise<Session[]> {
-    if (!userId) {
-      return [];
-    }
 
-    return this.sessionModel
-      .find({
-        user_id: userId,
-        status: {
-          $in: [
-            SessionStatus.ACTIVE,
-            SessionStatus.PAUSED,
-            SessionStatus.DISCONNECTED,
-          ],
-        },
-      })
-      .populate("device_id")
-      .exec();
-  }
+  // async getActiveSessionsByUser(userId: string): Promise<Session[]> {
+  //   const sessions = await this.sessionModel.find({
+  //     user_id: userId,
+  //     status: SessionStatus.ACTIVE
+  //   }).exec();
 
+  //   const now = new Date();
+
+  //   for (const session of sessions) {
+  //     const startTime = session.resume_time || session.start_time;
+  //     const elapsedSeconds = Math.floor((now.getTime() - startTime.getTime()) / 1000);
+
+  //     // เวลาที่เหลือจริง = เวลาตั้งต้น - เวลาที่ใช้ไปแล้ว
+  //     const actualRemaining = Math.max(0, session.remaining_seconds - elapsedSeconds);
+
+  //     // อัปเดตค่านี้กลับไปใน Object ที่จะส่งออกไป (แต่อาจจะยังไม่ต้อง Save ลง DB ทันทีเพื่อลด Load)
+  //     (session as any).remaining_seconds = actualRemaining;
+
+  //     // ถ้าน้อยกว่าหรือเท่ากับ 0 ให้สั่งปิด Session ทันที
+  //     if (actualRemaining <= 0) {
+  //       await this.getRemainingTime(session._id.toString());
+  //     }
+  //   }
+
+  //   return sessions;
+  // }
+// sessions.service.ts
+
+async getActiveSessionsByUser(userId: string): Promise<Session[]> {
+  const sessions = await this.sessionModel.find({
+    user_id: userId,
+    status: SessionStatus.ACTIVE
+  }).exec();
+
+  const now = new Date();
+
+  // ใช้ map เพื่อสร้างอาเรย์ใหม่ที่มีการคำนวณเวลาแล้ว
+  return sessions.map(session => {
+    const sessionObj = session.toObject(); // แปลงเป็น Plain Object เพื่อแก้ไขค่าได้
+    
+    const startTime = session.resume_time || session.start_time;
+    const elapsedSeconds = Math.floor((now.getTime() - startTime.getTime()) / 1000);
+
+    // 🎯 คำนวณเวลาที่เหลือจริงจาก "เวลาปัจจุบันของ Server"
+    const actualRemaining = Math.max(0, session.remaining_seconds - elapsedSeconds);
+
+    // ส่งค่าที่คำนวณแล้วกลับไปให้ Frontend
+    sessionObj.remaining_seconds = actualRemaining;
+    
+    return sessionObj;
+  });
+}
 
   /**
    * ดึง Session ที่ active ของ Device
@@ -314,36 +396,53 @@ export class SessionsService {
   }
 
   /**
-   * คำนวณเวลาที่เหลือจริงๆ (สำหรับ session ที่ active)
+   * คำนวณเวลาที่เหลือและล้างข้อมูลเมื่อเวลาหมด (Auto-Cleanup)
    */
   async getRemainingTime(sessionId: string): Promise<number> {
-    const session = await this.sessionModel.findById(sessionId);
-    if (!session) {
-      throw new NotFoundException("Session not found");
+    const session = await this.sessionModel.findById(sessionId).exec();
+    if (!session) return 0;
+
+    let actualRemaining = session.remaining_seconds;
+    if (session.status === SessionStatus.ACTIVE) {
+      const now = new Date();
+      const lastResumeTime = session.resume_time || session.start_time;
+      const elapsedSeconds = Math.floor((now.getTime() - lastResumeTime.getTime()) / 1000);
+      actualRemaining = Math.max(0, session.remaining_seconds - elapsedSeconds);
     }
 
-    // ถ้า session ไม่ได้ active ให้ return remaining_seconds ที่ freeze ไว้
-    if (session.status !== SessionStatus.ACTIVE) {
-      return session.remaining_seconds;
-    }
-
-    // ถ้า active ให้คำนวณเวลาจริงๆ
-    const now = new Date();
-    const lastResumeTime = session.resume_time || session.start_time;
-    const elapsedSeconds = Math.floor(
-      (now.getTime() - lastResumeTime.getTime()) / 1000
-    );
-    const actualRemaining = Math.max(
-      0,
-      session.remaining_seconds - elapsedSeconds
-    );
-
-    // ถ้าเวลาหมดแล้ว อัปเดต status
     if (actualRemaining <= 0) {
-      await this.sessionModel.findByIdAndUpdate(sessionId, {
-        status: SessionStatus.COMPLETED,
-        remaining_seconds: 0,
+      const userId = session.user_id;
+      const deviceId = session.device_id;
+      await this.logService.createLog({
+        type: 'DEVICE_DISCONNECTED',
+        level: 'WARNING',
+        message: `สิ้นสุดการใช้งาน: หมดเวลาการใช้งานอุปกรณ์`,
+        target_user_id: session.user_id.toString(),
+        target_device_id: session.device_id.toString(),
+        meta: { reason: 'timeout' }
       });
+      // A. คืนค่าสถานะเครื่อง
+      if (deviceId) {
+        await this.deviceModel.findByIdAndUpdate(deviceId, {
+          status: DeviceStatus.AVAILABLE,
+          current_user_id: null,
+        }).exec();
+      }
+
+      // B. 🎯 อัปเดต User: ดีดเครื่องออก ($pull) และกลับสถานะเป็น PENDING
+      await this.userModel.updateOne(
+        { _id: userId },
+        {
+          $pull: { devices: { device_id: deviceId } },
+          $set: {
+            status: UserStatus.PENDING,
+            device_id: null
+          }
+        }
+      ).exec();
+
+      // C. ลบ Session
+      await this.sessionModel.findByIdAndDelete(sessionId).exec();
       return 0;
     }
 
@@ -407,68 +506,54 @@ export class SessionsService {
  * - เคารพ remaining_seconds + resume_time
  */
   async startAssignedSessionsByUser(userId: string): Promise<Session[]> {
-    // 🔒 กัน session ซ้ำทุกสถานะที่ยังไม่จบ
-    const existing = await this.sessionModel.find({
-      user_id: userId,
-      status: {
-        $in: [
-          SessionStatus.ACTIVE,
-          SessionStatus.PAUSED,
-          SessionStatus.DISCONNECTED,
-        ],
-      },
-    });
-
-    if (existing.length > 0) {
-      return existing;
-    }
-
-    const user: any = await this.userModel.findById(userId);
-    if (!user || !Array.isArray(user.devices)) return [];
-
-    const created: Session[] = [];
-
-    const maxMove =
-      this.configService.get<number>("SESSION_MAX_MOVE_COUNT") ?? 3;
+    const user = await this.userModel.findById(userId).exec();
+    if (!user || !user.devices) return [];
 
     for (const d of user.devices) {
-      if (d.status !== UserStatus.PENDING) continue;
-      if (!d.device_id) continue;
+      if (d.status === 'PENDING') {
+        const deviceId = d.device_id;
 
-      // 🔒 กันซ้ำระดับ device
-      const deviceSession = await this.sessionModel.findOne({
-        user_id: userId,
-        device_id: d.device_id,
-        status: { $ne: SessionStatus.COMPLETED },
-      });
+        const device = await this.deviceModel.findOneAndUpdate(
+          { _id: deviceId, status: DeviceStatus.AVAILABLE },
+          { $set: { status: DeviceStatus.BUSY, current_user_id: userId } },
+          { new: true }
+        );
 
-      if (deviceSession) continue;
+        if (device) {
+          // 1. สร้าง Session
+          await this.logService.createLog({
+            type: 'DEVICE_ASSIGNED', 
+            level: 'SUCCESS',
+            message: `ผู้ใช้เริ่มเข้าใช้งานอุปกรณ์`,
+            target_user_id: userId,
+            target_device_id: deviceId.toString(),
+          });
 
-      const session = await this.sessionModel.create({
-        user_id: userId,
-        device_id: d.device_id,
-        package: "ASSIGNED_BY_ADMIN",
-        total_seconds: d.total_seconds,
-        remaining_seconds: d.remaining_seconds,
-        status: SessionStatus.ACTIVE,
-        start_time: new Date(),
-        moved_count: 0,
-        max_move_count: maxMove,
-      });
+          await this.sessionModel.create({
+            user_id: userId,
+            device_id: deviceId,
+            package: "ASSIGNED",
+            total_seconds: d.total_seconds,
+            remaining_seconds: d.remaining_seconds,
+            status: SessionStatus.ACTIVE,
+            start_time: new Date(),
+            max_move_count: 3
+          });
 
-      // update assignment
-      d.status = UserStatus.INUSE;
-      d.started_at = new Date();
-
-      await this.deviceModel.findByIdAndUpdate(d.device_id, {
-        status: "BUSY",
-        current_user_id: userId,
-      });
-
-      created.push(await session.populate("device_id"));
+          // 2. 🎯 อัปเดต User: เปลี่ยนสถานะรวมเป็น INUSE และอัปเดตสถานะเครื่องใน Array
+          await this.userModel.updateOne(
+            { _id: userId, "devices.device_id": deviceId },
+            {
+              $set: {
+                status: UserStatus.INUSE, // ทำให้ Admin เห็นไฟเขียว
+                "devices.$.status": UserStatus.INUSE,
+                "devices.$.started_at": new Date()
+              }
+            }
+          );
+        }
+      }
     }
-
-    await user.save();
-    return created;
+    return this.getActiveSessionsByUser(userId);
   }
 }

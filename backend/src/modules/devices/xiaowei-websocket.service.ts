@@ -38,9 +38,19 @@ export class XiaoweiWebSocketService implements OnModuleInit, OnModuleDestroy {
     this.logger.log(`Xiaowei WebSocket Service initialized - WS URL: ${this.wsUrl}`);
   }
 
-  async onModuleInit() {
-    await this.connect();
+ async onModuleInit() {
+  if (process.env.DISABLE_XIAOWEI_WS === 'true') {
+    this.logger.warn('🚫 Xiaowei WebSocket is disabled by env (onModuleInit)');
+    return;
   }
+
+  try {
+    await this.connect();
+  } catch (err) {
+    this.logger.error('Xiaowei WS initial connect failed', err);
+  }
+}
+
 
   async onModuleDestroy() {
     this.disconnect();

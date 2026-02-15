@@ -93,49 +93,77 @@ export function UserRow({
 }) {
   const [showPass, setShowPass] = useState(false);
 
-  const [liveRemaining, setLiveRemaining] = useState<number>(
-    user.remaining_seconds ?? 0
-  );
+  const initialTime = useMemo(() => {
+    if (userDevices && userDevices.length > 0) {
+      return userDevices[0].assign_seconds || 0;
+    }
+    return 0;
+  }, [userDevices]);
+
+  const [liveRemaining, setLiveRemaining] = useState<number>(initialTime);
 
   useEffect(() => {
-    setLiveRemaining(user.remaining_seconds ?? 0);
-  }, [user.remaining_seconds, user.id]);
+    // 🎯 Logic: ถ้าค่าจาก DB (initialTime) ต่างจากค่าในจอ (liveRemaining) 
+    // ไม่เกิน 10 วินาที ให้ใช้ค่าในจอต่อไป (เพื่อความลื่นไหล)
+    // แต่ถ้าต่างกันเยอะ (เช่น Admin กดเติมเวลา) ให้ใช้ค่าจาก DB
+    const diff = Math.abs(liveRemaining - initialTime);
 
-  const hasTime = (user.total_seconds ?? 0) > 0;
+    if (diff > 10 || liveRemaining === 0) {
+      setLiveRemaining(initialTime);
+    }
+  }, [initialTime]);
+
+  const hasTime = initialTime > 0;
   const isStarted = user.status === "INUSE";
 
+  // ภายใน useEffect ของ UserRow ที่นับถอยหลัง
   useEffect(() => {
-    if (!isStarted) return;
-    if (!hasTime) return;
-    if (liveRemaining <= 0) return;
+    if (!isStarted || liveRemaining <= 0) return;
 
     const timer = setInterval(() => {
-      setLiveRemaining((prev) => Math.max(0, prev - 1));
+      setLiveRemaining((prev) => {
+        if (prev <= 1) {
+          clearInterval(timer);
+
+          setTimeout(() => {
+            onAction("refresh" as any);
+          }, 0);
+
+          return 0;
+        }
+        return prev - 1;
+      });
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [isStarted, hasTime, liveRemaining]);
+  }, [isStarted, liveRemaining, onAction]);
 
+  // คำนวณ % สำหรับ ProgressBar
   const percent = useMemo(() => {
-    if (!hasTime) return 0;
-    if (!user.total_seconds || user.total_seconds <= 0) return 0;
-    const raw = (liveRemaining / user.total_seconds) * 100;
-    return Math.max(0, Math.min(100, raw));
-  }, [hasTime, liveRemaining, user.total_seconds]);
+    const total = userDevices[0]?.assign_seconds || 1;
+    return Math.max(0, Math.min(100, (liveRemaining / total) * 100));
+  }, [liveRemaining, userDevices]);
 
   const isSelf = currentUserId && user.id === currentUserId;
 
+  // แก้ไขส่วน firstDeviceLabel ใน UserRow
   const firstDeviceLabel = useMemo(() => {
     if (!userDevices || userDevices.length === 0) return "-";
 
     const firstId = userDevices[0].device_id;
+
+    // 🎯 ถ้า ID เป็นค่าว่าง หรือเป็นคำว่า "no-id" / "undefined"
+    if (!firstId || firstId === "no-id" || firstId === "undefined") {
+      return "ไม่พบรหัสอุปกรณ์";
+    }
+
     const meta = deviceMap[firstId];
-    const name = meta?.name || firstId;
 
-    if (userDevices.length === 1) return name;
-    return `${name} (+${userDevices.length - 1})`;
+    if (meta) return meta.name;
+
+    // 🎯 ถ้ามี ID แต่หาใน Map ไม่เจอ (Map อาจจะยังโหลดไม่เสร็จ)
+    return `รหัส: ..${firstId.slice(-4)}`;
   }, [userDevices, deviceMap]);
-
   return (
     <motion.tr
       initial={{ opacity: 0, x: -20 }}
@@ -175,9 +203,6 @@ export function UserRow({
         </div>
       </td>
 
-      {/* role */}
-      <td className="text-center font-mono text-sm">{user.role}</td>
-
       {/* status */}
       <td className="text-center">
         <Badge className={statusMap[user.status].className}>
@@ -187,31 +212,25 @@ export function UserRow({
 
       {/* time */}
       <td className="text-center">
+        {/* เปลี่ยนเงื่อนไขการแสดงผลตรงนี้ */}
         {hasTime ? (
           <div className="flex flex-col items-center gap-1">
-            <span
-              className={`text-xs font-medium ${
-                isStarted ? "text-foreground" : "text-muted-foreground"
-              }`}
-            >
+            <span className={`text-xs font-medium ${isStarted ? "text-foreground" : "text-muted-foreground"}`}>
               {formatPrettyTime(liveRemaining)}
-              {!isStarted && (
-                <span className="ml-2 italic text-[11px]">(ยังไม่เริ่ม)</span>
-              )}
+              {!isStarted && <span className="ml-2 italic text-[11px]">(ยังไม่เริ่ม)</span>}
             </span>
 
             <div className="h-1.5 w-28 bg-muted rounded-full overflow-hidden">
               <div
-                className={`h-full transition-all ${
-                  percent < 20 ? "bg-red-500" : "bg-green-500"
-                }`}
+                className={`h-full transition-all ${percent < 20 ? "bg-red-500" : "bg-green-500"}`}
                 style={{ width: `${percent}%` }}
               />
             </div>
           </div>
         ) : (
+          /* ถ้า hasTime เป็น false (ไม่มีเวลา) ให้โชว์แบบนี้ */
           <div className="flex flex-col items-center gap-1 text-muted-foreground">
-            <span className="text-xs italic">ยังไม่เริ่มใช้งาน</span>
+            <span className="text-xs italic">ยังไม่มีเวลาใช้งาน</span>
             <div className="h-1.5 w-28 bg-muted rounded-full" />
           </div>
         )}

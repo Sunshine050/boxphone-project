@@ -22,6 +22,7 @@ export interface OverviewDevice {
 
 interface OverviewPhoneGridProps {
   query: string;
+  userMap: Record<string, string>;
   statusFilter: StatusFilter;
   devices: OverviewDevice[];
 }
@@ -31,12 +32,15 @@ interface OverviewPhoneGridProps {
 export function OverviewPhoneGrid({
   query,
   statusFilter,
+  userMap,
   devices,
 }: OverviewPhoneGridProps) {
   const filteredDevices = devices.filter((d) => {
+    const userName = d.user ? (userMap[d.user] || "").toLowerCase() : "";
     const matchQuery =
       d.name.toLowerCase().includes(query.toLowerCase()) ||
-      d.user?.toLowerCase().includes(query.toLowerCase());
+      userName.includes(query.toLowerCase()) ||
+      (d.user || "").toLowerCase().includes(query.toLowerCase());
 
     const matchStatus = statusFilter === "all" || d.status === statusFilter;
 
@@ -94,10 +98,14 @@ export function OverviewPhoneGrid({
             <p className="text-sm font-semibold truncate">{d.name}</p>
 
             {d.user ? (
-              <p className="text-xs text-muted-foreground truncate">{d.user}</p>
+              <p className="text-xs text-foreground font-medium truncate flex items-center gap-1">
+                <span className="text-muted-foreground font-normal">ผู้ใช้:</span>
+                {/* 🎯 แสดงชื่อจาก Map ถ้าหาไม่เจอให้แสดง ID 4 ตัวท้าย */}
+                {userMap[d.user] || `ID: ${d.user.slice(-4)}`}
+              </p>
             ) : (
               <p className="text-xs text-muted-foreground italic">
-                ไม่มี session ที่ใช้งานอยู่
+                ไม่มีผู้ใช้งาน
               </p>
             )}
 
@@ -138,14 +146,14 @@ function DeviceScreenshot({ deviceId, status }: { deviceId: string; status: Devi
     setLoading(true);
     setError(false);
     setErrorMessage("");
-    
+
     try {
       // สร้าง URL พร้อม timestamp เพื่อ bypass cache
       const url = DevicesService.getScreenshotUrl(deviceId);
-      
+
       // ดึง token จาก localStorage
-      const token = typeof window !== "undefined" 
-        ? localStorage.getItem("access_token") 
+      const token = typeof window !== "undefined"
+        ? localStorage.getItem("access_token")
         : null;
 
       // ใช้ fetch เพื่อส่ง Authorization header
@@ -165,12 +173,12 @@ function DeviceScreenshot({ deviceId, status }: { deviceId: string; status: Devi
       // สร้าง blob URL จาก response
       const blob = await response.blob();
       const blobUrl = URL.createObjectURL(blob);
-      
+
       // ลบ blob URL เก่า (ถ้ามี)
       if (imageUrl && imageUrl.startsWith("blob:")) {
         URL.revokeObjectURL(imageUrl);
       }
-      
+
       setImageUrl(blobUrl);
       setLoading(false);
     } catch (err: any) {
