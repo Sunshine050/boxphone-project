@@ -1,7 +1,11 @@
 import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Logger, Res, Query } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Response } from 'express';
-import { execSync, execFileSync } from 'child_process';
+import { execFile, exec } from 'child_process';
+import { promisify } from 'util';
+
+const execFileAsync = promisify(execFile);
+const execAsync = promisify(exec);
 import { DevicesService } from './devices.service';
 import { Device } from './device.schema';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -18,10 +22,17 @@ const PLACEHOLDER_PNG = Buffer.from(
     'base64'
 );
 
+/** Cache ภาพต่อ serial (ลดการเรียก ADB ซ้ำ) */
+const SCREENSHOT_CACHE_TTL_MS = 8000;
+const SCREENSHOT_MAX_CONCURRENT = 2;
+
 @Controller('devices')
 @UseGuards(JwtAuthGuard)
 export class DevicesController {
     private readonly logger = new Logger(DevicesController.name);
+    private readonly screenshotCache = new Map<string, { buffer: Buffer; at: number }>();
+    private screenshotRunning = 0;
+    private readonly screenshotQueue: Array<() => void> = [];
 
     constructor(
         private readonly devicesService: DevicesService,
@@ -29,6 +40,29 @@ export class DevicesController {
         private readonly xiaoweiWsService: XiaoweiWebSocketService,
         private readonly configService: ConfigService,
     ) { }
+
+    private async acquireScreenshotSlot(): Promise<void> {
+        const max = this.configService.get<number>('SCREENSHOT_MAX_CONCURRENT') ?? SCREENSHOT_MAX_CONCURRENT;
+        if (this.screenshotRunning < max) {
+            this.screenshotRunning++;
+            return;
+        }
+        return new Promise((resolve) => {
+            this.screenshotQueue.push(() => {
+                this.screenshotRunning++;
+                resolve();
+            });
+        });
+    }
+
+    private releaseScreenshotSlot(): void {
+        const max = this.configService.get<number>('SCREENSHOT_MAX_CONCURRENT') ?? SCREENSHOT_MAX_CONCURRENT;
+        this.screenshotRunning--;
+        if (this.screenshotQueue.length > 0 && this.screenshotRunning < max) {
+            const next = this.screenshotQueue.shift()!;
+            next();
+        }
+    }
 
     @Get()
     async findAll(): Promise<Device[]> {
@@ -70,7 +104,8 @@ export class DevicesController {
             // Fallback: ถ้าเสี่ยวเหว๋ยคืน 0 เครื่อง แต่เครื่องต่อ USB อยู่ — ดึงจาก ADB
             if (xiaoweiDevices.length === 0) {
                 try {
-                    const adbOut = execSync('adb devices', { encoding: 'utf8', timeout: 5000 });
+                    const adbPath = this.configService.get<string>('ADB_PATH') || 'adb';
+                    const { stdout: adbOut } = await execAsync(`${adbPath} devices`, { encoding: 'utf8', timeout: 5000 });
                     const lines = adbOut.split(/\r?\n/).filter((l) => l.trim());
                     const adbList: { serial: string; status: string }[] = [];
                     for (const line of lines) {
@@ -181,30 +216,39 @@ export class DevicesController {
     }
 
     /**
-     * ดึง screenshot: ใช้ ADB เป็นทางหลัก (Xiaowei Desktop ไม่มี HTTP/WS ส่งภาพ — แค่ control protocol)
-     * Architecture: Frontend → NestJS → ADB screencap → Android device
+     * ดึง screenshot: cache (TTL) + จำกัด concurrent ADB เพื่อไม่ให้ช้า
      */
     private async fetchScreenshotForSerial(serial: string): Promise<Buffer> {
+        const ttlMs = this.configService.get<number>('SCREENSHOT_CACHE_TTL_MS') ?? SCREENSHOT_CACHE_TTL_MS;
+        const cached = this.screenshotCache.get(serial);
+        if (cached && Date.now() - cached.at < ttlMs) {
+            this.logger.debug(`[SCREENSHOT] Cache hit for ${serial}`);
+            return cached.buffer;
+        }
+        await this.acquireScreenshotSlot();
         try {
-            const screenshot = this.screenshotViaAdb(serial);
+            const screenshot = await this.screenshotViaAdb(serial);
             if (screenshot && screenshot.length > 0) {
+                this.screenshotCache.set(serial, { buffer: screenshot, at: Date.now() });
                 this.logger.log(`[SCREENSHOT] Fetched via ADB, ${screenshot.length} bytes`);
                 return screenshot;
             }
         } catch (e: any) {
             this.logger.warn(`[SCREENSHOT] ADB failed for ${serial}: ${e.message}`);
+        } finally {
+            this.releaseScreenshotSlot();
         }
-        this.logger.warn(`[SCREENSHOT] No screenshot for ${serial}, returning placeholder. Run: adb devices แล้ว adb -s <serial> exec-out screencap -p > test.png`);
+        this.logger.warn(`[SCREENSHOT] No screenshot for ${serial}, returning placeholder`);
         return PLACEHOLDER_PNG;
     }
 
-    /** ดึงหน้าจอผ่าน ADB (recommended: exec-out ส่ง binary ตรงไป stdout ไม่ผ่าน shell) */
-    private screenshotViaAdb(serial: string): Buffer {
+    /** ดึงหน้าจอผ่าน ADB แบบ async — ไม่บล็อก event loop จึงไม่ทำให้หน้า users/devices/logs ช้า */
+    private async screenshotViaAdb(serial: string): Promise<Buffer> {
         const adbPath = this.configService.get<string>('ADB_PATH') || 'adb';
         const opts = { encoding: 'buffer' as const, timeout: 15000, maxBuffer: 10 * 1024 * 1024 };
         try {
             this.logger.debug(`[SCREENSHOT] ADB exec-out screencap -p for ${serial} (adb: ${adbPath})`);
-            const out = execFileSync(adbPath, ['-s', serial, 'exec-out', 'screencap', '-p'], opts);
+            const { stdout: out } = await execFileAsync(adbPath, ['-s', serial, 'exec-out', 'screencap', '-p'], opts);
             if (Buffer.isBuffer(out) && out.length > 0) {
                 this.logger.log(`[SCREENSHOT] ADB exec-out OK - ${out.length} bytes`);
                 return out;
@@ -212,7 +256,7 @@ export class DevicesController {
         } catch (e1: any) {
             this.logger.debug(`[SCREENSHOT] exec-out failed: ${e1.message}, trying shell screencap -p`);
             try {
-                const out = execSync(`${adbPath} -s ${serial} shell screencap -p`, { ...opts, encoding: 'buffer' });
+                const { stdout: out } = await execAsync(`${adbPath} -s ${serial} shell screencap -p`, { encoding: 'buffer', timeout: 15000, maxBuffer: 10 * 1024 * 1024 });
                 if (Buffer.isBuffer(out) && out.length > 0) {
                     this.logger.log(`[SCREENSHOT] ADB shell screencap OK - ${out.length} bytes`);
                     return out;

@@ -96,6 +96,15 @@ npm run dev
 
 ---
 
+## คู่มือดึงภาพหน้าจอ (Screenshot) — สำคัญ ห้ามลบ
+
+การตั้งค่าให้ Dashboard ดึงภาพหน้าจอจากเครื่อง Android ได้ (รวมถึงการ deploy / ส่งมอบลูกค้า) อยู่ในคู่มือแยกดังนี้:
+
+- **[docs/SCREENSHOT-SETUP.md](./docs/SCREENSHOT-SETUP.md)** — คู่มือการตั้งค่า screenshot ตั้งแต่ติดตั้ง ADB จนดึงภาพได้ และ checklist สำหรับ production  
+- **สำคัญ ห้ามลบ** ไฟล์คู่มือและส่วนอ้างอิงนี้
+
+---
+
 ## Troubleshooting
 - **Error: "error during connect..."** -> แปลว่าลืมเปิด Docker Desktop ให้เปิดโปรแกรมแล้วรอสักพักค่อยรันคำสั่งใหม่
 - **Database connect fail** -> ลองเช็คว่า docker container ทำงานอยู่ไหมด้วยคำสั่ง `docker ps`

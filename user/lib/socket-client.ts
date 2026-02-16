@@ -5,19 +5,15 @@ import { io, Socket } from "socket.io-client";
 // lib/socket-client.ts
 
 function getBackendUrl(): string {
-  if (typeof window !== "undefined") {
-    const env = (window as any).__NEXT_DATA__?.env;
-
-    if (env?.NEXT_PUBLIC_API_URL) {
-      return env.NEXT_PUBLIC_API_URL;
-    }
-  }
-
-  if (typeof process !== "undefined" && process.env.NEXT_PUBLIC_API_URL) {
-    return process.env.NEXT_PUBLIC_API_URL;
-  }
-  
-  throw new Error("NEXT_PUBLIC_API_URL is not configured");
+  const url =
+    (typeof process !== "undefined" && (
+      process.env.NEXT_PUBLIC_API_URL ||
+      process.env.NEXT_PUBLIC_API_BASE_URL ||
+      process.env.NEXT_PUBLIC_BACKEND_URL
+    )) ||
+    (typeof window !== "undefined" && (window as any).__NEXT_DATA__?.env?.NEXT_PUBLIC_API_URL);
+  if (url) return url.replace(/\/+$/, "");
+  throw new Error("NEXT_PUBLIC_API_BASE_URL or NEXT_PUBLIC_API_URL must be configured (e.g. in .env.local)");
 }
 
 const BACKEND_URL = getBackendUrl();

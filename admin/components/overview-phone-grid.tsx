@@ -136,7 +136,23 @@ function DeviceScreenshot({ deviceId, status }: { deviceId: string; status: Devi
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string>("");
+  const [isInView, setIsInView] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // โหลด screenshot เฉพาะเมื่อการ์ดอยู่ใน viewport — หน้าภาพรวมโหลดเร็วขึ้น
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const obs = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((e) => setIsInView(e.isIntersecting));
+      },
+      { rootMargin: "100px", threshold: 0.01 }
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, []);
 
   const fetchScreenshot = async () => {
     if (status === "maintenance" || status === "error") {
@@ -197,6 +213,7 @@ function DeviceScreenshot({ deviceId, status }: { deviceId: string; status: Devi
   };
 
   useEffect(() => {
+    if (!isInView) return;
     fetchScreenshot();
     const refreshMs = Math.max(
       500,
@@ -212,63 +229,53 @@ function DeviceScreenshot({ deviceId, status }: { deviceId: string; status: Devi
         URL.revokeObjectURL(imageUrl);
       }
     };
-  }, [deviceId, status]);
-
-  if (status === "maintenance" || status === "error") {
-    return (
-      <div className="w-full h-full flex items-center justify-center">
-        <p className="text-xs text-muted-foreground">ไม่สามารถดึงหน้าจอได้</p>
-      </div>
-    );
-  }
-
-  if (loading && !imageUrl) {
-    return (
-      <div className="w-full h-full flex items-center justify-center">
-        <RefreshCw className="w-4 h-4 animate-spin text-muted-foreground" />
-      </div>
-    );
-  }
-
-  if (error || !imageUrl) {
-    return (
-      <div className="w-full h-full flex flex-col items-center justify-center gap-2 p-2">
-        <p className="text-xs text-muted-foreground text-center">
-          {errorMessage || "ไม่สามารถดึงหน้าจอได้"}
-        </p>
-        <Button
-          size="sm"
-          variant="ghost"
-          className="h-6 text-xs"
-          onClick={fetchScreenshot}
-        >
-          <RefreshCw className="w-3 h-3 mr-1" />
-          รีเฟรช
-        </Button>
-      </div>
-    );
-  }
+  }, [deviceId, status, isInView]);
 
   return (
-    <>
-      <img
-        src={imageUrl}
-        alt={`Device ${deviceId} screenshot`}
-        className="w-full h-full object-contain"
-        onError={() => setError(true)}
-      />
-      <div className="absolute bottom-2 right-2 z-10">
-        <Button
-          size="icon"
-          variant="secondary"
-          className="h-7 w-7 opacity-80 hover:opacity-100"
-          onClick={fetchScreenshot}
-          title="รีเฟรชหน้าจอ"
-        >
-          <RefreshCw className="w-3 h-3" />
-        </Button>
-      </div>
-    </>
+    <div ref={containerRef} className="w-full h-full min-h-0 relative flex items-center justify-center">
+      {status === "maintenance" || status === "error" ? (
+        <p className="text-xs text-muted-foreground">ไม่สามารถดึงหน้าจอได้</p>
+      ) : !isInView ? (
+        <p className="text-xs text-muted-foreground">เลื่อนเพื่อโหลด</p>
+      ) : loading && !imageUrl ? (
+        <RefreshCw className="w-4 h-4 animate-spin text-muted-foreground" />
+      ) : error || !imageUrl ? (
+        <div className="flex flex-col items-center justify-center gap-2 p-2">
+          <p className="text-xs text-muted-foreground text-center">
+            {errorMessage || "ไม่สามารถดึงหน้าจอได้"}
+          </p>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-6 text-xs"
+            onClick={fetchScreenshot}
+          >
+            <RefreshCw className="w-3 h-3 mr-1" />
+            รีเฟรช
+          </Button>
+        </div>
+      ) : (
+        <>
+          <img
+            src={imageUrl}
+            alt={`Device ${deviceId} screenshot`}
+            className="w-full h-full object-contain"
+            onError={() => setError(true)}
+          />
+          <div className="absolute bottom-2 right-2 z-10">
+            <Button
+              size="icon"
+              variant="secondary"
+              className="h-7 w-7 opacity-80 hover:opacity-100"
+              onClick={fetchScreenshot}
+              title="รีเฟรชหน้าจอ"
+            >
+              <RefreshCw className="w-3 h-3" />
+            </Button>
+          </div>
+        </>
+      )}
+    </div>
   );
 }
 
