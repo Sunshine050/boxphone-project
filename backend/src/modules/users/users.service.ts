@@ -11,12 +11,14 @@ import { User, UserDocument, UserStatus, UserRole } from "./user.schema";
 import * as bcrypt from "bcrypt";
 import { CreateUserByAdminDto } from "./dto/create-user-by-admin.dto";
 import { DeviceStatus } from "../devices/device.schema";
+import { LogService } from "../log/log.service";
 
 @Injectable()
 export class UsersService {
   constructor(
     @InjectModel(User.name) private userModel: Model<UserDocument>,
-    private readonly configService: ConfigService
+    private readonly configService: ConfigService,
+    private readonly logService: LogService,
   ) { }
 
   // ✅ map duration → seconds
@@ -29,10 +31,16 @@ export class UsersService {
   } as const;
 
   private calcRemaining(user: any) {
-    const remainingDb = user.remaining_seconds ?? 0;
-    const startedAt = user.started_at ? new Date(user.started_at) : null;
+    // ✅ ถ้าไม่มี devices เลย ให้คืนค่า 0 หรือค่า default
+    if (!user.devices || user.devices.length === 0) {
+      return user.remaining_seconds ?? 0;
+    }
 
-    if (!startedAt) return remainingDb;
+    const device = user.devices[0]; // สมมติว่าอิงจากเครื่องหลักเครื่องแรก
+    const remainingDb = device.remaining_seconds ?? 0;
+    const startedAt = device.started_at ? new Date(device.started_at) : null;
+
+    if (!startedAt || user.status !== UserStatus.INUSE) return remainingDb;
 
     const now = Date.now();
     const elapsed = Math.floor((now - startedAt.getTime()) / 1000);
@@ -276,6 +284,16 @@ export class UsersService {
 
     user.devices = devicesArr;
     await user.save();
+    for (const item of items) {
+      await this.logService.createLog({
+        type: 'DEVICE_ASSIGNED',
+        level: 'SUCCESS',
+        message: `มอบหมายอุปกรณ์ให้ผู้ใช้สำเร็จ`,
+        target_user_id: userId,
+        target_device_id: item.device_id,
+        meta: { assign_seconds: item.assign_seconds }
+      });
+    }
 
     return {
       message: "Assigned devices successfully",
@@ -305,7 +323,12 @@ export class UsersService {
         })
         .exec();
     }
-
+    await this.logService.createLog({
+      type: 'TIME_ADDED',
+      level: 'INFO',
+      message: `เติมเวลาให้ผู้ใช้ที่กำลังใช้งานทั้งหมด (+ ${addSeconds} วินาที)`,
+      meta: { count: users.length, added_seconds: addSeconds }
+    });
     return {
       message: "Bulk add time success",
       count: users.length,
@@ -313,28 +336,34 @@ export class UsersService {
     };
   }
 
+  // users.service.ts
+
   async findAll(): Promise<any[]> {
     const users = await this.userModel.find().exec();
+    return users.map((u: any) => {
+      const updatedDevices = (u.devices || []).map((d: any) => {
+        let currentRem = d.remaining_seconds ?? 0;
 
-    return users.map((u: any) => ({
-      id: u._id.toString(),
-      name: u.name,
-      username: u.username,
-      role: u.role,
-      status: u.status,
+        if (d.started_at && u.status === UserStatus.INUSE && d.status === UserStatus.INUSE) {
+          const elapsed = Math.floor((Date.now() - new Date(d.started_at).getTime()) / 1000);
+          currentRem = Math.max(0, d.remaining_seconds - elapsed);
+        }
+        return {
+          ...d,
+          device_id: d.device_id.toString(),
+          remaining_seconds: currentRem,
+        };
+      });
 
-      // ✅ ของเดิม
-      device_id: u.device_id ?? null,
-
-      // ✅ NEW
-      devices: u.devices ?? [],
-
-      total_seconds: u.total_seconds,
-      remaining_seconds: this.calcRemaining(u),
-
-      password_plain: u.password_plain,
-      started_at: u.started_at,
-    }));
+      return {
+        id: u._id.toString(),
+        name: u.name,
+        username: u.username,
+        status: u.status,
+        devices: updatedDevices,
+        password_plain: u.password_plain,
+      };
+    });
   }
 
   async findByUsername(username: string) {

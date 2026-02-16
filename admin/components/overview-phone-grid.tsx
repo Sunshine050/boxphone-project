@@ -22,6 +22,7 @@ export interface OverviewDevice {
 
 interface OverviewPhoneGridProps {
   query: string;
+  userMap?: Record<string, string>;
   statusFilter: StatusFilter;
   devices: OverviewDevice[];
 }
@@ -31,12 +32,15 @@ interface OverviewPhoneGridProps {
 export function OverviewPhoneGrid({
   query,
   statusFilter,
+  userMap = {},
   devices,
 }: OverviewPhoneGridProps) {
   const filteredDevices = devices.filter((d) => {
+    const userName = d.user ? (userMap[d.user] || "").toLowerCase() : "";
     const matchQuery =
       d.name.toLowerCase().includes(query.toLowerCase()) ||
-      d.user?.toLowerCase().includes(query.toLowerCase());
+      userName.includes(query.toLowerCase()) ||
+      (d.user || "").toLowerCase().includes(query.toLowerCase());
 
     const matchStatus = statusFilter === "all" || d.status === statusFilter;
 
@@ -94,10 +98,13 @@ export function OverviewPhoneGrid({
             <p className="text-sm font-semibold truncate">{d.name}</p>
 
             {d.user ? (
-              <p className="text-xs text-muted-foreground truncate">{d.user}</p>
+              <p className="text-xs text-foreground font-medium truncate flex items-center gap-1">
+                <span className="text-muted-foreground font-normal">ผู้ใช้:</span>
+                {userMap[d.user] || `ID: ${d.user.slice(-4)}`}
+              </p>
             ) : (
               <p className="text-xs text-muted-foreground italic">
-                ไม่มี session ที่ใช้งานอยู่
+                ไม่มีผู้ใช้งาน
               </p>
             )}
 
@@ -139,17 +146,14 @@ function DeviceScreenshot({ deviceId, status }: { deviceId: string; status: Devi
     setLoading(true);
     setError(false);
     setErrorMessage("");
-    
-    try {
-      // สร้าง URL พร้อม timestamp เพื่อ bypass cache
-      const url = DevicesService.getScreenshotUrl(deviceId);
-      
-      // ดึง token จาก localStorage
-      const token = typeof window !== "undefined" 
-        ? localStorage.getItem("access_token") 
-        : null;
 
-      // ใช้ fetch เพื่อส่ง Authorization header
+    try {
+      const url = DevicesService.getScreenshotUrl(deviceId);
+      const token =
+        typeof window !== "undefined"
+          ? localStorage.getItem("access_token")
+          : null;
+
       const response = await fetch(url, {
         method: "GET",
         headers: {
@@ -170,15 +174,13 @@ function DeviceScreenshot({ deviceId, status }: { deviceId: string; status: Devi
         throw new Error(msg);
       }
 
-      // สร้าง blob URL จาก response
       const blob = await response.blob();
       const blobUrl = URL.createObjectURL(blob);
-      
-      // ลบ blob URL เก่า (ถ้ามี)
+
       if (imageUrl && imageUrl.startsWith("blob:")) {
         URL.revokeObjectURL(imageUrl);
       }
-      
+
       setImageUrl(blobUrl);
       setLoading(false);
     } catch (err: any) {
@@ -186,6 +188,7 @@ function DeviceScreenshot({ deviceId, status }: { deviceId: string; status: Devi
       setError(true);
       setErrorMessage(err.message || "ไม่สามารถดึงหน้าจอได้");
       setLoading(false);
+      // หยุด auto-refresh เมื่อดึงไม่ได้ — ลดการกระพริบ
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
         intervalRef.current = null;
@@ -195,7 +198,10 @@ function DeviceScreenshot({ deviceId, status }: { deviceId: string; status: Devi
 
   useEffect(() => {
     fetchScreenshot();
-    const refreshMs = Math.max(500, Number(process.env.NEXT_PUBLIC_SCREENSHOT_REFRESH_MS) || 5000);
+    const refreshMs = Math.max(
+      500,
+      Number(process.env.NEXT_PUBLIC_SCREENSHOT_REFRESH_MS) || 5000
+    );
     intervalRef.current = setInterval(fetchScreenshot, refreshMs);
     return () => {
       if (intervalRef.current) {
@@ -251,7 +257,6 @@ function DeviceScreenshot({ deviceId, status }: { deviceId: string; status: Devi
         className="w-full h-full object-contain"
         onError={() => setError(true)}
       />
-      {/* ปุ่ม refresh แบบ manual */}
       <div className="absolute bottom-2 right-2 z-10">
         <Button
           size="icon"

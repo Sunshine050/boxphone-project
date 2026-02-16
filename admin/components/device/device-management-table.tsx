@@ -41,6 +41,7 @@ export interface Device {
 interface Props {
   devices: Device[];
   onView: (device: Device) => void;
+  userMap: Record<string, string>;
   onEdit: (device: Device) => void;
   onDelete: (device: Device) => void; // ✅ เพิ่ม onDelete
 }
@@ -72,6 +73,7 @@ const statusConfig: Record<
 
 export function DeviceManagementTable({
   devices,
+  userMap,
   onView,
   onEdit,
   onDelete,
@@ -127,9 +129,12 @@ export function DeviceManagementTable({
                   </TableCell>
 
                   {/* USER */}
-                  <TableCell className="text-center text-sm">
+                <TableCell className="text-center text-sm">
                     {d.current_user_id ? (
-                      <span className="font-medium">{d.current_user_id}</span>
+                      <span className="font-medium">
+                        {/* ค้นชื่อจาก Map ถ้าหาไม่เจอให้แสดง ID (4 ตัวท้าย) */}
+                        {userMap[d.current_user_id] || `User: ${d.current_user_id.slice(-4)}`}
+                      </span>
                     ) : (
                       <span className="text-muted-foreground">-</span>
                     )}

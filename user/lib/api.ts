@@ -1,6 +1,7 @@
-const BASE_URL =
+const BASE_URL = (
   process.env.NEXT_PUBLIC_API_BASE_URL ||
-  process.env.NEXT_PUBLIC_BACKEND_URL;
+  process.env.NEXT_PUBLIC_BACKEND_URL
+) as string;
 
 if (!BASE_URL) {
   throw new Error("NEXT_PUBLIC_API_BASE_URL must be configured");
@@ -11,7 +12,7 @@ type HttpMethod = "GET" | "POST" | "PATCH" | "DELETE";
 interface FetchOptions {
   method?: HttpMethod;
   body?: any;
-  auth?: boolean; // ✅ เพิ่ม
+  auth?: boolean;
 }
 
 export async function apiFetch<T>(
@@ -25,17 +26,20 @@ export async function apiFetch<T>(
   };
 
   if (auth) {
-    const token =
-      typeof window !== "undefined"
-        ? localStorage.getItem("access_token")
-        : null;
-
+    const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
     if (token) {
       headers.Authorization = `Bearer ${token}`;
+    } else {
+      // 🎯 ป้องกันการส่ง request ไปทั้งที่ไม่มี token (ถ้า auth=true)
+      console.warn(`No token found for authenticated request to: ${path}`);
     }
   }
 
-  const res = await fetch(`${BASE_URL}${path}`, {
+  // 🎯 แก้ไขเรื่อง Slash (/) ซ้ำซ้อน: ตรวจสอบว่า BASE_URL ลงท้ายด้วย / หรือไม่
+  const cleanBaseUrl = BASE_URL.endsWith('/') ? BASE_URL.slice(0, -1) : BASE_URL;
+  const cleanPath = path.startsWith('/') ? path : `/${path}`;
+
+  const res = await fetch(`${cleanBaseUrl}${cleanPath}`, {
     method,
     headers,
     body: body ? JSON.stringify(body) : undefined,
@@ -43,6 +47,11 @@ export async function apiFetch<T>(
   });
 
   if (!res.ok) {
+    // 🎯 ถ้าเป็น 401 Unauthorized ให้จัดการ (เช่น ลบ token ทิ้ง)
+    if (res.status === 401 && typeof window !== "undefined") {
+      localStorage.removeItem("access_token");
+    }
+    
     let message = "API Error";
     try {
       const err = await res.json();

@@ -19,34 +19,33 @@ import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import { UserRole } from "../users/user.schema";
 import { CreateSessionDto } from "./dto/create-session.dto";
 import { MoveSessionDto } from "./dto/move-session.dto";
+import { LogService } from "../log/log.service";
 
 @Controller("sessions")
 @UseGuards(JwtAuthGuard)
 export class SessionsController {
   private readonly logger = new Logger(SessionsController.name);
 
-  constructor(private readonly sessionsService: SessionsService) { }
+  constructor(
+    private readonly sessionsService: SessionsService,
+    private readonly logService: LogService
+  ) { }
   /**
    * USER: ดึง session ของตัวเอง
    * GET /sessions/me
    */
   @Get("me")
-  @HttpCode(HttpStatus.OK)
-  async getMySessions(@CurrentUser() currentUser: any) {
-    const userId =
-      currentUser?.userId ||
-      currentUser?.id ||
-      currentUser?._id?.toString();
+  @UseGuards(JwtAuthGuard)
+  async getMySessions(@CurrentUser() user: any) {
+    const userId = user.userId || user.id;
 
-    // 1. หา session ที่มีอยู่ก่อน
-    const sessions =
-      await this.sessionsService.getActiveSessionsByUser(userId);
-
-    if (sessions.length > 0) {
-      return sessions;
+    // 1. ตรวจสอบ Session ที่ Active อยู่แล้ว (ป้องกันการสร้างซ้ำเมื่อ Refresh)
+    const activeSessions = await this.sessionsService.getActiveSessionsByUser(userId);
+    if (activeSessions.length > 0) {
+      return activeSessions;
     }
 
-    // 2. ค่อย start assigned (สร้างได้ครั้งเดียว)
+    // 2. ถ้าไม่มี Active Session ให้ลองตรวจสอบ Device ที่ถูก Assign ไว้และ Auto-Start
     return this.sessionsService.startAssignedSessionsByUser(userId);
   }
 
@@ -74,6 +73,15 @@ export class SessionsController {
       this.logger.log(
         `[CREATE_SESSION] ✅ Success - Session ID: ${sessionId}, User ID: ${session.user_id}, Device ID: ${session.device_id}, Status: ${session.status}, Remaining: ${session.remaining_seconds}s`
       );
+      await this.logService.createLog({
+        type: 'TIME_ADDED',
+        level: 'SUCCESS',
+        message: `สร้าง Session ใหม่ (เครื่อง ${createSessionDto.device_id})`,
+        target_user_id: createSessionDto.user_id,
+        target_device_id: createSessionDto.device_id,
+        admin_username: currentUser?.username || 'admin',
+        meta: { package: createSessionDto.package, seconds: createSessionDto.total_seconds }
+      });
       return {
         message: "Session created successfully",
         session: {
@@ -179,12 +187,22 @@ export class SessionsController {
     this.logger.log(
       `[PAUSE_SESSION] Admin: ${currentUser?.username || "unknown"} pausing Session ID: ${id}, Reason: ${body?.reason || "N/A"}`
     );
+
     try {
       const session = await this.sessionsService.pauseSession(id, body?.reason);
       const sessionId = (session as any)._id.toString();
       this.logger.log(
         `[PAUSE_SESSION] ✅ Success - Session ID: ${sessionId}, Status: ${session.status}, Remaining: ${session.remaining_seconds}s (FROZEN)`
       );
+
+      await this.logService.createLog({
+        type: 'SYSTEM_WARNING',
+        level: 'INFO',
+        message: `สั่งหยุดเวลา (Pause) สำหรับ Session: ${id}`,
+        target_user_id: (session as any).user_id,
+        admin_username: currentUser?.username || 'admin',
+        meta: { reason: body?.reason }
+      });
       return {
         message: "Session paused successfully",
         session: {
@@ -247,6 +265,7 @@ export class SessionsController {
     this.logger.log(
       `[MOVE_SESSION] Admin: ${currentUser?.username || "unknown"} moving Session ID: ${id} to Device ID: ${moveSessionDto.to_device_id}, Reason: ${moveSessionDto.reason || "N/A"}`
     );
+
     try {
       const movedBy =
         currentUser?.userId ||
@@ -262,6 +281,15 @@ export class SessionsController {
       this.logger.log(
         `[MOVE_SESSION] ✅ Success - Session ID: ${sessionId}, From Device: ${moveSessionDto.to_device_id}, To Device: ${session.device_id}, Remaining: ${session.remaining_seconds}s (UNCHANGED), Moved Count: ${session.moved_count}`
       );
+      await this.logService.createLog({
+        type: 'DEVICE_ASSIGNED',
+        level: 'WARNING',
+        message: `ย้ายผู้ใช้ไปเครื่องใหม่: ${moveSessionDto.to_device_id}`,
+        target_user_id: (session as any).user_id,
+        target_device_id: moveSessionDto.to_device_id,
+        admin_username: currentUser?.username || 'admin',
+        meta: { reason: moveSessionDto.reason }
+      });
       return {
         message: "Session moved successfully",
         session: {

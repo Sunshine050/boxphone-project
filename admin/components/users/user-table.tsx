@@ -28,25 +28,32 @@ export function UsersTable({
   onAction: (action: UserAction, user: User) => void;
   deviceMap: Record<string, DeviceMini>;
 }) {
-  const getUserDevices = (u: any): UserDeviceAssigned[] => {
-    // ✅ รองรับหลายรูปแบบจาก backend
-    if (Array.isArray(u.devices) && u.devices.length > 0) {
-      return u.devices.map((x: any) => ({
-        device_id: String(x.device_id),
-        assign_seconds: x.assign_seconds ?? x.remaining_seconds ?? undefined,
-      }));
-    }
+  // ในส่วนของ UsersTable component
+const getUserDevices = (u: any): UserDeviceAssigned[] => {
+  // 1. ตรวจสอบว่ามี Array devices และมีข้อมูลข้างในไหม
+  if (u.devices && Array.isArray(u.devices) && u.devices.length > 0) {
+    return u.devices.map((item: any) => {
+      // 🎯 ต้องดึงจาก item.device_id เท่านั้น
+      const idFromBackend = item.device_id || item._id; 
+      
+      return {
+        // แปลงเป็น String และล้างค่าว่างเพื่อเอาไป match กับ deviceMap
+        device_id: idFromBackend ? String(idFromBackend).trim() : "no-id",
+        assign_seconds: item.remaining_seconds ?? item.total_seconds ?? 0,
+      };
+    });
+  }
 
-    if (u.device_id) {
-      return [
-        {
-          device_id: String(u.device_id),
-        },
-      ];
-    }
+  // 2. กรณีสำรองเผื่อบาง User เก็บที่ root (ถ้ามี)
+  if (u.device_id) {
+    return [{
+      device_id: String(u.device_id).trim(),
+      assign_seconds: u.remaining_seconds ?? 0
+    }];
+  }
 
-    return [];
-  };
+  return [];
+};
 
   const rows = useMemo(() => {
     return users.map((u) => ({
@@ -70,7 +77,6 @@ export function UsersTable({
                 <th className="p-4 text-left w-[16%]">ชื่อผู้ใช้</th>
                 <th className="text-center w-[14%]">Username</th>
                 <th className="text-center w-[20%]">Password</th>
-                <th className="text-center w-[10%]">Role</th>
                 <th className="text-center w-[12%]">สถานะ</th>
                 <th className="text-center w-[14%]">เวลาใช้งาน</th>
                 <th className="text-center w-[12%]">Device</th>

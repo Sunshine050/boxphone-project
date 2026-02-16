@@ -11,6 +11,7 @@ import {
 import { StatusSummaryCards } from "@/components/status-summary-cards";
 import { Button } from "@/components/ui/button";
 import { DevicesService } from "@/services/devices.service";
+import { UsersService } from "@/services/users.service";
 
 export type DeviceStatus =
   | "all"
@@ -31,22 +32,35 @@ export default function AdminOverviewPage() {
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<DeviceStatus>("all");
 
+  const [users, setUsers] = useState<any[]>([]);
   const [devices, setDevices] = useState<OverviewDevice[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const userMap = useMemo(() => {
+    return users.reduce((acc, u) => {
+      acc[u.id || u._id] = u.name;
+      return acc;
+    }, {} as Record<string, string>);
+  }, [users]);
 
   const fetchDevices = async () => {
     setLoading(true);
     try {
-      const data = await DevicesService.getAll(); // ✅ GET /devices
+      // 🎯 ดึงทั้ง Devices และ Users พร้อมกัน
+      const [data, userData] = await Promise.all([
+        DevicesService.getAll(),
+        UsersService.getAll()
+      ]);
 
       const mapped: OverviewDevice[] = (data || []).map((d: any) => ({
         id: d.id || d._id,
         name: d.name,
         status: mapDeviceStatus(d.status),
-        user: d.current_user_id ?? undefined,
+        user: d.current_user_id ?? undefined, // ตัวนี้ยังเป็น ID อยู่
       }));
 
       setDevices(mapped);
+      setUsers(userData);
     } finally {
       setLoading(false);
     }
@@ -163,6 +177,7 @@ export default function AdminOverviewPage() {
           query={query}
           statusFilter={statusFilter}
           devices={devices}
+          userMap={userMap}
         />
       )}
     </motion.div>

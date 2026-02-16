@@ -45,36 +45,38 @@ export default function UserManagementPage() {
 
   // ✅ ทำ map ไว้ lookup device name เร็วๆ
   const deviceMap = useMemo(() => {
-    return devices.reduce((acc, d) => {
-      acc[d.id] = d;
-      return acc;
-    }, {} as Record<string, DeviceMini>);
-  }, [devices]);
-
+  return devices.reduce((acc, d) => {
+    // ใช้ d.id ซึ่งเราแปลงมาจาก _id แล้วใน fetchDevices
+    const idStr = d.id?.toString();
+    if (idStr) {
+      acc[idStr] = d;
+    }
+    return acc;
+  }, {} as Record<string, DeviceMini>);
+}, [devices]);
   // ✅ fetch devices จาก backend
-  const fetchDevices = async () => {
-    try {
-      const data = (await DevicesService.getAll()) as any[];
-
+const fetchDevices = async () => {
+  try {
+    const data = (await DevicesService.getAll()) as any[];
+    if (data && Array.isArray(data)) {
       setDevices(
         data.map((d) => ({
-          id: d.id || d._id,
-          name: d.name,
-          serial_number: d.serial_number,
+          // 🎯 บังคับให้ key ใน Map เป็น String ที่สะอาด
+          id: String(d._id || d.id).trim(), 
+          name: d.name || "Unnamed",
+          serial_number: d.serial_number || "-",
         }))
       );
-    } catch (e) {
-      console.error("fetchDevices failed:", e);
-      setDevices([]);
     }
-  };
+  } catch (e) {
+    console.error("fetchDevices failed:", e);
+  }
+};
 
-
-  const fetchUsers = async () => {
-    setLoading(true);
+  const fetchUsers = async (isSilent = false) => {
+    if (!isSilent) setLoading(true); // 🎯 สั่งโหลดเฉพาะตอนเปิดหน้าหรือ Search
     try {
       const data: any[] = await UsersService.getAll();
-
       setUsers(
         data.map((u) => ({
           ...u,
@@ -82,7 +84,7 @@ export default function UserManagementPage() {
         }))
       );
     } finally {
-      setLoading(false);
+      if (!isSilent) setLoading(false);
     }
   };
 
@@ -125,8 +127,19 @@ export default function UserManagementPage() {
     });
   }, [users, search]);
 
-  const handleAction = async (action: UserAction, user: User) => {
+  useEffect(() => {
+    const interval = setInterval(() => {
+      fetchUsers(true);
+    }, 10000);
+
+    return () => clearInterval(interval);
+  }, []);
+  const handleAction = async (action: UserAction | "refresh", user: User) => {
     switch (action) {
+      case "refresh" as any:
+        await fetchUsers();
+        break;
+
       case "delete": {
         if (me?.id && user.id === me.id) {
           alert("Admin ไม่สามารถลบตัวเองได้");
@@ -142,13 +155,7 @@ export default function UserManagementPage() {
         await fetchUsers();
         break;
 
-      // ✅ รวม assign + time เป็นปุ่มเดียว
       case "assign":
-        setAssignUser(user);
-        setAssignOpen(true);
-        break;
-
-      // ✅ เผื่อมี code เก่าเรียก "time" อยู่
       case "time":
         setAssignUser(user);
         setAssignOpen(true);
