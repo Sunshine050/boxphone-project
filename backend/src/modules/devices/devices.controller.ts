@@ -1,6 +1,7 @@
 import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Logger, Res, Query } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Response } from 'express';
-import { execSync } from 'child_process';
+import { execSync, execFileSync } from 'child_process';
 import { DevicesService } from './devices.service';
 import { Device } from './device.schema';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -11,6 +12,12 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { XiaoweiService } from './xiaowei.service';
 import { XiaoweiWebSocketService } from './xiaowei-websocket.service';
 
+/** Placeholder PNG (1x1 transparent) เมื่อดึงหน้าจาจาก HTTP/ADB ไม่ได้ — ให้ frontend ได้ 200 + image แทน error */
+const PLACEHOLDER_PNG = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+    'base64'
+);
+
 @Controller('devices')
 @UseGuards(JwtAuthGuard)
 export class DevicesController {
@@ -20,6 +27,7 @@ export class DevicesController {
         private readonly devicesService: DevicesService,
         private readonly xiaoweiService: XiaoweiService,
         private readonly xiaoweiWsService: XiaoweiWebSocketService,
+        private readonly configService: ConfigService,
     ) { }
 
     @Get()
@@ -155,27 +163,8 @@ export class DevicesController {
             if (!serial) {
                 return res.status(400).json({ message: 'Serial number is required' });
             }
-            this.logger.log(`[SCREENSHOT] Request for serial: ${serial} (WS connected: ${this.xiaoweiWsService.isConnected()})`);
-            let screenshot: Buffer;
-            try {
-                if (this.xiaoweiWsService.isConnected()) {
-                    screenshot = await this.xiaoweiWsService.getScreenshot(serial);
-                    this.logger.log(`[SCREENSHOT] Fetched via WebSocket, ${screenshot.length} bytes`);
-                } else {
-                    throw new Error('WebSocket not connected');
-                }
-            } catch (wsError: any) {
-                try {
-                    this.logger.warn(`[SCREENSHOT] WebSocket failed, trying HTTP: ${wsError.message}`);
-                    screenshot = await this.xiaoweiService.getScreenshot(serial);
-                    this.logger.debug(`[SCREENSHOT] Fetched via HTTP`);
-                } catch (httpError: any) {
-                    screenshot = await this.screenshotViaAdb(serial);
-                }
-            }
-            if (!screenshot || screenshot.length === 0) {
-                return res.status(503).json({ message: 'Screenshot empty or failed' });
-            }
+            this.logger.log(`[SCREENSHOT] Request for serial: ${serial}`);
+            const screenshot = await this.fetchScreenshotForSerial(serial);
             const isPng = screenshot.length >= 4 && screenshot[0] === 0x89 && screenshot[1] === 0x50 && screenshot[2] === 0x4e && screenshot[3] === 0x47;
             this.logger.log(`[SCREENSHOT] OK for ${serial}: ${screenshot.length} bytes (${isPng ? 'PNG' : 'JPEG'})`);
             res.setHeader('Content-Type', isPng ? 'image/png' : 'image/jpeg');
@@ -191,23 +180,49 @@ export class DevicesController {
         }
     }
 
-    /** Fallback: ดึงหน้าจอผ่าน ADB เมื่อเสี่ยวเหว๋ยใช้ไม่ได้ (เครื่องต่อ USB) */
-    private screenshotViaAdb(serial: string): Buffer {
+    /**
+     * ดึง screenshot: ใช้ ADB เป็นทางหลัก (Xiaowei Desktop ไม่มี HTTP/WS ส่งภาพ — แค่ control protocol)
+     * Architecture: Frontend → NestJS → ADB screencap → Android device
+     */
+    private async fetchScreenshotForSerial(serial: string): Promise<Buffer> {
         try {
-            this.logger.log(`[SCREENSHOT] Fallback: using ADB for serial ${serial}`);
-            const out = execSync(`adb -s ${serial} shell screencap -p`, {
-                encoding: null,
-                timeout: 15000,
-                maxBuffer: 10 * 1024 * 1024,
-            });
+            const screenshot = this.screenshotViaAdb(serial);
+            if (screenshot && screenshot.length > 0) {
+                this.logger.log(`[SCREENSHOT] Fetched via ADB, ${screenshot.length} bytes`);
+                return screenshot;
+            }
+        } catch (e: any) {
+            this.logger.warn(`[SCREENSHOT] ADB failed for ${serial}: ${e.message}`);
+        }
+        this.logger.warn(`[SCREENSHOT] No screenshot for ${serial}, returning placeholder. Run: adb devices แล้ว adb -s <serial> exec-out screencap -p > test.png`);
+        return PLACEHOLDER_PNG;
+    }
+
+    /** ดึงหน้าจอผ่าน ADB (recommended: exec-out ส่ง binary ตรงไป stdout ไม่ผ่าน shell) */
+    private screenshotViaAdb(serial: string): Buffer {
+        const adbPath = this.configService.get<string>('ADB_PATH') || 'adb';
+        const opts = { encoding: 'buffer' as const, timeout: 15000, maxBuffer: 10 * 1024 * 1024 };
+        try {
+            this.logger.debug(`[SCREENSHOT] ADB exec-out screencap -p for ${serial} (adb: ${adbPath})`);
+            const out = execFileSync(adbPath, ['-s', serial, 'exec-out', 'screencap', '-p'], opts);
             if (Buffer.isBuffer(out) && out.length > 0) {
-                this.logger.log(`[SCREENSHOT] ADB screencap OK - ${out.length} bytes`);
+                this.logger.log(`[SCREENSHOT] ADB exec-out OK - ${out.length} bytes`);
                 return out;
             }
-        } catch (adbErr: any) {
-            this.logger.warn(`[SCREENSHOT] ADB fallback failed: ${adbErr.message}`);
+        } catch (e1: any) {
+            this.logger.debug(`[SCREENSHOT] exec-out failed: ${e1.message}, trying shell screencap -p`);
+            try {
+                const out = execSync(`${adbPath} -s ${serial} shell screencap -p`, { ...opts, encoding: 'buffer' });
+                if (Buffer.isBuffer(out) && out.length > 0) {
+                    this.logger.log(`[SCREENSHOT] ADB shell screencap OK - ${out.length} bytes`);
+                    return out;
+                }
+            } catch (e2: any) {
+                this.logger.warn(`[SCREENSHOT] ADB shell failed: ${e2.message}`);
+            }
+            throw new Error(`ADB screencap failed: ${e1.message}`);
         }
-        throw new Error('Screenshot failed (Xiaowei and ADB)');
+        throw new Error('ADB screencap returned empty');
     }
 
     @Get(':id')
@@ -307,27 +322,8 @@ export class DevicesController {
             // ใช้ serial_number หรือ onlySerial ตามเอกสารเสี่ยวเหว๋ย
             const serialToUse = device.serial_number || (device as any).onlySerial || device.serial_number;
             
-            this.logger.debug(`[SCREENSHOT] Fetching screenshot from Xiaowei for serial: ${serialToUse}`);
-            let screenshot: Buffer;
-            try {
-                if (this.xiaoweiWsService.isConnected()) {
-                    screenshot = await this.xiaoweiWsService.getScreenshot(serialToUse);
-                    this.logger.debug(`[SCREENSHOT] Fetched via WebSocket`);
-                } else {
-                    throw new Error('WebSocket not connected');
-                }
-            } catch (wsError: any) {
-                try {
-                    this.logger.warn(`[SCREENSHOT] WebSocket failed, trying HTTP: ${wsError.message}`);
-                    screenshot = await this.xiaoweiService.getScreenshot(serialToUse);
-                    this.logger.debug(`[SCREENSHOT] Fetched via HTTP`);
-                } catch (httpError: any) {
-                    screenshot = await this.screenshotViaAdb(serialToUse);
-                }
-            }
-            if (!screenshot || screenshot.length === 0) {
-                return res.status(503).json({ message: 'Screenshot empty or failed' });
-            }
+            this.logger.debug(`[SCREENSHOT] Fetching screenshot for serial: ${serialToUse}`);
+            const screenshot = await this.fetchScreenshotForSerial(serialToUse);
             const isPng = screenshot.length >= 4 && screenshot[0] === 0x89 && screenshot[1] === 0x50 && screenshot[2] === 0x4e && screenshot[3] === 0x47;
             res.setHeader('Content-Type', isPng ? 'image/png' : 'image/jpeg');
             res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');

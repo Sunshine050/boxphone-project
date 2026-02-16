@@ -15,12 +15,16 @@ export class XiaoweiService {
   private readonly logger = new Logger(XiaoweiService.name);
   private readonly apiClient: AxiosInstance;
   private readonly apiUrl: string;
+  /** HTTP base URL ที่ derive จาก XIAOWEI_WS_URL (เช่น ws://127.0.0.1:22222/ → http://127.0.0.1:22222) สำหรับลอง screenshot บนพอร์ตเดียวกับ WS */
+  private readonly httpFromWsUrl: string;
   private readonly apiKey?: string;
   private readonly username?: string;
   private readonly password?: string;
 
   constructor(private readonly configService: ConfigService) {
     this.apiUrl = this.configService.get<string>('XIAOWEI_API_URL') || '';
+    const wsUrl = this.configService.get<string>('XIAOWEI_WS_URL') || '';
+    this.httpFromWsUrl = wsUrl.replace(/^ws:\/\//i, 'http://').replace(/\/+$/, '');
     this.apiKey = this.configService.get<string>('XIAOWEI_API_KEY');
     this.username = this.configService.get<string>('XIAOWEI_USERNAME');
     this.password = this.configService.get<string>('XIAOWEI_PASSWORD');
@@ -40,6 +44,9 @@ export class XiaoweiService {
       this.logger.log(`Xiaowei HTTP API URL: ${this.apiUrl}`);
     } else {
       this.logger.warn('XIAOWEI_API_URL not set - set in .env for HTTP fallback');
+    }
+    if (this.httpFromWsUrl) {
+      this.logger.log(`Xiaowei HTTP from WS host (screenshot fallback): ${this.httpFromWsUrl}`);
     }
   }
 
@@ -93,10 +100,46 @@ export class XiaoweiService {
               responseType: 'arraybuffer',
             });
           } catch (error3: any) {
+            this.logger.debug(`Method 3 failed for ${serialNumber}, trying HTTP on WS host...`);
+            // 4) ลอง HTTP บนพอร์ตเดียวกับ WebSocket (บางรุ่นเสี่ยวเหว๋ยเปิด screenshot ที่พอร์ตนี้)
+            if (this.httpFromWsUrl) {
+              try {
+                const r = await axios.get(`${this.httpFromWsUrl}/screenshot`, {
+                  params: { serial: serialNumber },
+                  responseType: 'arraybuffer',
+                  timeout: 10000,
+                });
+                if (r.data && r.data.byteLength > 0) {
+                  const buf = Buffer.from(r.data, 'binary');
+                  if (buf.length >= 4 && buf[0] === 0x89 && buf[1] === 0x50) {
+                    this.logger.log(`Screenshot from WS host for ${serialNumber}, ${buf.length} bytes`);
+                    return buf;
+                  }
+                }
+              } catch (e4: any) {
+                this.logger.debug(`WS host screenshot failed: ${e4?.message || e4}`);
+              }
+              try {
+                const r = await axios.get(`${this.httpFromWsUrl}/api/screenshot`, {
+                  params: { serial: serialNumber },
+                  responseType: 'arraybuffer',
+                  timeout: 10000,
+                });
+                if (r.data && r.data.byteLength > 0) {
+                  const buf = Buffer.from(r.data, 'binary');
+                  if (buf.length >= 4 && buf[0] === 0x89 && buf[1] === 0x50) {
+                    this.logger.log(`Screenshot from WS host /api/screenshot for ${serialNumber}, ${buf.length} bytes`);
+                    return buf;
+                  }
+                }
+              } catch (e5: any) {
+                this.logger.debug(`WS host /api/screenshot failed: ${e5?.message || e5}`);
+              }
+            }
             this.logger.error(`All screenshot methods failed for ${serialNumber}`);
-            this.logger.error(`Method 1 (POST): ${error?.message || 'unknown'}`);
-            this.logger.error(`Method 2 (GET with params): ${error2?.message || 'unknown'}`);
-            this.logger.error(`Method 3 (GET device-specific): ${error3?.message || 'unknown'}`);
+            this.logger.error(`Method 1 (POST /api/screenshot): ${error?.response?.status || error?.code || error?.message || 'unknown'} - ${error?.response?.data ? JSON.stringify(error.response.data).slice(0, 200) : error?.message || ''}`);
+            this.logger.error(`Method 2 (GET /api/screenshot?serial=): ${error2?.response?.status || error2?.code || error2?.message || 'unknown'} - ${error2?.response?.data ? JSON.stringify(error2.response.data).slice(0, 200) : error2?.message || ''}`);
+            this.logger.error(`Method 3 (GET /api/devices/{serial}/screenshot): ${error3?.response?.status || error3?.code || error3?.message || 'unknown'} - ${error3?.response?.data ? JSON.stringify(error3.response.data).slice(0, 200) : error3?.message || ''}`);
             throw new Error(`Failed to fetch screenshot: ${error?.message || error2?.message || error3?.message || 'All methods failed'}`);
           }
         }

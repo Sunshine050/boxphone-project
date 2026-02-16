@@ -35,6 +35,7 @@ export default function AdminOverviewPage() {
   const [users, setUsers] = useState<any[]>([]);
   const [devices, setDevices] = useState<OverviewDevice[]>([]);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
   const userMap = useMemo(() => {
     return users.reduce((acc, u) => {
@@ -45,22 +46,24 @@ export default function AdminOverviewPage() {
 
   const fetchDevices = async () => {
     setLoading(true);
+    setFetchError(null);
     try {
-      // 🎯 ดึงทั้ง Devices และ Users พร้อมกัน
       const [data, userData] = await Promise.all([
         DevicesService.getAll(),
-        UsersService.getAll()
+        UsersService.getAll(),
       ]);
 
       const mapped: OverviewDevice[] = (data || []).map((d: any) => ({
         id: d.id || d._id,
         name: d.name,
         status: mapDeviceStatus(d.status),
-        user: d.current_user_id ?? undefined, // ตัวนี้ยังเป็น ID อยู่
+        user: d.current_user_id ?? undefined,
       }));
 
       setDevices(mapped);
       setUsers(userData);
+    } catch (e: any) {
+      setFetchError(e?.message || "ไม่สามารถโหลดข้อมูลได้");
     } finally {
       setLoading(false);
     }
@@ -130,6 +133,16 @@ export default function AdminOverviewPage() {
           </Button>
         </div>
       </div>
+
+      {/* ข้อความเมื่อเชื่อมต่อ backend ไม่ได้ */}
+      {fetchError && (
+        <div className="rounded-lg border border-destructive/50 bg-destructive/10 px-4 py-3 flex items-center justify-between gap-4">
+          <p className="text-sm text-destructive">{fetchError}</p>
+          <Button variant="outline" size="sm" onClick={fetchDevices} disabled={loading}>
+            ลองใหม่
+          </Button>
+        </div>
+      )}
 
       {/* สรุปสถานะ */}
       <StatusSummaryCards />

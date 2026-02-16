@@ -37,12 +37,21 @@ export async function apiFetch<T>(
     headers.Authorization = `Bearer ${token}`;
   }
 
-  const res = await fetch(`${BASE_URL}${path}`, {
-    method,
-    headers,
-    body: body ? JSON.stringify(body) : undefined,
-    cache: "no-store",
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${BASE_URL}${path}`, {
+      method,
+      headers,
+      body: body ? JSON.stringify(body) : undefined,
+      cache: "no-store",
+    });
+  } catch (e: any) {
+    const msg =
+      e?.message === "Failed to fetch" || e?.name === "TypeError"
+        ? "ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้ — ตรวจสอบว่า Backend รันอยู่ (เช่น พอร์ต 3031) และ NEXT_PUBLIC_API_BASE_URL ถูกต้อง"
+        : e?.message || "Network error";
+    throw new Error(msg);
+  }
 
   if (!res.ok) {
     const error = await res.json().catch(() => ({}));
