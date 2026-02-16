@@ -86,12 +86,12 @@ export function LoginForm({ onSubmit, isLoading, error }: LoginFormProps) {
           <motion.form onSubmit={handleSubmit} className="space-y-4">
             {/* Email */}
             <motion.div variants={item} className="space-y-2">
-              <Label htmlFor="email">อีเมล</Label>
+              <Label htmlFor="username">ชื่อผู้ใช้ (Username)</Label>
               <Input
                 id="username"
                 name="username"
                 type="text"
-                placeholder="admin@cloudphone.com"
+                placeholder="admin"
                 required
               />
             </motion.div>

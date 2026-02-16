@@ -1,5 +1,6 @@
 import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Logger, Res, Query } from '@nestjs/common';
 import { Response } from 'express';
+import { execSync } from 'child_process';
 import { DevicesService } from './devices.service';
 import { Device } from './device.schema';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -57,6 +58,28 @@ export class DevicesController {
                 }
             }
             this.logger.log(`[SYNC] Found ${xiaoweiDevices.length} devices from Xiaowei`);
+
+            // Fallback: ถ้าเสี่ยวเหว๋ยคืน 0 เครื่อง แต่เครื่องต่อ USB อยู่ — ดึงจาก ADB
+            if (xiaoweiDevices.length === 0) {
+                try {
+                    const adbOut = execSync('adb devices', { encoding: 'utf8', timeout: 5000 });
+                    const lines = adbOut.split(/\r?\n/).filter((l) => l.trim());
+                    const adbList: { serial: string; status: string }[] = [];
+                    for (const line of lines) {
+                        if (line.startsWith('List of devices')) continue;
+                        const parts = line.split(/\s+/).filter(Boolean);
+                        if (parts.length >= 2 && parts[1] === 'device') {
+                            adbList.push({ serial: parts[0], status: 'online' });
+                        }
+                    }
+                    if (adbList.length > 0) {
+                        xiaoweiDevices = adbList.map((d) => ({ serial: d.serial, onlySerial: d.serial, status: d.status, name: `Device ${d.serial}`, model: 'ADB' }));
+                        this.logger.log(`[SYNC] Fallback: got ${xiaoweiDevices.length} devices from ADB`);
+                    }
+                } catch (adbErr: any) {
+                    this.logger.warn(`[SYNC] ADB fallback failed: ${adbErr.message}`);
+                }
+            }
 
             const syncedDevices = [];
             
@@ -122,6 +145,71 @@ export class DevicesController {
         }
     }
 
+    /**
+     * ดึงหน้าจอจาก serial (ต้องอยู่ก่อน @Get(':id') เพื่อไม่ให้ "screenshot" ถูกจับเป็น :id)
+     * GET /devices/screenshot?serial=xxx
+     */
+    @Get('screenshot')
+    async getScreenshotBySerial(@Query('serial') serial: string, @Res() res: Response) {
+        try {
+            if (!serial) {
+                return res.status(400).json({ message: 'Serial number is required' });
+            }
+            this.logger.log(`[SCREENSHOT] Request for serial: ${serial} (WS connected: ${this.xiaoweiWsService.isConnected()})`);
+            let screenshot: Buffer;
+            try {
+                if (this.xiaoweiWsService.isConnected()) {
+                    screenshot = await this.xiaoweiWsService.getScreenshot(serial);
+                    this.logger.log(`[SCREENSHOT] Fetched via WebSocket, ${screenshot.length} bytes`);
+                } else {
+                    throw new Error('WebSocket not connected');
+                }
+            } catch (wsError: any) {
+                try {
+                    this.logger.warn(`[SCREENSHOT] WebSocket failed, trying HTTP: ${wsError.message}`);
+                    screenshot = await this.xiaoweiService.getScreenshot(serial);
+                    this.logger.debug(`[SCREENSHOT] Fetched via HTTP`);
+                } catch (httpError: any) {
+                    screenshot = await this.screenshotViaAdb(serial);
+                }
+            }
+            if (!screenshot || screenshot.length === 0) {
+                return res.status(503).json({ message: 'Screenshot empty or failed' });
+            }
+            const isPng = screenshot.length >= 4 && screenshot[0] === 0x89 && screenshot[1] === 0x50 && screenshot[2] === 0x4e && screenshot[3] === 0x47;
+            this.logger.log(`[SCREENSHOT] OK for ${serial}: ${screenshot.length} bytes (${isPng ? 'PNG' : 'JPEG'})`);
+            res.setHeader('Content-Type', isPng ? 'image/png' : 'image/jpeg');
+            res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+            res.setHeader('Content-Length', screenshot.length.toString());
+            res.send(screenshot);
+        } catch (error: any) {
+            this.logger.error(`[SCREENSHOT] Failed to get screenshot for serial ${serial}: ${error.message}`);
+            const message =
+                error.message ||
+                'Failed to fetch screenshot. Check: 1) XIAOWEI_WS_URL in backend .env, 2) Xiaowei app open + API on, 3) ADB if using USB.';
+            res.status(500).json({ message, error: error.message });
+        }
+    }
+
+    /** Fallback: ดึงหน้าจอผ่าน ADB เมื่อเสี่ยวเหว๋ยใช้ไม่ได้ (เครื่องต่อ USB) */
+    private screenshotViaAdb(serial: string): Buffer {
+        try {
+            this.logger.log(`[SCREENSHOT] Fallback: using ADB for serial ${serial}`);
+            const out = execSync(`adb -s ${serial} shell screencap -p`, {
+                encoding: null,
+                timeout: 15000,
+                maxBuffer: 10 * 1024 * 1024,
+            });
+            if (Buffer.isBuffer(out) && out.length > 0) {
+                this.logger.log(`[SCREENSHOT] ADB screencap OK - ${out.length} bytes`);
+                return out;
+            }
+        } catch (adbErr: any) {
+            this.logger.warn(`[SCREENSHOT] ADB fallback failed: ${adbErr.message}`);
+        }
+        throw new Error('Screenshot failed (Xiaowei and ADB)');
+    }
+
     @Get(':id')
     async findOne(@Param('id') id: string): Promise<Device> {
         return this.devicesService.findOne(id);
@@ -161,6 +249,45 @@ export class DevicesController {
     }
 
     /**
+     * ดึงหน้าจอเป็น JSON { image: "data:image/jpeg;base64,..." } สำหรับ <img src={image} />
+     * ส่ง device.preview ไปเสี่ยวเหว๋ยแล้วรอ binary กลับมา
+     * GET /devices/:id/preview
+     */
+    @Get(':id/preview')
+    async getPreview(@Param('id') id: string) {
+        try {
+            const device = await this.devicesService.findOne(id);
+            if (!device) {
+                return { image: null, message: 'Device not found' };
+            }
+            const serial = device.serial_number || (device as any).onlySerial;
+            if (!serial) {
+                return { image: null, message: 'Device has no serial' };
+            }
+            let image: string | null = null;
+            if (this.xiaoweiWsService.isConnected()) {
+                try {
+                    const buffer = await this.xiaoweiWsService.getScreenshot(serial);
+                    if (buffer && buffer.length > 0) {
+                        const base64 = buffer.toString('base64');
+                        const isPng = buffer.length >= 4 && buffer[0] === 0x89 && buffer[1] === 0x50;
+                        image = `data:${isPng ? 'image/png' : 'image/jpeg'};base64,${base64}`;
+                    }
+                } catch (e) {
+                    image = this.xiaoweiWsService.getLastPreviewBase64(serial);
+                }
+            }
+            if (!image) {
+                image = this.xiaoweiWsService.getLastPreviewBase64(serial);
+            }
+            return { image };
+        } catch (error: any) {
+            this.logger.error(`[PREVIEW] Failed for device ${id}: ${error.message}`);
+            return { image: null, message: error.message };
+        }
+    }
+
+    /**
      * ดึงหน้าจอจากเสี่ยวเหว๋ยตาม device ID
      * GET /devices/:id/screenshot
      */
@@ -181,7 +308,6 @@ export class DevicesController {
             const serialToUse = device.serial_number || (device as any).onlySerial || device.serial_number;
             
             this.logger.debug(`[SCREENSHOT] Fetching screenshot from Xiaowei for serial: ${serialToUse}`);
-            // ลอง WebSocket ก่อน, ถ้าไม่ได้ลอง HTTP
             let screenshot: Buffer;
             try {
                 if (this.xiaoweiWsService.isConnected()) {
@@ -191,62 +317,24 @@ export class DevicesController {
                     throw new Error('WebSocket not connected');
                 }
             } catch (wsError: any) {
-                this.logger.warn(`[SCREENSHOT] WebSocket failed, trying HTTP: ${wsError.message}`);
-                screenshot = await this.xiaoweiService.getScreenshot(serialToUse);
-                this.logger.debug(`[SCREENSHOT] Fetched via HTTP`);
+                try {
+                    this.logger.warn(`[SCREENSHOT] WebSocket failed, trying HTTP: ${wsError.message}`);
+                    screenshot = await this.xiaoweiService.getScreenshot(serialToUse);
+                    this.logger.debug(`[SCREENSHOT] Fetched via HTTP`);
+                } catch (httpError: any) {
+                    screenshot = await this.screenshotViaAdb(serialToUse);
+                }
             }
-            
-            this.logger.debug(`[SCREENSHOT] Screenshot received - Size: ${screenshot.length} bytes`);
-            
-            res.setHeader('Content-Type', 'image/png');
+            if (!screenshot || screenshot.length === 0) {
+                return res.status(503).json({ message: 'Screenshot empty or failed' });
+            }
+            const isPng = screenshot.length >= 4 && screenshot[0] === 0x89 && screenshot[1] === 0x50 && screenshot[2] === 0x4e && screenshot[3] === 0x47;
+            res.setHeader('Content-Type', isPng ? 'image/png' : 'image/jpeg');
             res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
             res.setHeader('Content-Length', screenshot.length.toString());
             res.send(screenshot);
         } catch (error: any) {
             this.logger.error(`[SCREENSHOT] Failed to get screenshot for device ${id}: ${error.message}`);
-            this.logger.error(`[SCREENSHOT] Error stack: ${error.stack}`);
-            res.status(500).json({ 
-                message: error.message || 'Failed to fetch screenshot',
-                error: error.message 
-            });
-        }
-    }
-
-    /**
-     * ดึงหน้าจอจากเสี่ยวเหว๋ยตาม serial number
-     * GET /devices/screenshot?serial=xxx
-     */
-    @Get('screenshot')
-    async getScreenshotBySerial(@Query('serial') serial: string, @Res() res: Response) {
-        try {
-            if (!serial) {
-                return res.status(400).json({ message: 'Serial number is required' });
-            }
-
-            this.logger.debug(`[SCREENSHOT] Request for serial: ${serial}`);
-            // ลอง WebSocket ก่อน, ถ้าไม่ได้ลอง HTTP
-            let screenshot: Buffer;
-            try {
-                if (this.xiaoweiWsService.isConnected()) {
-                    screenshot = await this.xiaoweiWsService.getScreenshot(serial);
-                    this.logger.debug(`[SCREENSHOT] Fetched via WebSocket`);
-                } else {
-                    throw new Error('WebSocket not connected');
-                }
-            } catch (wsError: any) {
-                this.logger.warn(`[SCREENSHOT] WebSocket failed, trying HTTP: ${wsError.message}`);
-                screenshot = await this.xiaoweiService.getScreenshot(serial);
-                this.logger.debug(`[SCREENSHOT] Fetched via HTTP`);
-            }
-            
-            this.logger.debug(`[SCREENSHOT] Screenshot received - Size: ${screenshot.length} bytes`);
-            
-            res.setHeader('Content-Type', 'image/png');
-            res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-            res.setHeader('Content-Length', screenshot.length.toString());
-            res.send(screenshot);
-        } catch (error: any) {
-            this.logger.error(`[SCREENSHOT] Failed to get screenshot for serial ${serial}: ${error.message}`);
             this.logger.error(`[SCREENSHOT] Error stack: ${error.stack}`);
             res.status(500).json({ 
                 message: error.message || 'Failed to fetch screenshot',

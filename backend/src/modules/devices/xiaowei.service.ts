@@ -3,18 +3,12 @@ import { ConfigService } from '@nestjs/config';
 import axios, { AxiosInstance } from 'axios';
 
 /**
- * Xiaowei (效卫) Service สำหรับดึงหน้าจอจาก BoxPhone Server
- * 
- * เอกสาร API: https://www.xiaowei.xin/help/70/349
- * 
- * ตามเอกสาร 8.1.1: เสี่ยวเหว๋ยใช้ WebSocket ที่ ws://127.0.0.1:22222/
- * 
- * ต้องตั้งค่า environment variables:
- * - XIAOWEI_WS_URL: WebSocket URL ของเสี่ยวเหว๋ย (เช่น ws://127.0.0.1:22222)
- * - XIAOWEI_API_URL: HTTP API URL (ถ้ามี, เช่น http://localhost:8080) - fallback
- * - XIAOWEI_API_KEY: API Key สำหรับ authentication (ถ้ามี)
- * - XIAOWEI_USERNAME: Username สำหรับ login (ถ้ามี)
- * - XIAOWEI_PASSWORD: Password สำหรับ login (ถ้ามี)
+ * Xiaowei (效卫) Service — ดึงหน้าจอ/รายการเครื่องผ่าน HTTP API
+ * เอกสาร: https://www.xiaowei.xin/help/70/349
+ *
+ * ต้องตั้งใน backend .env (ห้าม hardcode):
+ * - XIAOWEI_API_URL: HTTP API URL ของเสี่ยวเหว๋ย
+ * - XIAOWEI_API_KEY / XIAOWEI_USERNAME / XIAOWEI_PASSWORD (ถ้า API ต้องการ)
  */
 @Injectable()
 export class XiaoweiService {
@@ -26,7 +20,7 @@ export class XiaoweiService {
   private readonly password?: string;
 
   constructor(private readonly configService: ConfigService) {
-    this.apiUrl = this.configService.get<string>('XIAOWEI_API_URL') || 'http://localhost:8080';
+    this.apiUrl = this.configService.get<string>('XIAOWEI_API_URL') || '';
     this.apiKey = this.configService.get<string>('XIAOWEI_API_KEY');
     this.username = this.configService.get<string>('XIAOWEI_USERNAME');
     this.password = this.configService.get<string>('XIAOWEI_PASSWORD');
@@ -42,13 +36,15 @@ export class XiaoweiService {
       },
     });
 
-    // Log initialization status
-    if (this.apiKey) {
-      this.logger.log(`Xiaowei Service initialized - API URL: ${this.apiUrl} (with API Key)`);
+    if (this.apiUrl) {
+      this.logger.log(`Xiaowei HTTP API URL: ${this.apiUrl}`);
     } else {
-      this.logger.log(`Xiaowei Service initialized - API URL: ${this.apiUrl} (no authentication)`);
-      this.logger.warn('⚠️  XIAOWEI_API_KEY not set - API calls will be made without authentication');
+      this.logger.warn('XIAOWEI_API_URL not set - set in .env for HTTP fallback');
     }
+  }
+
+  private ensureApiUrl(): void {
+    if (!this.apiUrl) throw new Error('XIAOWEI_API_URL not set - configure in backend .env');
   }
 
   /**
@@ -59,6 +55,7 @@ export class XiaoweiService {
    * @returns Buffer ของภาพหน้าจอ (PNG format)
    */
   async getScreenshot(serialNumber: string): Promise<Buffer> {
+    this.ensureApiUrl();
     try {
       this.logger.debug(`Fetching screenshot for device: ${serialNumber}`);
 
@@ -168,6 +165,7 @@ export class XiaoweiService {
    * @returns Array ของ device information
    */
   async getDeviceList(): Promise<any[]> {
+    this.ensureApiUrl();
     try {
       this.logger.debug('Fetching device list from Xiaowei');
       
@@ -209,8 +207,8 @@ export class XiaoweiService {
    * ตรวจสอบว่าเสี่ยวเหว๋ย API พร้อมใช้งานหรือไม่
    */
   async healthCheck(): Promise<boolean> {
+    if (!this.apiUrl) return false;
     try {
-      // ลองเรียก device list endpoint (ตามเอกสาร 8.2.1)
       const devices = await this.getDeviceList();
       this.logger.log(`Xiaowei API is healthy - Found ${devices.length} devices`);
       return true;

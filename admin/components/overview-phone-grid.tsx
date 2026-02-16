@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Eye, Power, RefreshCw } from "lucide-react";
@@ -129,6 +129,7 @@ function DeviceScreenshot({ deviceId, status }: { deviceId: string; status: Devi
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string>("");
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const fetchScreenshot = async () => {
     if (status === "maintenance" || status === "error") {
@@ -159,7 +160,14 @@ function DeviceScreenshot({ deviceId, status }: { deviceId: string; status: Devi
 
       if (!response.ok) {
         const errorText = await response.text();
-        throw new Error(`HTTP ${response.status}: ${errorText || response.statusText}`);
+        let msg = errorText || response.statusText;
+        try {
+          const j = JSON.parse(errorText);
+          if (j.message) msg = j.message;
+        } catch {
+          if (errorText.length > 200) msg = errorText.slice(0, 200) + "...";
+        }
+        throw new Error(msg);
       }
 
       // สร้าง blob URL จาก response
@@ -178,16 +186,22 @@ function DeviceScreenshot({ deviceId, status }: { deviceId: string; status: Devi
       setError(true);
       setErrorMessage(err.message || "ไม่สามารถดึงหน้าจอได้");
       setLoading(false);
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
     }
   };
 
   useEffect(() => {
     fetchScreenshot();
-    // Auto-refresh ทุก 5 วินาที (optional - สามารถปิดได้)
-    const interval = setInterval(fetchScreenshot, 5000);
+    const refreshMs = Math.max(500, Number(process.env.NEXT_PUBLIC_SCREENSHOT_REFRESH_MS) || 5000);
+    intervalRef.current = setInterval(fetchScreenshot, refreshMs);
     return () => {
-      clearInterval(interval);
-      // Cleanup blob URL เมื่อ component unmount
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
       if (imageUrl && imageUrl.startsWith("blob:")) {
         URL.revokeObjectURL(imageUrl);
       }

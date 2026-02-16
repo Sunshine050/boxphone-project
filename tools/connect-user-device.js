@@ -6,7 +6,11 @@
  * 2. รัน script นี้: node tools/connect-user-device.js
  */
 
-const BASE_URL = process.env.BACKEND_URL || 'http://127.0.0.1:3031';
+const BASE_URL = process.env.BACKEND_URL || process.env.API_BASE_URL || '';
+if (!BASE_URL) {
+  console.error('❌ Set BACKEND_URL or API_BASE_URL in env');
+  process.exit(1);
+}
 const ADMIN_USERNAME = process.env.ADMIN_USERNAME || 'admin';
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123456';
 
