@@ -7,6 +7,7 @@ import { DevicesService } from "@/services/devices.service";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
 
 import {
   Dialog,
@@ -82,18 +83,23 @@ export function UserAssignDevicesTimeDialog({
   const [devices, setDevices] = useState<DeviceItem[]>([]);
   const [loadingDevices, setLoadingDevices] = useState(false);
 
+  const deviceMap = useMemo(() => {
+    return devices.reduce((acc, d) => {
+      acc[d.id] = d;
+      return acc;
+    }, {} as Record<string, DeviceItem>);
+  }, [devices]);
+
   const fetchDevices = async () => {
     setLoadingDevices(true);
     try {
       const data = (await DevicesService.getAll()) as any[];
-
       const mapped: DeviceItem[] = data.map((d) => ({
         id: d.id || d._id,
         name: d.name,
         serial_number: d.serial_number,
         status: d.status,
       }));
-
       setDevices(mapped);
       return mapped;
     } finally {
@@ -101,18 +107,9 @@ export function UserAssignDevicesTimeDialog({
     }
   };
 
-  /**
-   * ✅ เปิด dialog:
-   * 1) preload จาก user ก่อน (เพื่อให้ dropdown มี value ทันที)
-   * 2) fetch devices list
-   * 3) validate ว่า device_id ที่ preload มีจริงใน list ถ้าไม่จริง -> ล้างออก
-   */
   useEffect(() => {
     if (!open) return;
-
     const u: any = user;
-
-    // ✅ preload rows ก่อน
     let preloadRows: Row[] = [createEmptyRow()];
 
     if (u && Array.isArray(u.devices) && u.devices.length > 0) {
@@ -123,43 +120,22 @@ export function UserAssignDevicesTimeDialog({
         customMinutes: "0",
       }));
     } else if (u && u.device_id) {
-      preloadRows = [
-        {
-          device_id: String(u.device_id),
-          packageKey: "1h",
-          customHours: "0",
-          customMinutes: "0",
-        },
-      ];
+      preloadRows = [{ device_id: String(u.device_id), packageKey: "1h", customHours: "0", customMinutes: "0" }];
     }
 
     setRows(preloadRows);
 
-    // ✅ โหลด device list แล้ว validate
     (async () => {
       const list = await fetchDevices();
-
-      setRows((prev) => {
-        return prev.map((r) => {
-          if (!r.device_id) return r;
-
-          const exists = list.some((d) => d.id === r.device_id);
-          if (!exists) {
-            // ถ้า id ไม่ match list -> reset เป็นว่าง
-            return { ...r, device_id: "" };
-          }
-          return r;
-        });
-      });
+      setRows((prev) => prev.map((r) => {
+        if (!r.device_id) return r;
+        const exists = list.some((d) => d.id === r.device_id);
+        return exists ? r : { ...r, device_id: "" };
+      }));
     })();
   }, [open, user?.id]);
 
-  /** ✅ หา device ที่ถูกเลือกแล้วทั้งหมด */
-  const selectedDeviceIds = useMemo(() => {
-    return rows
-      .map((r) => r.device_id)
-      .filter((x) => x && x.trim() !== "");
-  }, [rows]);
+  const selectedDeviceIds = useMemo(() => rows.map((r) => r.device_id).filter((x) => x && x.trim() !== ""), [rows]);
 
   const getAssignSeconds = (row: Row) => {
     if (row.packageKey !== "custom") return PACKAGE_SECONDS[row.packageKey];
@@ -168,34 +144,21 @@ export function UserAssignDevicesTimeDialog({
 
   const validItems = useMemo(() => {
     return rows
-      .map((r) => ({
-        device_id: r.device_id.trim(),
-        assign_seconds: getAssignSeconds(r),
-      }))
+      .map((r) => ({ device_id: r.device_id.trim(), assign_seconds: getAssignSeconds(r) }))
       .filter((x) => x.device_id !== "" && x.assign_seconds > 0);
   }, [rows]);
 
-  const canSubmit = useMemo(() => {
-    return !!user?.id && validItems.length > 0;
-  }, [user?.id, validItems.length]);
+  const canSubmit = useMemo(() => !!user?.id && validItems.length > 0, [user?.id, validItems.length]);
 
   const addRow = () => setRows((prev) => [...prev, createEmptyRow()]);
-  const removeRow = (idx: number) =>
-    setRows((prev) => prev.filter((_, i) => i !== idx));
+  const removeRow = (idx: number) => setRows((prev) => prev.filter((_, i) => i !== idx));
 
-  const updateRow = <K extends keyof Row>(
-    idx: number,
-    key: K,
-    value: Row[K]
-  ) => {
-    setRows((prev) =>
-      prev.map((r, i) => (i === idx ? { ...r, [key]: value } : r))
-    );
+  const updateRow = <K extends keyof Row>(idx: number, key: K, value: Row[K]) => {
+    setRows((prev) => prev.map((r, i) => (i === idx ? { ...r, [key]: value } : r)));
   };
 
   const handleSubmit = async () => {
     if (!user?.id) return;
-
     setLoading(true);
     try {
       await UsersService.assignDevices(user.id, validItems);
@@ -210,72 +173,68 @@ export function UserAssignDevicesTimeDialog({
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-3xl w-[95vw] sm:w-full max-h-[85vh] p-0 flex flex-col overflow-hidden">
-        {/* Header fixed */}
-        <div className="px-6 pt-6">
+      {/* 🎯 เปลี่ยนสีพื้นหลังเป็นโทน Black/Zinc ตามธีมเว็บ */}
+      <DialogContent className="max-w-3xl w-[95vw] sm:w-full max-h-[85vh] p-0 flex flex-col overflow-hidden bg-[#0c0c0e] text-zinc-100 border-zinc-800 shadow-2xl">
+        <div className="px-6 pt-6 border-b border-zinc-900 pb-4">
           <DialogHeader>
-            <DialogTitle>กำหนด Device + เวลา (Package)</DialogTitle>
-            <p className="text-sm text-muted-foreground">
-              ผู้ใช้: <span className="font-medium">{user?.username}</span>
+            <DialogTitle className="text-xl font-bold tracking-tight text-zinc-100">กำหนด Device + เวลา (Package)</DialogTitle>
+            <p className="text-sm text-zinc-500">
+              ผู้ใช้: <span className="font-semibold text-blue-400">{user?.username}</span>
             </p>
           </DialogHeader>
         </div>
 
-        {/* Scrollable */}
-        <div className="px-6 py-4 overflow-y-auto max-h-[calc(85vh-140px)] space-y-4">
+        <div className="px-6 py-4 overflow-y-auto max-h-[calc(85vh-140px)] space-y-4 bg-[#0c0c0e]">
           {rows.map((r, idx) => {
-            const disabledSet = new Set(
-              selectedDeviceIds.filter((id) => id !== r.device_id)
-            );
-
+            const disabledSet = new Set(selectedDeviceIds.filter((id) => id !== r.device_id));
             const assignSeconds = getAssignSeconds(r);
+            const currentDevice = deviceMap[r.device_id];
 
             return (
-              <div key={idx} className="rounded-2xl border p-4 space-y-3">
+              <div key={idx} className="rounded-2xl border border-zinc-800 bg-zinc-900/30 p-5 space-y-4 transition-all hover:border-zinc-700">
                 <div className="flex items-center justify-between">
-                  <div className="text-sm font-medium">เครื่องที่ {idx + 1}</div>
-
-                  <Button
-                    size="icon"
-                    variant="destructive"
-                    onClick={() => removeRow(idx)}
-                    disabled={rows.length === 1}
-                    title="ลบเครื่องนี้"
+                  <div className="text-xs font-bold text-zinc-500 uppercase tracking-widest">เครื่องที่ {idx + 1}</div>
+                  <Button 
+                    size="icon" 
+                    variant="ghost" 
+                    onClick={() => removeRow(idx)} 
+                    disabled={rows.length === 1} 
+                    className="h-8 w-8 text-zinc-500 hover:text-red-400 hover:bg-red-400/10"
                   >
                     <Trash2 size={16} />
                   </Button>
                 </div>
 
-                {/* Device Select */}
-                <div className="space-y-1">
-                  <div className="text-xs text-muted-foreground">
-                    เลือก Device
+                {/* 🎯 Device Select Area */}
+                <div className="space-y-2">
+                  <div className="flex justify-between items-center">
+                    <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">เลือก Device</label>
+                    {currentDevice && (
+                      <Badge variant="outline" className={`text-[10px] border-none px-0 ${
+                        currentDevice.status === "AVAILABLE" ? "text-emerald-500" : "text-amber-500"
+                      }`}>
+                        ● {currentDevice.status}
+                      </Badge>
+                    )}
                   </div>
 
                   {loadingDevices ? (
-                    <div className="text-xs text-muted-foreground">
-                      กำลังโหลดรายการเครื่อง...
-                    </div>
+                    <div className="text-xs text-zinc-600 italic">กำลังโหลดรายการเครื่อง...</div>
                   ) : (
                     <select
                       value={r.device_id}
-                      onChange={(e) =>
-                        updateRow(idx, "device_id", e.target.value)
-                      }
-                      className="w-full border rounded-xl px-3 py-2 text-sm bg-background"
+                      onChange={(e) => updateRow(idx, "device_id", e.target.value)}
+                      className="w-full border border-zinc-800 rounded-xl px-3 py-2.5 text-sm bg-zinc-950 text-zinc-200 focus:outline-none focus:ring-1 focus:ring-zinc-700 appearance-none cursor-pointer"
                     >
-                      <option value="">-- เลือกเครื่อง --</option>
-
+                      <option value="" className="bg-zinc-950 text-zinc-500">-- เลือกเครื่องจากรายการ --</option>
                       {devices.map((d) => {
                         const isDisabled = disabledSet.has(d.id);
-                        const label = `${d.name} • SN: ${d.serial_number} • ${d.status} • +${secondsToHoursText(
-                          assignSeconds
-                        )}`;
+                        const statusIndicator = d.status === "AVAILABLE" ? "🟢" : d.status === "BUSY" ? "🟡" : "🔴";
+                        const label = `${d.name} • SN: ${d.serial_number} • ${d.status}`;
 
                         return (
-                          <option key={d.id} value={d.id} disabled={isDisabled}>
-                            {label}
-                            {isDisabled ? " (เลือกแล้ว)" : ""}
+                          <option key={d.id} value={d.id} disabled={isDisabled} className="bg-zinc-950 py-2">
+                            {statusIndicator} {label} {isDisabled ? " (เลือกแล้ว)" : ""}
                           </option>
                         );
                       })}
@@ -283,63 +242,54 @@ export function UserAssignDevicesTimeDialog({
                   )}
                 </div>
 
-                {/* Package */}
-                <div className="space-y-2">
-                  <div className="text-xs text-muted-foreground">
-                    เวลา (Package)
-                  </div>
-
+                {/* Package Buttons */}
+                <div className="space-y-3">
+                  <div className="text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">เวลา (Package)</div>
                   <div className="flex flex-wrap gap-2">
-                    {(
-                      ["1h", "1d", "1w", "1m", "1y", "custom"] as PackageKey[]
-                    ).map((k) => (
+                    {(["1h", "1d", "1w", "1m", "1y", "custom"] as PackageKey[]).map((k) => (
                       <Button
                         key={k}
                         type="button"
                         variant={r.packageKey === k ? "default" : "outline"}
                         onClick={() => updateRow(idx, "packageKey", k)}
-                        className="h-9"
+                        className={`h-9 flex-1 min-w-[80px] text-xs transition-all ${
+                          r.packageKey === k 
+                          ? 'bg-zinc-100 text-zinc-950 hover:bg-white shadow-lg' 
+                          : 'bg-zinc-950 border-zinc-800 text-zinc-500 hover:border-zinc-600 hover:text-zinc-200'
+                        }`}
                       >
-                        {k === "1h" && "1 ชั่วโมง"}
+                        {k === "1h" && "1 ชม."}
                         {k === "1d" && "1 วัน"}
                         {k === "1w" && "1 สัปดาห์"}
                         {k === "1m" && "1 เดือน"}
                         {k === "1y" && "1 ปี"}
-                        {k === "custom" && "Custom"}
+                        {k === "custom" && "ระบุเอง"}
                       </Button>
                     ))}
                   </div>
 
                   {r.packageKey === "custom" && (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-w-sm">
-                      <div className="space-y-1">
-                        <div className="text-xs text-muted-foreground">
-                          ชั่วโมง
-                        </div>
-                        <Input
-                          value={r.customHours}
-                          onChange={(e) =>
-                            updateRow(idx, "customHours", e.target.value)
-                          }
+                    <div className="grid grid-cols-2 gap-3 p-4 bg-zinc-950/50 rounded-xl border border-zinc-800/50">
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-bold uppercase text-zinc-600">ชั่วโมง</label>
+                        <Input 
+                          type="number"
+                          value={r.customHours} 
+                          onChange={(e) => updateRow(idx, "customHours", e.target.value)} 
+                          className="bg-zinc-950 border-zinc-800 text-zinc-200 focus:ring-0 h-9 font-mono" 
                         />
                       </div>
-
-                      <div className="space-y-1">
-                        <div className="text-xs text-muted-foreground">นาที</div>
-                        <Input
-                          value={r.customMinutes}
-                          onChange={(e) =>
-                            updateRow(idx, "customMinutes", e.target.value)
-                          }
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-bold uppercase text-zinc-600">นาที</label>
+                        <Input 
+                          type="number"
+                          value={r.customMinutes} 
+                          onChange={(e) => updateRow(idx, "customMinutes", e.target.value)} 
+                          className="bg-zinc-950 border-zinc-800 text-zinc-200 focus:ring-0 h-9 font-mono" 
                         />
                       </div>
-
-                      <div className="text-xs text-muted-foreground sm:col-span-2">
-                        รวม:{" "}
-                        <span className="font-medium">
-                          {secondsToHoursText(assignSeconds)}
-                        </span>
-                        {"  "}({assignSeconds} วินาที)
+                      <div className="col-span-2 pt-1">
+                        <p className="text-[10px] text-zinc-500 italic">รวมเวลา: <span className="text-emerald-500 font-medium">{secondsToHoursText(assignSeconds)}</span></p>
                       </div>
                     </div>
                   )}
@@ -348,28 +298,32 @@ export function UserAssignDevicesTimeDialog({
             );
           })}
 
-          <Button
-            variant="outline"
-            onClick={addRow}
-            className="gap-2 w-full sm:w-auto"
+          <Button 
+            variant="ghost" 
+            onClick={addRow} 
+            className="gap-2 w-full border border-dashed border-zinc-800 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900/50 py-7 rounded-2xl transition-all"
           >
-            <Plus size={16} />
-            เพิ่มเครื่อง
+            <Plus size={18} />
+            เพิ่มอุปกรณ์อีกเครื่อง
           </Button>
-
-          <p className="text-xs text-muted-foreground">
-            ✅ เครื่องที่เลือกไปแล้วจะถูกปิด (สีเทา) ในแถวอื่นอัตโนมัติ
-          </p>
         </div>
 
-        {/* Footer fixed */}
-        <div className="px-6 pb-6 pt-4 border-t bg-background">
-          <DialogFooter>
-            <Button variant="outline" onClick={onClose}>
+        {/* Footer: ใช้สี Blue สำหรับ Action หลัก */}
+        <div className="px-6 py-6 border-t border-zinc-900 bg-[#0c0c0e]">
+          <DialogFooter className="flex flex-row gap-3">
+            <Button 
+              variant="ghost" 
+              onClick={onClose} 
+              className="flex-1 text-zinc-500 hover:text-zinc-200 hover:bg-zinc-900 h-11"
+            >
               ยกเลิก
             </Button>
-            <Button onClick={handleSubmit} disabled={!canSubmit || loading}>
-              {loading ? "กำลังบันทึก..." : "ยืนยัน"}
+            <Button 
+              onClick={handleSubmit} 
+              disabled={!canSubmit || loading} 
+              className="flex-[2] bg-blue-600 hover:bg-blue-500 text-white font-bold h-11 shadow-lg shadow-blue-900/20 transition-all active:scale-95"
+            >
+              {loading ? "กำลังบันทึกข้อมูล..." : "ยืนยันและเปิดใช้งาน"}
             </Button>
           </DialogFooter>
         </div>

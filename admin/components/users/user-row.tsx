@@ -33,15 +33,11 @@ function formatHMS(sec: number) {
   const h = Math.floor(sec / 3600);
   const m = Math.floor((sec % 3600) / 60);
   const s = Math.floor(sec % 60);
-  return `${String(h).padStart(2, "0")}:${String(m).padStart(
-    2,
-    "0"
-  )}:${String(s).padStart(2, "0")}`;
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 }
 
 function formatPrettyTime(sec: number) {
   if (!sec || sec <= 0) return "หมดเวลา";
-
   const day = Math.floor(sec / 86400);
   const hour = Math.floor((sec % 86400) / 3600);
   const minute = Math.floor((sec % 3600) / 60);
@@ -51,7 +47,6 @@ function formatPrettyTime(sec: number) {
     if (minute > 0) return `${day} วัน ${minute} นาที`;
     return `${day} วัน`;
   }
-
   return formatHMS(sec);
 }
 
@@ -84,15 +79,12 @@ export function UserRow({
   index: number;
   currentUserId: string | null;
   onAction: (action: UserAction) => void;
-
-  // ✅ multi devices
   userDevices: UserDeviceAssigned[];
-
-  // ✅ device map from parent
   deviceMap: Record<string, DeviceMini>;
 }) {
   const [showPass, setShowPass] = useState(false);
 
+  // 🎯 ดึงเวลาเริ่มต้นจาก Database (Props)
   const initialTime = useMemo(() => {
     if (userDevices && userDevices.length > 0) {
       return userDevices[0].assign_seconds || 0;
@@ -102,33 +94,25 @@ export function UserRow({
 
   const [liveRemaining, setLiveRemaining] = useState<number>(initialTime);
 
+  // 🎯 จุดที่ 1: แก้ไขให้ Sync ตาม Backend ทันทีที่ข้อมูลเปลี่ยน
   useEffect(() => {
-    // 🎯 Logic: ถ้าค่าจาก DB (initialTime) ต่างจากค่าในจอ (liveRemaining) 
-    // ไม่เกิน 10 วินาที ให้ใช้ค่าในจอต่อไป (เพื่อความลื่นไหล)
-    // แต่ถ้าต่างกันเยอะ (เช่น Admin กดเติมเวลา) ให้ใช้ค่าจาก DB
-    const diff = Math.abs(liveRemaining - initialTime);
-
-    if (diff > 10 || liveRemaining === 0) {
-      setLiveRemaining(initialTime);
-    }
+    setLiveRemaining(initialTime);
   }, [initialTime]);
 
   const hasTime = initialTime > 0;
   const isStarted = user.status === "INUSE";
 
-  // ภายใน useEffect ของ UserRow ที่นับถอยหลัง
+  // 🎯 จุดที่ 2: ปรับ Timer ให้เดินต่อเนื่อง ไม่สะดุด
   useEffect(() => {
+    // เดินเวลาเฉพาะตอนกำลังใช้งานและยังมีเวลาเหลือ
     if (!isStarted || liveRemaining <= 0) return;
 
     const timer = setInterval(() => {
       setLiveRemaining((prev) => {
         if (prev <= 1) {
           clearInterval(timer);
-
-          setTimeout(() => {
-            onAction("refresh" as any);
-          }, 0);
-
+          // เมื่อเวลาหมดจริงๆ ให้สั่ง Refresh ข้อมูลใหม่จาก API
+          setTimeout(() => onAction("refresh" as any), 0);
           return 0;
         }
         return prev - 1;
@@ -136,9 +120,9 @@ export function UserRow({
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [isStarted, liveRemaining, onAction]);
+    // 💡 ไม่ใส่ liveRemaining ใน deps เพื่อไม่ให้ setInterval ถูก reset ทุกวินาที
+  }, [isStarted, onAction]);
 
-  // คำนวณ % สำหรับ ProgressBar
   const percent = useMemo(() => {
     const total = userDevices[0]?.assign_seconds || 1;
     return Math.max(0, Math.min(100, (liveRemaining / total) * 100));
@@ -146,24 +130,15 @@ export function UserRow({
 
   const isSelf = currentUserId && user.id === currentUserId;
 
-  // แก้ไขส่วน firstDeviceLabel ใน UserRow
   const firstDeviceLabel = useMemo(() => {
     if (!userDevices || userDevices.length === 0) return "-";
-
     const firstId = userDevices[0].device_id;
-
-    // 🎯 ถ้า ID เป็นค่าว่าง หรือเป็นคำว่า "no-id" / "undefined"
-    if (!firstId || firstId === "no-id" || firstId === "undefined") {
-      return "ไม่พบรหัสอุปกรณ์";
-    }
-
+    if (!firstId || firstId === "no-id" || firstId === "undefined") return "ไม่พบรหัสอุปกรณ์";
     const meta = deviceMap[firstId];
-
     if (meta) return meta.name;
-
-    // 🎯 ถ้ามี ID แต่หาใน Map ไม่เจอ (Map อาจจะยังโหลดไม่เสร็จ)
     return `รหัส: ..${firstId.slice(-4)}`;
   }, [userDevices, deviceMap]);
+
   return (
     <motion.tr
       initial={{ opacity: 0, x: -20 }}
@@ -171,29 +146,14 @@ export function UserRow({
       transition={{ delay: index * 0.05 }}
       className="border-b"
     >
-      {/* name */}
       <td className="p-4 font-medium">{user.name}</td>
-
-      {/* username */}
       <td className="text-center font-mono text-sm">{user.username}</td>
-
-      {/* password */}
       <td className="text-center">
         <div className="flex items-center justify-center gap-2 font-mono text-sm">
           {user.password_plain ? (
             <>
-              <span>
-                {showPass
-                  ? user.password_plain
-                  : "•".repeat(user.password_plain.length)}
-              </span>
-
-              <Button
-                size="icon"
-                variant="ghost"
-                onClick={() => setShowPass((s) => !s)}
-                title={showPass ? "ซ่อนรหัสผ่าน" : "แสดงรหัสผ่าน"}
-              >
+              <span>{showPass ? user.password_plain : "•".repeat(user.password_plain.length)}</span>
+              <Button size="icon" variant="ghost" onClick={() => setShowPass((s) => !s)}>
                 {showPass ? <EyeOff size={16} /> : <Eye size={16} />}
               </Button>
             </>
@@ -202,98 +162,57 @@ export function UserRow({
           )}
         </div>
       </td>
-
-      {/* status */}
       <td className="text-center">
-        <Badge className={statusMap[user.status].className}>
-          {statusMap[user.status].label}
-        </Badge>
+        <Badge className={statusMap[user.status].className}>{statusMap[user.status].label}</Badge>
       </td>
-
-      {/* time */}
       <td className="text-center">
-        {/* เปลี่ยนเงื่อนไขการแสดงผลตรงนี้ */}
         {hasTime ? (
           <div className="flex flex-col items-center gap-1">
             <span className={`text-xs font-medium ${isStarted ? "text-foreground" : "text-muted-foreground"}`}>
               {formatPrettyTime(liveRemaining)}
               {!isStarted && <span className="ml-2 italic text-[11px]">(ยังไม่เริ่ม)</span>}
             </span>
-
             <div className="h-1.5 w-28 bg-muted rounded-full overflow-hidden">
               <div
-                className={`h-full transition-all ${percent < 20 ? "bg-red-500" : "bg-green-500"}`}
+                className={`h-full transition-all duration-1000 linear ${percent < 20 ? "bg-red-500" : "bg-green-500"}`}
                 style={{ width: `${percent}%` }}
               />
             </div>
           </div>
         ) : (
-          /* ถ้า hasTime เป็น false (ไม่มีเวลา) ให้โชว์แบบนี้ */
           <div className="flex flex-col items-center gap-1 text-muted-foreground">
             <span className="text-xs italic">ยังไม่มีเวลาใช้งาน</span>
             <div className="h-1.5 w-28 bg-muted rounded-full" />
           </div>
         )}
       </td>
-
-      {/* ✅ device dropdown */}
       <td className="text-center text-sm">
         {userDevices.length === 0 ? (
           <span className="text-muted-foreground">-</span>
         ) : (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button
-                className="
-                  inline-flex items-center justify-center gap-1
-                  px-2 py-1 rounded-lg
-                  text-muted-foreground hover:text-foreground
-                  hover:bg-muted/30 transition
-                "
-              >
+              <button className="inline-flex items-center justify-center gap-1 px-2 py-1 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/30 transition">
                 <span className="truncate max-w-[120px]">{firstDeviceLabel}</span>
                 <ChevronDown size={16} className="opacity-70" />
               </button>
             </DropdownMenuTrigger>
-
-            <DropdownMenuContent
-              align="end"
-              className="w-[320px] max-h-[260px] overflow-y-auto"
-            >
-              <div className="px-2 py-2 text-xs text-muted-foreground">
-                อุปกรณ์ทั้งหมด ({userDevices.length})
-              </div>
-
+            <DropdownMenuContent align="end" className="w-[320px] max-h-[260px] overflow-y-auto">
+              <div className="px-2 py-2 text-xs text-muted-foreground">อุปกรณ์ทั้งหมด ({userDevices.length})</div>
               <div className="space-y-2 p-2">
                 {userDevices.map((item) => {
                   const meta = deviceMap[item.device_id];
-
                   return (
-                    <div
-                      key={item.device_id}
-                      className="rounded-xl border bg-background/40 p-3"
-                    >
+                    <div key={item.device_id} className="rounded-xl border bg-background/40 p-3">
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0">
-                          <div className="font-medium truncate">
-                            {meta?.name || item.device_id}
-                          </div>
-
-                          <div className="text-xs text-muted-foreground truncate">
-                            SN: {meta?.serial_number || "-"}
-                          </div>
-
+                          <div className="font-medium truncate">{meta?.name || item.device_id}</div>
+                          <div className="text-xs text-muted-foreground truncate">SN: {meta?.serial_number || "-"}</div>
                           <div className="text-xs text-muted-foreground mt-1">
-                            เวลา:{" "}
-                            <span className="text-foreground font-medium">
-                              {secondsToHoursText(item.assign_seconds)}
-                            </span>
+                            เวลา: <span className="text-foreground font-medium">{secondsToHoursText(item.assign_seconds)}</span>
                           </div>
                         </div>
-
-                        <Badge className="text-xs">
-                          {meta?.status || "UNKNOWN"}
-                        </Badge>
+                        <Badge className="text-xs">{meta?.status || "UNKNOWN"}</Badge>
                       </div>
                     </div>
                   );
@@ -303,28 +222,13 @@ export function UserRow({
           </DropdownMenu>
         )}
       </td>
-
-      {/* actions */}
       <td className="p-4">
         <div className="flex justify-end gap-2">
-          {/* ✅ ปุ่มเดียว */}
-          <Button
-            size="icon"
-            variant="outline"
-            onClick={() => onAction("assign")}
-            title="จัดการ Device + เวลา"
-          >
+          <Button size="icon" variant="outline" onClick={() => onAction("assign")}>
             <Settings2 size={16} />
           </Button>
-
-          {/* delete */}
           {user.role !== "ADMIN" && !isSelf && (
-            <Button
-              size="icon"
-              variant="destructive"
-              onClick={() => onAction("delete")}
-              title="delete"
-            >
+            <Button size="icon" variant="destructive" onClick={() => onAction("delete")}>
               <Trash2 size={16} />
             </Button>
           )}
