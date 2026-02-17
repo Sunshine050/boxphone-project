@@ -28,8 +28,7 @@ async function bootstrap() {
   // Validation Pipe Configuration
   app.useGlobalPipes(new ValidationPipe(getValidationPipeConfig()));
 
-  // CORS Configuration - Enable CORS with permissive settings for development
-  // IMPORTANT: This must be called BEFORE routes are registered
+  
   app.enableCors({
     origin: (origin, callback) => {
       // Allow all origins in development

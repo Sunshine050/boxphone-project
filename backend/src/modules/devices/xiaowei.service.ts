@@ -3,30 +3,28 @@ import { ConfigService } from '@nestjs/config';
 import axios, { AxiosInstance } from 'axios';
 
 /**
- * Xiaowei (效卫) Service สำหรับดึงหน้าจอจาก BoxPhone Server
- * 
- * เอกสาร API: https://www.xiaowei.xin/help/70/349
- * 
- * ตามเอกสาร 8.1.1: เสี่ยวเหว๋ยใช้ WebSocket ที่ ws://127.0.0.1:22222/
- * 
- * ต้องตั้งค่า environment variables:
- * - XIAOWEI_WS_URL: WebSocket URL ของเสี่ยวเหว๋ย (เช่น ws://127.0.0.1:22222)
- * - XIAOWEI_API_URL: HTTP API URL (ถ้ามี, เช่น http://localhost:8080) - fallback
- * - XIAOWEI_API_KEY: API Key สำหรับ authentication (ถ้ามี)
- * - XIAOWEI_USERNAME: Username สำหรับ login (ถ้ามี)
- * - XIAOWEI_PASSWORD: Password สำหรับ login (ถ้ามี)
+ * Xiaowei (效卫) Service — ดึงหน้าจอ/รายการเครื่องผ่าน HTTP API
+ * เอกสาร: https://www.xiaowei.xin/help/70/349
+ *
+ * ต้องตั้งใน backend .env (ห้าม hardcode):
+ * - XIAOWEI_API_URL: HTTP API URL ของเสี่ยวเหว๋ย
+ * - XIAOWEI_API_KEY / XIAOWEI_USERNAME / XIAOWEI_PASSWORD (ถ้า API ต้องการ)
  */
 @Injectable()
 export class XiaoweiService {
   private readonly logger = new Logger(XiaoweiService.name);
   private readonly apiClient: AxiosInstance;
   private readonly apiUrl: string;
+  /** HTTP base URL ที่ derive จาก XIAOWEI_WS_URL (เช่น ws://127.0.0.1:22222/ → http://127.0.0.1:22222) สำหรับลอง screenshot บนพอร์ตเดียวกับ WS */
+  private readonly httpFromWsUrl: string;
   private readonly apiKey?: string;
   private readonly username?: string;
   private readonly password?: string;
 
   constructor(private readonly configService: ConfigService) {
-    this.apiUrl = this.configService.get<string>('XIAOWEI_API_URL') || 'http://localhost:8080';
+    this.apiUrl = this.configService.get<string>('XIAOWEI_API_URL') || '';
+    const wsUrl = this.configService.get<string>('XIAOWEI_WS_URL') || '';
+    this.httpFromWsUrl = wsUrl.replace(/^ws:\/\//i, 'http://').replace(/\/+$/, '');
     this.apiKey = this.configService.get<string>('XIAOWEI_API_KEY');
     this.username = this.configService.get<string>('XIAOWEI_USERNAME');
     this.password = this.configService.get<string>('XIAOWEI_PASSWORD');
@@ -42,13 +40,18 @@ export class XiaoweiService {
       },
     });
 
-    // Log initialization status
-    if (this.apiKey) {
-      this.logger.log(`Xiaowei Service initialized - API URL: ${this.apiUrl} (with API Key)`);
+    if (this.apiUrl) {
+      this.logger.log(`Xiaowei HTTP API URL: ${this.apiUrl}`);
     } else {
-      this.logger.log(`Xiaowei Service initialized - API URL: ${this.apiUrl} (no authentication)`);
-      this.logger.warn('⚠️  XIAOWEI_API_KEY not set - API calls will be made without authentication');
+      this.logger.warn('XIAOWEI_API_URL not set - set in .env for HTTP fallback');
     }
+    if (this.httpFromWsUrl) {
+      this.logger.log(`Xiaowei HTTP from WS host (screenshot fallback): ${this.httpFromWsUrl}`);
+    }
+  }
+
+  private ensureApiUrl(): void {
+    if (!this.apiUrl) throw new Error('XIAOWEI_API_URL not set - configure in backend .env');
   }
 
   /**
@@ -59,6 +62,7 @@ export class XiaoweiService {
    * @returns Buffer ของภาพหน้าจอ (PNG format)
    */
   async getScreenshot(serialNumber: string): Promise<Buffer> {
+    this.ensureApiUrl();
     try {
       this.logger.debug(`Fetching screenshot for device: ${serialNumber}`);
 
@@ -96,10 +100,46 @@ export class XiaoweiService {
               responseType: 'arraybuffer',
             });
           } catch (error3: any) {
+            this.logger.debug(`Method 3 failed for ${serialNumber}, trying HTTP on WS host...`);
+            // 4) ลอง HTTP บนพอร์ตเดียวกับ WebSocket (บางรุ่นเสี่ยวเหว๋ยเปิด screenshot ที่พอร์ตนี้)
+            if (this.httpFromWsUrl) {
+              try {
+                const r = await axios.get(`${this.httpFromWsUrl}/screenshot`, {
+                  params: { serial: serialNumber },
+                  responseType: 'arraybuffer',
+                  timeout: 10000,
+                });
+                if (r.data && r.data.byteLength > 0) {
+                  const buf = Buffer.from(r.data, 'binary');
+                  if (buf.length >= 4 && buf[0] === 0x89 && buf[1] === 0x50) {
+                    this.logger.log(`Screenshot from WS host for ${serialNumber}, ${buf.length} bytes`);
+                    return buf;
+                  }
+                }
+              } catch (e4: any) {
+                this.logger.debug(`WS host screenshot failed: ${e4?.message || e4}`);
+              }
+              try {
+                const r = await axios.get(`${this.httpFromWsUrl}/api/screenshot`, {
+                  params: { serial: serialNumber },
+                  responseType: 'arraybuffer',
+                  timeout: 10000,
+                });
+                if (r.data && r.data.byteLength > 0) {
+                  const buf = Buffer.from(r.data, 'binary');
+                  if (buf.length >= 4 && buf[0] === 0x89 && buf[1] === 0x50) {
+                    this.logger.log(`Screenshot from WS host /api/screenshot for ${serialNumber}, ${buf.length} bytes`);
+                    return buf;
+                  }
+                }
+              } catch (e5: any) {
+                this.logger.debug(`WS host /api/screenshot failed: ${e5?.message || e5}`);
+              }
+            }
             this.logger.error(`All screenshot methods failed for ${serialNumber}`);
-            this.logger.error(`Method 1 (POST): ${error?.message || 'unknown'}`);
-            this.logger.error(`Method 2 (GET with params): ${error2?.message || 'unknown'}`);
-            this.logger.error(`Method 3 (GET device-specific): ${error3?.message || 'unknown'}`);
+            this.logger.error(`Method 1 (POST /api/screenshot): ${error?.response?.status || error?.code || error?.message || 'unknown'} - ${error?.response?.data ? JSON.stringify(error.response.data).slice(0, 200) : error?.message || ''}`);
+            this.logger.error(`Method 2 (GET /api/screenshot?serial=): ${error2?.response?.status || error2?.code || error2?.message || 'unknown'} - ${error2?.response?.data ? JSON.stringify(error2.response.data).slice(0, 200) : error2?.message || ''}`);
+            this.logger.error(`Method 3 (GET /api/devices/{serial}/screenshot): ${error3?.response?.status || error3?.code || error3?.message || 'unknown'} - ${error3?.response?.data ? JSON.stringify(error3.response.data).slice(0, 200) : error3?.message || ''}`);
             throw new Error(`Failed to fetch screenshot: ${error?.message || error2?.message || error3?.message || 'All methods failed'}`);
           }
         }
@@ -168,6 +208,7 @@ export class XiaoweiService {
    * @returns Array ของ device information
    */
   async getDeviceList(): Promise<any[]> {
+    this.ensureApiUrl();
     try {
       this.logger.debug('Fetching device list from Xiaowei');
       
@@ -209,8 +250,8 @@ export class XiaoweiService {
    * ตรวจสอบว่าเสี่ยวเหว๋ย API พร้อมใช้งานหรือไม่
    */
   async healthCheck(): Promise<boolean> {
+    if (!this.apiUrl) return false;
     try {
-      // ลองเรียก device list endpoint (ตามเอกสาร 8.2.1)
       const devices = await this.getDeviceList();
       this.logger.log(`Xiaowei API is healthy - Found ${devices.length} devices`);
       return true;

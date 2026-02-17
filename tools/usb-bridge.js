@@ -15,10 +15,8 @@ const { execSync, exec } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 
-// Configuration
-// Use 127.0.0.1 instead of localhost for better compatibility
-// Backend runs on port 3031 (not 3001)
-const BACKEND_URL = process.env.BACKEND_URL || 'http://127.0.0.1:3031';
+// Configuration — ต้องตั้ง BACKEND_URL หรือ API_BASE_URL ใน env
+const BACKEND_URL = process.env.BACKEND_URL || process.env.API_BASE_URL || '';
 const DEVICE_ID = process.env.DEVICE_ID || `usb_device_${Date.now()}`;
 const STREAM_FPS = parseInt(process.env.STREAM_FPS || '5'); // Frames per second
 const TEMP_DIR = path.join(__dirname, '..', 'temp');
@@ -29,6 +27,10 @@ if (!fs.existsSync(TEMP_DIR)) {
   fs.mkdirSync(TEMP_DIR, { recursive: true });
 }
 
+if (!BACKEND_URL) {
+  console.error('❌ Set BACKEND_URL or API_BASE_URL in env');
+  process.exit(1);
+}
 console.log('🚀 Starting USB Bridge Service for BoxPhone...');
 console.log(`🔗 Backend URL: ${BACKEND_URL}`);
 console.log(`📱 Device ID: ${DEVICE_ID}`);

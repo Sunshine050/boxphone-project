@@ -7,17 +7,15 @@ import { Smartphone, RefreshCw } from "lucide-react";
 import { motion } from "framer-motion";
 import { AssignUserDialog } from "./assign-user-dialog";
 import { AvailableDevice } from "@/app/admin/available/page";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { DevicesService } from "@/services/devices.service";
 
 interface Props {
   loading: boolean;
   devices: AvailableDevice[];
-
   selected: AvailableDevice | null;
   onSelect: (device: AvailableDevice) => void;
   onCloseDialog: () => void;
-
   onSuccess?: () => void;
 }
 
@@ -73,7 +71,6 @@ export function AvailableDevicesGrid({
                       </span>
                     </div>
                   </div>
-
                   <Badge className="bg-green-500/10 text-green-500 border-green-500/30">
                     พร้อมใช้งาน
                   </Badge>
@@ -81,9 +78,11 @@ export function AvailableDevicesGrid({
               </CardHeader>
 
               <CardContent className="space-y-4">
-                {/* ภาพหน้าจอจากเสี่ยวเหว๋ย */}
                 <div className="relative aspect-[9/16] bg-gradient-to-b from-neutral-900 to-black rounded-lg overflow-hidden ring-1 ring-inset ring-white/10">
-                  <DeviceScreenshot deviceId={device.id} serialNumber={device.serial_number} />
+                  <DeviceScreenshot
+                    deviceId={device.id}
+                    serialNumber={device.serial_number}
+                  />
                 </div>
 
                 <div className="text-xs">
@@ -94,7 +93,10 @@ export function AvailableDevicesGrid({
                   </p>
                 </div>
 
-                <Button className="w-full cursor-pointer" onClick={() => onSelect(device)}>
+                <Button
+                  className="w-full cursor-pointer"
+                  onClick={() => onSelect(device)}
+                >
                   มอบหมายผู้ใช้งาน
                 </Button>
               </CardContent>
@@ -103,7 +105,6 @@ export function AvailableDevicesGrid({
         ))}
       </motion.div>
 
-      {/* ✅ Dialog */}
       {selected && (
         <AssignUserDialog
           device={selected}
@@ -117,27 +118,31 @@ export function AvailableDevicesGrid({
 
 /* ================= DEVICE SCREENSHOT ================= */
 
-function DeviceScreenshot({ deviceId, serialNumber }: { deviceId: string; serialNumber: string }) {
+function DeviceScreenshot({
+  deviceId,
+  serialNumber,
+}: {
+  deviceId: string;
+  serialNumber: string;
+}) {
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string>("");
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const fetchScreenshot = async () => {
     setLoading(true);
     setError(false);
     setErrorMessage("");
-    
-    try {
-      // ใช้ serial number แทน device ID (เพราะอาจจะเร็วกว่า)
-      const url = DevicesService.getScreenshotUrlBySerial(serialNumber);
-      
-      // ดึง token จาก localStorage
-      const token = typeof window !== "undefined" 
-        ? localStorage.getItem("access_token") 
-        : null;
 
-      // ใช้ fetch เพื่อส่ง Authorization header
+    try {
+      const url = DevicesService.getScreenshotUrlBySerial(serialNumber);
+      const token =
+        typeof window !== "undefined"
+          ? localStorage.getItem("access_token")
+          : null;
+
       const response = await fetch(url, {
         method: "GET",
         headers: {
@@ -148,18 +153,23 @@ function DeviceScreenshot({ deviceId, serialNumber }: { deviceId: string; serial
 
       if (!response.ok) {
         const errorText = await response.text();
-        throw new Error(`HTTP ${response.status}: ${errorText || response.statusText}`);
+        let msg = errorText || response.statusText;
+        try {
+          const j = JSON.parse(errorText);
+          if (j.message) msg = j.message;
+        } catch {
+          if (errorText.length > 200) msg = errorText.slice(0, 200) + "...";
+        }
+        throw new Error(msg);
       }
 
-      // สร้าง blob URL จาก response
       const blob = await response.blob();
       const blobUrl = URL.createObjectURL(blob);
-      
-      // ลบ blob URL เก่า (ถ้ามี)
+
       if (imageUrl && imageUrl.startsWith("blob:")) {
         URL.revokeObjectURL(imageUrl);
       }
-      
+
       setImageUrl(blobUrl);
       setLoading(false);
     } catch (err: any) {
@@ -167,16 +177,25 @@ function DeviceScreenshot({ deviceId, serialNumber }: { deviceId: string; serial
       setError(true);
       setErrorMessage(err.message || "ไม่สามารถดึงหน้าจอได้");
       setLoading(false);
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
     }
   };
 
   useEffect(() => {
     fetchScreenshot();
-    // Auto-refresh ทุก 5 วินาที
-    const interval = setInterval(fetchScreenshot, 5000);
+    const refreshMs = Math.max(
+      500,
+      Number(process.env.NEXT_PUBLIC_SCREENSHOT_REFRESH_MS) || 5000
+    );
+    intervalRef.current = setInterval(fetchScreenshot, refreshMs);
     return () => {
-      clearInterval(interval);
-      // Cleanup blob URL เมื่อ component unmount
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
       if (imageUrl && imageUrl.startsWith("blob:")) {
         URL.revokeObjectURL(imageUrl);
       }
@@ -218,7 +237,6 @@ function DeviceScreenshot({ deviceId, serialNumber }: { deviceId: string; serial
         className="w-full h-full object-contain"
         onError={() => setError(true)}
       />
-      {/* ปุ่ม refresh แบบ manual */}
       <div className="absolute bottom-2 right-2 z-10">
         <Button
           size="icon"

@@ -2,9 +2,13 @@ const { io } = require('socket.io-client');
 const { execSync } = require('child_process');
 const fs = require('fs');
 
-const BACKEND_URL = 'http://localhost:3031';
+const BACKEND_URL = process.env.BACKEND_URL || process.env.API_BASE_URL || '';
 const DEVICE_ID = 'android_device_1';
 
+if (!BACKEND_URL) {
+  console.error('❌ Set BACKEND_URL or API_BASE_URL in env');
+  process.exit(1);
+}
 console.log('🚀 Starting Emulator Streamer...');
 console.log(`🔗 Connecting to ${BACKEND_URL}`);
 

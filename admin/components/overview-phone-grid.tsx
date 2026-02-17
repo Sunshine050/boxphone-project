@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Eye, Power, RefreshCw } from "lucide-react";
@@ -22,7 +22,7 @@ export interface OverviewDevice {
 
 interface OverviewPhoneGridProps {
   query: string;
-  userMap: Record<string, string>;
+  userMap?: Record<string, string>;
   statusFilter: StatusFilter;
   devices: OverviewDevice[];
 }
@@ -32,7 +32,7 @@ interface OverviewPhoneGridProps {
 export function OverviewPhoneGrid({
   query,
   statusFilter,
-  userMap,
+  userMap = {},
   devices,
 }: OverviewPhoneGridProps) {
   const filteredDevices = devices.filter((d) => {
@@ -100,7 +100,6 @@ export function OverviewPhoneGrid({
             {d.user ? (
               <p className="text-xs text-foreground font-medium truncate flex items-center gap-1">
                 <span className="text-muted-foreground font-normal">ผู้ใช้:</span>
-                {/* 🎯 แสดงชื่อจาก Map ถ้าหาไม่เจอให้แสดง ID 4 ตัวท้าย */}
                 {userMap[d.user] || `ID: ${d.user.slice(-4)}`}
               </p>
             ) : (
@@ -137,6 +136,23 @@ function DeviceScreenshot({ deviceId, status }: { deviceId: string; status: Devi
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string>("");
+  const [isInView, setIsInView] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // โหลด screenshot เฉพาะเมื่อการ์ดอยู่ใน viewport — หน้าภาพรวมโหลดเร็วขึ้น
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const obs = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((e) => setIsInView(e.isIntersecting));
+      },
+      { rootMargin: "100px", threshold: 0.01 }
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, []);
 
   const fetchScreenshot = async () => {
     if (status === "maintenance" || status === "error") {
@@ -148,15 +164,12 @@ function DeviceScreenshot({ deviceId, status }: { deviceId: string; status: Devi
     setErrorMessage("");
 
     try {
-      // สร้าง URL พร้อม timestamp เพื่อ bypass cache
       const url = DevicesService.getScreenshotUrl(deviceId);
+      const token =
+        typeof window !== "undefined"
+          ? localStorage.getItem("access_token")
+          : null;
 
-      // ดึง token จาก localStorage
-      const token = typeof window !== "undefined"
-        ? localStorage.getItem("access_token")
-        : null;
-
-      // ใช้ fetch เพื่อส่ง Authorization header
       const response = await fetch(url, {
         method: "GET",
         headers: {
@@ -167,14 +180,19 @@ function DeviceScreenshot({ deviceId, status }: { deviceId: string; status: Devi
 
       if (!response.ok) {
         const errorText = await response.text();
-        throw new Error(`HTTP ${response.status}: ${errorText || response.statusText}`);
+        let msg = errorText || response.statusText;
+        try {
+          const j = JSON.parse(errorText);
+          if (j.message) msg = j.message;
+        } catch {
+          if (errorText.length > 200) msg = errorText.slice(0, 200) + "...";
+        }
+        throw new Error(msg);
       }
 
-      // สร้าง blob URL จาก response
       const blob = await response.blob();
       const blobUrl = URL.createObjectURL(blob);
 
-      // ลบ blob URL เก่า (ถ้ามี)
       if (imageUrl && imageUrl.startsWith("blob:")) {
         URL.revokeObjectURL(imageUrl);
       }
@@ -186,78 +204,78 @@ function DeviceScreenshot({ deviceId, status }: { deviceId: string; status: Devi
       setError(true);
       setErrorMessage(err.message || "ไม่สามารถดึงหน้าจอได้");
       setLoading(false);
+      // หยุด auto-refresh เมื่อดึงไม่ได้ — ลดการกระพริบ
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
     }
   };
 
   useEffect(() => {
+    if (!isInView) return;
     fetchScreenshot();
-    // Auto-refresh ทุก 5 วินาที (optional - สามารถปิดได้)
-    const interval = setInterval(fetchScreenshot, 5000);
+    const refreshMs = Math.max(
+      500,
+      Number(process.env.NEXT_PUBLIC_SCREENSHOT_REFRESH_MS) || 5000
+    );
+    intervalRef.current = setInterval(fetchScreenshot, refreshMs);
     return () => {
-      clearInterval(interval);
-      // Cleanup blob URL เมื่อ component unmount
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
       if (imageUrl && imageUrl.startsWith("blob:")) {
         URL.revokeObjectURL(imageUrl);
       }
     };
-  }, [deviceId, status]);
-
-  if (status === "maintenance" || status === "error") {
-    return (
-      <div className="w-full h-full flex items-center justify-center">
-        <p className="text-xs text-muted-foreground">ไม่สามารถดึงหน้าจอได้</p>
-      </div>
-    );
-  }
-
-  if (loading && !imageUrl) {
-    return (
-      <div className="w-full h-full flex items-center justify-center">
-        <RefreshCw className="w-4 h-4 animate-spin text-muted-foreground" />
-      </div>
-    );
-  }
-
-  if (error || !imageUrl) {
-    return (
-      <div className="w-full h-full flex flex-col items-center justify-center gap-2 p-2">
-        <p className="text-xs text-muted-foreground text-center">
-          {errorMessage || "ไม่สามารถดึงหน้าจอได้"}
-        </p>
-        <Button
-          size="sm"
-          variant="ghost"
-          className="h-6 text-xs"
-          onClick={fetchScreenshot}
-        >
-          <RefreshCw className="w-3 h-3 mr-1" />
-          รีเฟรช
-        </Button>
-      </div>
-    );
-  }
+  }, [deviceId, status, isInView]);
 
   return (
-    <>
-      <img
-        src={imageUrl}
-        alt={`Device ${deviceId} screenshot`}
-        className="w-full h-full object-contain"
-        onError={() => setError(true)}
-      />
-      {/* ปุ่ม refresh แบบ manual */}
-      <div className="absolute bottom-2 right-2 z-10">
-        <Button
-          size="icon"
-          variant="secondary"
-          className="h-7 w-7 opacity-80 hover:opacity-100"
-          onClick={fetchScreenshot}
-          title="รีเฟรชหน้าจอ"
-        >
-          <RefreshCw className="w-3 h-3" />
-        </Button>
-      </div>
-    </>
+    <div ref={containerRef} className="w-full h-full min-h-0 relative flex items-center justify-center">
+      {status === "maintenance" || status === "error" ? (
+        <p className="text-xs text-muted-foreground">ไม่สามารถดึงหน้าจอได้</p>
+      ) : !isInView ? (
+        <p className="text-xs text-muted-foreground">เลื่อนเพื่อโหลด</p>
+      ) : loading && !imageUrl ? (
+        <RefreshCw className="w-4 h-4 animate-spin text-muted-foreground" />
+      ) : error || !imageUrl ? (
+        <div className="flex flex-col items-center justify-center gap-2 p-2">
+          <p className="text-xs text-muted-foreground text-center">
+            {errorMessage || "ไม่สามารถดึงหน้าจอได้"}
+          </p>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-6 text-xs"
+            onClick={fetchScreenshot}
+          >
+            <RefreshCw className="w-3 h-3 mr-1" />
+            รีเฟรช
+          </Button>
+        </div>
+      ) : (
+        <>
+          <img
+            src={imageUrl}
+            alt={`Device ${deviceId} screenshot`}
+            className="w-full h-full object-contain"
+            onError={() => setError(true)}
+          />
+          <div className="absolute bottom-2 right-2 z-10">
+            <Button
+              size="icon"
+              variant="secondary"
+              className="h-7 w-7 opacity-80 hover:opacity-100"
+              onClick={fetchScreenshot}
+              title="รีเฟรชหน้าจอ"
+            >
+              <RefreshCw className="w-3 h-3" />
+            </Button>
+          </div>
+        </>
+      )}
+    </div>
   );
 }
 

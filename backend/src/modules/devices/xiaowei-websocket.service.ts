@@ -1,302 +1,354 @@
-import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  OnModuleInit,
+  OnModuleDestroy,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { WebSocket as WS } from 'ws';
+import * as WebSocket from 'ws';
 
 /**
- * Xiaowei WebSocket Service สำหรับเชื่อมต่อกับเสี่ยวเหว๋ยผ่าน WebSocket
- * 
- * ตามเอกสาร 8.1.1: ที่อยู่คำขอ API = ws://127.0.0.1:22222/
- * 
- * Request format:
- * {
- *   "action": "pushEvent",  // ประเภทเหตุการณ์
- *   "device": "all" | "xxx,xxx",  // หมายเลขประจำเครื่อง
- *   "data": {}  // พารามิเตอร์คำขอ (JSON)
- * }
- * 
- * Response format:
- * {
- *   "code": 10000,  // 10000 = สำเร็จ
- *   "message": "SUCCESS",
- *   "data": {}  // ข้อมูลที่ส่งคืน
- * }
+ * Xiaowei WebSocket Service (Correct Spec Version)
+ *
+ * - Xiaowei ไม่มี requestId
+ * - Response เป็น push
+ * - Screenshot เป็น binary หรือ base64
+ * - Device list push กลับมา
  */
 @Injectable()
-export class XiaoweiWebSocketService implements OnModuleInit, OnModuleDestroy {
+export class XiaoweiWebSocketService
+  implements OnModuleInit, OnModuleDestroy
+{
   private readonly logger = new Logger(XiaoweiWebSocketService.name);
-  private ws: WS | null = null;
+
+  private ws: WebSocket | null = null;
   private readonly wsUrl: string;
-  private readonly reconnectInterval = 5000; // 5 seconds
+
+  // reconnect
   private reconnectTimer: NodeJS.Timeout | null = null;
-  private messageQueue: Array<{ request: any; resolve: (value: any) => void; reject: (error: any) => void }> = [];
-  private requestIdCounter = 0;
-  private pendingRequests = new Map<number, { resolve: (value: any) => void; reject: (error: any) => void }>();
+  private readonly reconnectInterval = 5000;
+  /** เมื่อ server ตอบ 200 = ไม่ใช่ WebSocket (อาจเป็น HTTP API) → ไม่ reconnect บ่อย */
+  private wrongProtocolLogged = false;
+
+  // device registry
+  private devices = new Map<string, any>();
+
+  // screenshot/preview: ต้องส่ง device.preview ก่อน เสี่ยวเหว๋ยถึงจะส่ง binary กลับมา
+  private screenshotResolvers = new Map<string, (buffer: Buffer) => void>();
+  /** serial ที่เราส่ง device.preview ล่าสุด — ใช้ผูก binary ที่ได้รับกับเครื่อง */
+  private lastRequestedSerial: string | null = null;
+  /** เก็บภาพล่าสุดต่อเครื่อง (base64 data URL) สำหรับ GET preview */
+  private lastImageBySerial = new Map<string, string>();
 
   constructor(private readonly configService: ConfigService) {
-    // ใช้ WebSocket URL จาก environment หรือ default
-    this.wsUrl = this.configService.get<string>('XIAOWEI_WS_URL') || 'ws://127.0.0.1:22222';
-    this.logger.log(`Xiaowei WebSocket Service initialized - WS URL: ${this.wsUrl}`);
+    const url = this.configService.get<string>('XIAOWEI_WS_URL');
+    this.wsUrl = url ? (url.endsWith('/') ? url : `${url}/`) : '';
+    if (this.wsUrl) this.logger.log(`Xiaowei WS URL: ${this.wsUrl}`);
+    else this.logger.warn('XIAOWEI_WS_URL not set - set in .env to connect to Xiaowei API');
   }
 
- async onModuleInit() {
-  if (process.env.DISABLE_XIAOWEI_WS === 'true') {
-    this.logger.warn('🚫 Xiaowei WebSocket is disabled by env (onModuleInit)');
-    return;
-  }
+  /* ================= lifecycle ================= */
 
-  try {
+  async onModuleInit() {
+    if (!this.wsUrl) return;
     await this.connect();
-  } catch (err) {
-    this.logger.error('Xiaowei WS initial connect failed', err);
   }
-}
 
-
-  async onModuleDestroy() {
+  onModuleDestroy() {
     this.disconnect();
   }
 
-  /**
-   * เชื่อมต่อ WebSocket
-   */
+  /* ================= connection ================= */
+
   private async connect(): Promise<void> {
     return new Promise((resolve, reject) => {
       try {
-        this.logger.log(`Connecting to Xiaowei WebSocket: ${this.wsUrl}`);
-        
-        this.ws = new WS(this.wsUrl);
+        this.logger.log(`Connecting to Xiaowei WS...`);
+
+        this.ws = new WebSocket(this.wsUrl);
 
         this.ws.on('open', () => {
-          this.logger.log('✅ Connected to Xiaowei WebSocket');
-          this.clearReconnectTimer();
+          this.wrongProtocolLogged = false;
+          this.logger.log('✅ Xiaowei WebSocket connected');
+          this.clearReconnect();
           resolve();
         });
 
-        this.ws.on('message', (data: Buffer | string) => {
-          try {
-            const message = JSON.parse(data.toString());
-            this.handleMessage(message);
-          } catch (error: any) {
-            this.logger.error(`Failed to parse WebSocket message: ${error.message}`);
+        this.ws.on('message', (data) => {
+          if (Buffer.isBuffer(data)) {
+            this.handleBinaryMessage(data);
+          } else {
+            this.handleJsonMessage(data.toString());
           }
         });
 
-        this.ws.on('error', (error: Error) => {
-          this.logger.error(`WebSocket error: ${error.message}`);
-          reject(error);
-        });
-
         this.ws.on('close', () => {
-          this.logger.warn('WebSocket connection closed');
+          this.logger.warn('❌ Xiaowei WS closed');
           this.scheduleReconnect();
         });
-      } catch (error: any) {
-        this.logger.error(`Failed to create WebSocket connection: ${error.message}`);
-        reject(error);
+
+        this.ws.on('error', (err) => {
+          const msg = err.message || '';
+          if (msg.includes('200') || msg.includes('Unexpected server response')) {
+            if (!this.wrongProtocolLogged) {
+              this.wrongProtocolLogged = true;
+              this.logger.warn(
+                '⚠️ The server returned HTTP 200 (not WebSocket). This port is likely the HTTP API. Set XIAOWEI_WS_URL to the WebSocket port (e.g. ws://127.0.0.1:22222/) in .env and check Xiaowei settings.'
+              );
+            }
+          } else {
+            this.logger.error(`WS error: ${msg}`);
+          }
+        });
+      } catch (err) {
+        reject(err);
       }
     });
   }
 
-  /**
-   * จัดการ message ที่ได้รับ
-   */
-  private handleMessage(message: any): void {
-    // ตามเอกสาร: Response format = { code: 10000, message: "SUCCESS", data: ... }
-    // ถ้า code = 10000 = สำเร็จ
-    
-    // ถ้ามี requestId ให้ resolve/reject pending request
-    if (message.requestId !== undefined) {
-      const pending = this.pendingRequests.get(message.requestId);
-      if (pending) {
-        if (message.code === 10000) {
-          pending.resolve(message.data || message);
-        } else if (message.code === 10001) {
-          // 10001 = ต้อง activate membership/VIP
-          const errorMsg = message.message || '请激活会员后使用';
-          pending.reject(new Error(`Xiaowei requires VIP activation: ${errorMsg} (Code: ${message.code})`));
-        } else {
-          pending.reject(new Error(message.message || `Request failed with code ${message.code}`));
-        }
-        this.pendingRequests.delete(message.requestId);
-        return;
-      }
-    }
-
-    // ถ้าไม่มี requestId แต่มี code = response ที่ไม่มี requestId
-    // ลอง resolve request แรกที่ pending (FIFO - First In First Out)
-    if (message.code !== undefined && this.pendingRequests.size > 0) {
-      const firstKey = Array.from(this.pendingRequests.keys())[0];
-      const firstPending = this.pendingRequests.get(firstKey);
-      if (firstPending) {
-        if (message.code === 10000) {
-          firstPending.resolve(message.data || message);
-        } else if (message.code === 10001) {
-          const errorMsg = message.message || '请激活会员后使用';
-          firstPending.reject(new Error(`Xiaowei error: ${errorMsg} (Code: ${message.code})`));
-        } else {
-          firstPending.reject(new Error(message.message || `Request failed with code ${message.code}`));
-        }
-        this.pendingRequests.delete(firstKey);
-        return;
-      }
-    }
-
-    // ถ้าไม่มี requestId อาจเป็น push message
-    this.logger.debug(`Received WebSocket message: ${JSON.stringify(message)}`);
-  }
-
-  /**
-   * ส่ง request ผ่าน WebSocket
-   */
-  private async sendRequest(action: string, device: string, data: any = {}): Promise<any> {
-    return new Promise((resolve, reject) => {
-      if (!this.ws || this.ws.readyState !== 1) { // 1 = OPEN
-        reject(new Error('WebSocket is not connected'));
-        return;
-      }
-
-      // ตามเอกสาร 8.1.1: Request format = { action, device, data }
-      // ไม่ต้องใส่ requestId (เสี่ยวเหว๋ยไม่รองรับ)
-      const request = {
-        action,
-        device,
-        data,
-      };
-      
-      // ใช้ requestId เฉพาะสำหรับ tracking response (ไม่ส่งไปใน request)
-      const requestId = ++this.requestIdCounter;
-
-      this.pendingRequests.set(requestId, { resolve, reject });
-
-      // ตั้ง timeout 10 วินาที
-      setTimeout(() => {
-        if (this.pendingRequests.has(requestId)) {
-          this.pendingRequests.delete(requestId);
-          reject(new Error('Request timeout'));
-        }
-      }, 10000);
-
-      try {
-        this.ws.send(JSON.stringify(request));
-        this.logger.debug(`Sent WebSocket request: ${JSON.stringify(request)}`);
-      } catch (error: any) {
-        this.pendingRequests.delete(requestId);
-        reject(error);
-      }
-    });
-  }
-
-  /**
-   * กำหนดเวลา reconnect
-   */
-  private scheduleReconnect(): void {
-    if (this.reconnectTimer) {
-      return;
-    }
-
-    this.reconnectTimer = setTimeout(async () => {
-      this.reconnectTimer = null;
-      this.logger.log('Attempting to reconnect to Xiaowei WebSocket...');
-      try {
-        await this.connect();
-      } catch (error) {
-        this.scheduleReconnect();
-      }
-    }, this.reconnectInterval);
-  }
-
-  /**
-   * ล้าง reconnect timer
-   */
-  private clearReconnectTimer(): void {
-    if (this.reconnectTimer) {
-      clearTimeout(this.reconnectTimer);
-      this.reconnectTimer = null;
-    }
-  }
-
-  /**
-   * ตัดการเชื่อมต่อ
-   */
-  private disconnect(): void {
-    this.clearReconnectTimer();
+  private disconnect() {
+    this.clearReconnect();
     if (this.ws) {
       this.ws.close();
       this.ws = null;
     }
   }
 
+  private scheduleReconnect() {
+    if (this.reconnectTimer) return;
+    const interval = this.wrongProtocolLogged ? 60000 : this.reconnectInterval;
+    this.reconnectTimer = setTimeout(async () => {
+      this.reconnectTimer = null;
+      if (this.wrongProtocolLogged) return;
+      this.logger.log('🔄 Reconnecting Xiaowei WS...');
+      try {
+        await this.connect();
+      } catch {
+        this.scheduleReconnect();
+      }
+    }, interval);
+  }
+
+  private clearReconnect() {
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+  }
+
+  /* ================= message handlers ================= */
+
+  private handleJsonMessage(raw: string) {
+    let msg: any;
+    try {
+      msg = JSON.parse(raw);
+    } catch {
+      this.logger.warn('Invalid JSON message');
+      return;
+    }
+
+    /** รองรับหลายรูปแบบการตอบกลับรายการอุปกรณ์ */
+    const extractDeviceList = (data: any): any[] => {
+      if (Array.isArray(data)) return data;
+      if (data && typeof data === 'object') {
+        if (Array.isArray(data.list)) return data.list;
+        if (Array.isArray(data.devices)) return data.devices;
+        if (Array.isArray(data.data)) return data.data;
+        if (Array.isArray(data.deviceList)) return data.deviceList;
+      }
+      return [];
+    };
+
+    const addDevice = (device: any) => {
+      const serial = device?.serial ?? device?.onlySerial ?? device?.deviceId ?? device?.id;
+      if (serial) {
+        this.devices.set(String(serial), { ...device, serial: String(serial), onlySerial: device?.onlySerial ?? serial });
+      }
+    };
+
+    /**
+     * Device list: data เป็น array หรือ object ที่มี list/devices/data
+     */
+    const list = extractDeviceList(msg.data);
+    if (list.length > 0) {
+      list.forEach(addDevice);
+      this.logger.log(`📱 Devices online: ${this.devices.size}`);
+      return;
+    }
+
+    /** บันทึก raw เมื่อได้ code 10000 แต่ไม่มี device (ใช้ debug) */
+    if (msg.code === 10000 && msg.data != null && !Array.isArray(msg.data)) {
+      this.logger.debug(`WS response code=10000, data keys: ${Object.keys(msg.data || {}).join(', ')}`);
+    }
+
+    /**
+     * ACK / status (ไม่มี data หรือ data ไม่ใช่รายการเครื่อง)
+     */
+    if (msg.code === 10000) {
+      return;
+    }
+
+    if (msg.code === 10001) {
+      const errorMsg = msg.message || 'กรุณาเปิดใช้งานสมาชิกภาพของคุณก่อนใช้งาน' || '请激活会员后使用';
+      this.logger.error(
+        `❌ Xiaowei requires account/device activation: ${errorMsg} (Code: 10001). ` +
+        `Please check: 1) Login to Xiaowei, 2) Activate VIP/Membership, 3) Bind Device to Account`
+      );
+      return;
+    }
+
+    // แสดงรูปแบบข้อความที่เสี่ยวเหว๋ยส่งมา (ช่วย debug ตอน Sync ได้ 0 เครื่อง)
+    this.logger.warn(
+      `Xiaowei WS message (not device list): code=${msg.code}, keys=${Object.keys(msg).join(', ')}. ` +
+      `Sample: ${raw.substring(0, 200)}${raw.length > 200 ? '...' : ''}`
+    );
+  }
+
+  private handleBinaryMessage(buffer: Buffer) {
+    /** ภาพหน้าจอจริงจะใหญ่ (มัก 40KB+); ขนาดต่ำกว่า MIN = อาจเป็น JSON/ข้อความจากเสี่ยวเหว๋ย ไม่ใช่ภาพ */
+    const MIN_PREVIEW_BYTES = 5000;
+    const serial = this.lastRequestedSerial;
+
+    // binary เล็กมาก: ลองอ่านเป็น JSON/ข้อความ (สำหรับ debug)
+    if (buffer.length < MIN_PREVIEW_BYTES) {
+      try {
+        const raw = buffer.toString('utf8');
+        if (raw.trim().startsWith('{') || raw.trim().startsWith('[')) {
+          const msg = JSON.parse(raw);
+          const list = Array.isArray(msg) ? msg : (msg?.data ?? msg?.list ?? msg?.devices ?? msg?.deviceList);
+          if (Array.isArray(list) && list.length > 0) {
+            list.forEach((d: any) => {
+              const s = d?.serial ?? d?.onlySerial ?? d?.deviceId ?? d?.id;
+              if (s) this.devices.set(String(s), { ...d, serial: String(s) });
+            });
+            this.logger.log(`📱 Devices from binary JSON: ${this.devices.size}`);
+            return;
+          }
+          if (serial && this.screenshotResolvers.has(serial)) {
+            this.logger.warn(`[PREVIEW] Xiaowei sent small binary (${buffer.length} bytes), not image. Sample: ${raw.slice(0, 120)}...`);
+          }
+          return;
+        }
+      } catch {
+        // ไม่ใช่ JSON
+      }
+      if (serial && this.screenshotResolvers.has(serial)) {
+        this.logger.warn(`[PREVIEW] Ignoring small binary (${buffer.length} bytes) for ${serial} — waiting for real image (need >= ${MIN_PREVIEW_BYTES} bytes)`);
+      }
+      return;
+    }
+
+    // ขนาดใหญ่พอ = น่าจะเป็นภาพจริง
+    if (serial && this.screenshotResolvers.has(serial)) {
+      const resolve = this.screenshotResolvers.get(serial)!;
+      this.screenshotResolvers.delete(serial);
+      this.lastRequestedSerial = null;
+      resolve(buffer);
+      this.storePreviewImage(serial, buffer);
+      this.logger.log(`[PREVIEW] Received image for ${serial}, ${buffer.length} bytes`);
+      return;
+    }
+  }
+
+  /** เก็บ buffer เป็น data URL ต่อ serial (JPEG/PNG ตาม signature) */
+  private storePreviewImage(serial: string, buffer: Buffer): void {
+    const base64 = buffer.toString('base64');
+    const isPng =
+      buffer.length >= 4 &&
+      buffer[0] === 0x89 &&
+      buffer[1] === 0x50 &&
+      buffer[2] === 0x4e &&
+      buffer[3] === 0x47;
+    const mime = isPng ? 'image/png' : 'image/jpeg';
+    this.lastImageBySerial.set(serial, `data:${mime};base64,${base64}`);
+  }
+
+  /* ================= public APIs ================= */
+
+  isConnected(): boolean {
+    return this.ws !== null && this.ws.readyState === WebSocket.OPEN;
+  }
+
   /**
-   * ดึงรายการอุปกรณ์
-   * ตามเอกสาร 8.2.1: action = "getDeviceList" หรือตามเอกสาร
+   * Get device list (push-based)
+   * ตามเอกสาร 8.1.1: action = ประเภทเหตุการณ์, devices = "ทั้งหมด"|"xxx,xxx", data = JSON (ตัวเลือก)
+   * ฟังก์ชัน "รับรายการอุปกรณ์" = get device list → ใช้ action getDeviceList
+   * ไม่ล้าง this.devices ก่อน — รายการอาจถูก push ตอน connect
    */
   async getDeviceList(): Promise<any[]> {
-    try {
-      this.logger.debug('Fetching device list via WebSocket');
-      
-      // ลองหลาย action names ที่เป็นไปได้ (ตามเอกสาร 8.2.1)
-      // อาจเป็น "getDeviceList", "deviceList", "list", หรือตามที่เอกสารระบุ
-      const actions = ['getDeviceList', 'deviceList', 'listDevices', 'getDevices', 'list'];
-      
-      for (const action of actions) {
-        try {
-          const response = await this.sendRequest(action, 'all', {});
-          
-          // ตรวจสอบ response format
-          if (Array.isArray(response)) {
-            return response;
-          } else if (response && Array.isArray(response.data)) {
-            return response.data;
-          } else if (response && response.code === 10000 && Array.isArray(response.data)) {
-            return response.data;
-          }
-        } catch (error) {
-          this.logger.debug(`Action ${action} failed, trying next...`);
-          continue;
-        }
-      }
-
-      throw new Error('All device list actions failed');
-    } catch (error: any) {
-      this.logger.error(`Failed to fetch device list: ${error.message}`);
-      throw error;
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+      throw new Error('WebSocket not connected');
     }
+
+    const countBefore = this.devices.size;
+
+    // ตามเอกสาร: getDeviceList ใช้ "device" (เอกพจน์), ค่า "all" = ทั้งหมด
+    this.ws.send(
+      JSON.stringify({
+        action: 'getDeviceList',
+        device: 'all',
+        data: {},
+      }),
+    );
+
+    // รอคำตอบ JSON (อย่างน้อย 3 วินาที)
+    await new Promise((r) => setTimeout(r, 3000));
+
+    const list = Array.from(this.devices.values());
+    if (list.length === 0) {
+      this.logger.warn(
+        `⚠️  No devices from Xiaowei (had ${countBefore} before request). ` +
+        'Check: 1) Xiaowei open + API enabled, 2) VIP. Log shows binary only = list may use different action in your Xiaowei version.'
+      );
+    } else {
+      this.logger.log(`📱 Device list: ${list.length} devices`);
+    }
+
+    return list;
   }
 
   /**
-   * ดึงหน้าจอ
-   * ตามเอกสาร 8.2.4: action = "screenshot"
+   * Preview/screenshot: ส่ง device.preview ก่อน แล้วถ้า 5 วินาทีไม่มี binary ค่อยลอง pushEvent (type 2)
    */
   async getScreenshot(serial: string): Promise<Buffer> {
-    try {
-      this.logger.debug(`Fetching screenshot for device: ${serial}`);
-      
-      const response = await this.sendRequest('screenshot', serial, {});
-      
-      // Response อาจเป็น base64 string หรือ binary data
-      if (typeof response === 'string') {
-        // ถ้าเป็น base64
-        return Buffer.from(response, 'base64');
-      } else if (response.data) {
-        // ถ้าเป็น object ที่มี data field
-        if (typeof response.data === 'string') {
-          return Buffer.from(response.data, 'base64');
-        } else if (Buffer.isBuffer(response.data)) {
-          return response.data;
-        }
-      }
-
-      throw new Error('Unexpected screenshot response format');
-    } catch (error: any) {
-      this.logger.error(`Failed to fetch screenshot: ${error.message}`);
-      throw error;
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+      throw new Error('WebSocket not connected');
     }
+
+    return new Promise((resolve, reject) => {
+      this.lastRequestedSerial = serial;
+      this.screenshotResolvers.set(serial, (buf: Buffer) => {
+        clearTimeout(timeout1);
+        clearTimeout(timeout2);
+        resolve(buf);
+      });
+
+      const send = (msg: object) => {
+        this.ws!.send(JSON.stringify(msg));
+        this.logger.log(`[PREVIEW] Sent for ${serial}: ${JSON.stringify(msg)}`);
+      };
+
+      send({ t: 'device.preview', id: serial });
+
+      const timeout1 = setTimeout(() => {
+        if (!this.screenshotResolvers.has(serial)) return;
+        this.logger.warn(`[PREVIEW] No image after 5s, trying pushEvent (type 2) for ${serial}`);
+        send({ action: 'pushEvent', devices: serial, data: { type: '2' } });
+      }, 5000);
+
+      const timeout2 = setTimeout(() => {
+        timeout1 && clearTimeout(timeout1);
+        if (this.screenshotResolvers.has(serial)) {
+          this.screenshotResolvers.delete(serial);
+          if (this.lastRequestedSerial === serial) this.lastRequestedSerial = null;
+          reject(new Error('Screenshot timeout (Xiaowei did not send image)'));
+        }
+      }, 13000);
+    });
   }
 
-  /**
-   * ตรวจสอบว่าเชื่อมต่ออยู่หรือไม่
-   */
-  isConnected(): boolean {
-    return this.ws !== null && this.ws.readyState === 1; // 1 = OPEN
+  /** ภาพล่าสุดต่อ serial (base64 data URL) — ใช้กับ GET /devices/:id/preview */
+  getLastPreviewBase64(serial: string): string | null {
+    return this.lastImageBySerial.get(serial) ?? null;
   }
 }

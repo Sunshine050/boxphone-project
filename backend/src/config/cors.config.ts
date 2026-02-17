@@ -1,24 +1,20 @@
 import { CorsOptions } from "@nestjs/common/interfaces/external/cors-options.interface";
 import { ConfigService } from "@nestjs/config";
 export function getCorsConfig(configService: ConfigService): CorsOptions {
-  const origin = configService.get<string>("CORS_ORIGIN") || "*";
   const methods =
     configService.get<string>("CORS_METHODS") ||
     "GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS";
   const credentials = configService.get<boolean>("CORS_CREDENTIALS") !== false;
 
-  // Default origins for development
-  const defaultOrigins = [
-    "http://localhost:3000",
-    "http://localhost:3001",
-    "http://localhost:3002",
-    "http://127.0.0.1:3000",
-    "http://127.0.0.1:3001",
-    "http://127.0.0.1:3002",
-  ];
+  // CORS_ORIGINS = คั่นด้วย comma เช่น "http://localhost:3000,https://admin.example.com"
+  // ไม่ตั้ง = อนุญาตทุก origin (development)
+  const originsEnv = configService.get<string>("CORS_ORIGINS");
+  const origin = originsEnv
+    ? originsEnv.split(",").map((s) => s.trim()).filter(Boolean)
+    : true;
 
   return {
-    origin: true, // Allow all origins in development
+    origin,
     methods: methods.split(",").map((m) => m.trim()) as any,
     credentials: true,
     allowedHeaders: [
