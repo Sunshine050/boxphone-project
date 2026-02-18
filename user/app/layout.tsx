@@ -14,6 +14,13 @@ const inter = Inter({
 export const metadata: Metadata = {
   title: "CloudPhone - Remote Android Device Control",
   description: "Rent and control real Android devices via browser",
+   icons: {
+    icon: [
+      {
+        url: '/logo-boxphone.svg',
+      },
+    ]
+  },
 }
 
 export default function RootLayout({
