@@ -5,13 +5,14 @@ import { DevicesService } from './devices.service';
 import { Device, DeviceSchema } from './device.schema';
 import { XiaoweiService } from './xiaowei.service';
 import { XiaoweiWebSocketService } from './xiaowei-websocket.service';
+import { AdbScreenshotService } from './adb-screenshot.service';
 
 @Module({
     imports: [
         MongooseModule.forFeature([{ name: Device.name, schema: DeviceSchema }]),
     ],
     controllers: [DevicesController],
-    providers: [DevicesService, XiaoweiService, XiaoweiWebSocketService],
-    exports: [DevicesService, XiaoweiService, XiaoweiWebSocketService],
+    providers: [DevicesService, XiaoweiService, XiaoweiWebSocketService, AdbScreenshotService],
+    exports: [DevicesService, XiaoweiService, XiaoweiWebSocketService, AdbScreenshotService],
 })
 export class DevicesModule { }

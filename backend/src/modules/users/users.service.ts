@@ -83,11 +83,29 @@ export class UsersService {
     return createdUser.save();
   }
 
+  formatUserResponse(user: any) {
+    return {
+      id: user._id ? user._id.toString() : user.id,
+      name: user.name,
+      username: user.username,
+      role: user.role,
+      status: user.status,
+      start_date: user.start_date,
+      device_id: user.device_id ?? null,
+      devices: user.devices ?? [],
+      total_seconds: user.total_seconds,
+      remaining_seconds: user.remaining_seconds,
+      password_plain: user.password_plain,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt,
+    };
+  }
+
   /**
    * ✅ สร้าง USER โดยแอดมิน
    * - Admin สร้างคนอื่น → ต้องเป็น USER เสมอ ✅
    */
-  async createByAdmin(createUserDto: CreateUserByAdminDto): Promise<User> {
+  async createByAdmin(createUserDto: CreateUserByAdminDto, adminUsername: string = "admin"): Promise<any> {
     const existingUser = await this.findByUsername(createUserDto.username);
     if (existingUser) {
       throw new ConflictException("Username already exists");
@@ -125,7 +143,18 @@ export class UsersService {
       devices: [],
     });
 
-    return newUser.save();
+    const savedUser = await newUser.save();
+
+    await this.logService.createLog({
+      type: 'USER_CREATED',
+      level: 'SUCCESS',
+      message: `สร้างผู้ใช้ใหม่: ${savedUser.username}`,
+      target_user_id: savedUser._id.toString(),
+      admin_username: adminUsername,
+      meta: { role: savedUser.role }
+    });
+
+    return this.formatUserResponse(savedUser);
   }
 
   /**
@@ -222,7 +251,8 @@ export class UsersService {
   async assignDevices(
     userId: string,
     items: { device_id: string; assign_seconds?: number }[],
-    deviceService: any
+    deviceService: any,
+    adminUsername: string = "admin"
   ) {
     const user: any = await this.findById(userId);
     if (!user) throw new NotFoundException("User not found");
@@ -287,16 +317,15 @@ export class UsersService {
 
     user.devices = devicesArr;
     await user.save();
-    for (const item of items) {
-      await this.logService.createLog({
-        type: 'DEVICE_ASSIGNED',
-        level: 'SUCCESS',
-        message: `มอบหมายอุปกรณ์ให้ผู้ใช้สำเร็จ`,
-        target_user_id: userId,
-        target_device_id: item.device_id,
-        meta: { assign_seconds: item.assign_seconds }
-      });
-    }
+
+    await this.logService.createLog({
+      type: 'DEVICE_ASSIGNED',
+      level: 'SUCCESS',
+      message: `Assign อุปกรณ์ใหม่ ${items.length} เครื่อง ให้ผู้ใช้`,
+      target_user_id: userId,
+      admin_username: adminUsername,
+      meta: { devices: items }
+    });
 
     return {
       message: "Assigned devices successfully",
@@ -309,7 +338,7 @@ export class UsersService {
    * ✅ NEW: เพิ่มเวลาให้ user ที่กำลังใช้งานทั้งหมด (INUSE) ทีเดียว
    * - custom seconds ได้
    */
-  async bulkAddTimeToInuseUsers(addSeconds: number) {
+  async bulkAddTimeToInuseUsers(addSeconds: number, adminUsername: string = "admin") {
     if (!addSeconds || addSeconds <= 0) {
       throw new BadRequestException("add_seconds must be > 0");
     }
@@ -338,7 +367,8 @@ export class UsersService {
     await this.logService.createLog({
       type: "TIME_ADDED",
       level: "INFO",
-      message: `เติมเวลาให้ผู้ใช้ที่กำลังใช้งานทั้งหมด (+ ${addSeconds} วินาที)`,
+      message: `เติมเวลาแบบกลุ่ม (Bulk) จำนวน ${addSeconds} วินาที ให้ผู้ใช้ที่ INUSE`,
+      admin_username: adminUsername,
       meta: { count: users.length, added_seconds: addSeconds },
     });
 
@@ -386,6 +416,12 @@ export class UsersService {
 
   async findById(userId: string): Promise<User | null> {
     return this.userModel.findById(userId).exec();
+  }
+
+  async findByIdFormatted(userId: string) {
+    const user = await this.userModel.findById(userId).exec();
+    if (!user) throw new NotFoundException("User not found");
+    return this.formatUserResponse(user);
   }
 
   async update(userId: string, updateUserDto: any): Promise<User | null> {

@@ -9,7 +9,6 @@ import {
   Body,
   HttpCode,
   HttpStatus,
-  NotFoundException,
   Logger,
 } from "@nestjs/common";
 import { UsersService } from "./users.service";
@@ -22,11 +21,8 @@ import { UserRole } from "./user.schema";
 import { CreateUserByAdminDto } from "./dto/create-user-by-admin.dto";
 import { ConnectDeviceDto } from "./dto/connect-device.dto";
 import { AddTimeDto } from "./dto/add-time.dto";
-
-// ✅ NEW DTOs
 import { AssignDevicesDto } from "./dto/assign-devices.dto";
 import { BulkAddTimeDto } from "./dto/bulk-add-time.dto";
-import { LogService } from "../log/log.service";
 
 @Controller("users")
 export class UsersController {
@@ -35,7 +31,6 @@ export class UsersController {
   constructor(
     private readonly usersService: UsersService,
     private readonly devicesService: DevicesService,
-    private readonly logService: LogService
   ) { }
 
   /**
@@ -50,55 +45,18 @@ export class UsersController {
     @Body() createUserDto: CreateUserByAdminDto,
     @CurrentUser() currentUser: any
   ) {
-    this.logger.log(
-      `[CREATE_USER] Admin: ${currentUser?.username || "unknown"} creating user: ${createUserDto.username
-      }`
-    );
+    const adminUsername = currentUser?.username || "unknown";
+    this.logger.log(`[CREATE_USER] Admin: ${adminUsername} creating user: ${createUserDto.username}`);
 
     try {
-      const user = await this.usersService.createByAdmin(createUserDto);
-      const userId = (user as any)._id.toString();
-
-      this.logger.log(
-        `[CREATE_USER] ✅ Success - User ID: ${userId}, Username: ${user.username}`
-      );
-
-      await this.logService.createLog({
-        type: 'USER_CREATED',
-        level: 'SUCCESS',
-        message: `สร้างผู้ใช้ใหม่: ${user.username}`,
-        target_user_id: userId,
-        admin_username: currentUser?.username || 'admin',
-        meta: { role: user.role }
-      });
-
+      const user = await this.usersService.createByAdmin(createUserDto, adminUsername);
+      this.logger.log(`[CREATE_USER] ✅ Success - User ID: ${user.id}, Username: ${user.username}`);
       return {
         message: "User created successfully",
-        user: {
-          id: userId,
-          username: user.username,
-          role: user.role,
-          status: user.status,
-          start_date: user.start_date,
-
-          // ✅ ของเดิม
-          device_id: (user as any).device_id ?? null,
-
-          // ✅ NEW
-          devices: (user as any).devices ?? [],
-
-          // ✅ เวลาแทน credits
-          total_seconds: (user as any).total_seconds,
-          remaining_seconds: (user as any).remaining_seconds,
-
-          // ✅ password สำหรับแสดงในหน้า admin
-          password_plain: (user as any).password_plain,
-        },
+        user,
       };
-    } catch (error) {
-      this.logger.error(
-        `[CREATE_USER] ❌ Failed - Username: ${createUserDto.username}, Error: ${error.message}`
-      );
+    } catch (error: any) {
+      this.logger.error(`[CREATE_USER] ❌ Failed - Username: ${createUserDto.username}, Error: ${error.message}`);
       throw error;
     }
   }
@@ -137,23 +95,14 @@ export class UsersController {
     @Body() dto: AssignDevicesDto,
     @CurrentUser() currentUser: any
   ) {
-    this.logger.log(
-      `[ASSIGN_DEVICES] Admin: ${currentUser?.username || "unknown"} assigning ${dto?.items?.length || 0
-      } devices to userId=${userId}`
-    );
-    await this.logService.createLog({
-      type: 'DEVICE_ASSIGNED',
-      level: 'SUCCESS',
-      message: `Assign อุปกรณ์ใหม่ ${dto.items.length} เครื่อง ให้ผู้ใช้`,
-      target_user_id: userId,
-      admin_username: currentUser?.username || 'admin',
-      meta: { devices: dto.items }
-    });
+    const adminUsername = currentUser?.username || "unknown";
+    this.logger.log(`[ASSIGN_DEVICES] Admin: ${adminUsername} assigning ${dto?.items?.length || 0} devices to userId=${userId}`);
 
     return this.usersService.assignDevices(
       userId,
       dto.items,
-      this.devicesService
+      this.devicesService,
+      adminUsername
     );
   }
 
@@ -166,23 +115,15 @@ export class UsersController {
   @Roles(UserRole.ADMIN)
   @HttpCode(HttpStatus.OK)
   async bulkAddTime(@Body() dto: BulkAddTimeDto, @CurrentUser() currentUser: any) {
-    this.logger.log(
-      `[BULK_ADD_TIME] Admin: ${currentUser?.username || "unknown"} adding ${dto.add_seconds}s to INUSE users`
-    );
-    await this.logService.createLog({
-    type: 'TIME_ADDED',
-    level: 'INFO',
-    message: `เติมเวลาแบบกลุ่ม (Bulk) จำนวน ${dto.add_seconds} วินาที ให้ผู้ใช้ที่ INUSE`,
-    admin_username: currentUser?.username || 'admin',
-    meta: { seconds_added: dto.add_seconds }
-  });
+    const adminUsername = currentUser?.username || "unknown";
+    this.logger.log(`[BULK_ADD_TIME] Admin: ${adminUsername} adding ${dto.add_seconds}s to INUSE users`);
 
-    return this.usersService.bulkAddTimeToInuseUsers(dto.add_seconds);
+    return this.usersService.bulkAddTimeToInuseUsers(dto.add_seconds, adminUsername);
   }
 
   @Get("me")
   @UseGuards(JwtAuthGuard)
-  async getProfile(@CurrentUser() user) {
+  async getProfile(@CurrentUser() user: any) {
     return user;
   }
 
@@ -193,30 +134,7 @@ export class UsersController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
   async findOne(@Param("id") id: string) {
-    const user: any = await this.usersService.findById(id);
-    if (!user) throw new NotFoundException("User not found");
-
-    return {
-      id: user._id.toString(),
-      username: user.username,
-      role: user.role,
-      status: user.status,
-      start_date: user.start_date,
-
-      // ✅ ของเดิม
-      device_id: user.device_id ?? null,
-
-      // ✅ NEW
-      devices: user.devices ?? [],
-
-      // ✅ เวลา
-      total_seconds: user.total_seconds,
-      remaining_seconds: user.remaining_seconds,
-      password_plain: user.password_plain,
-
-      createdAt: user.createdAt,
-      updatedAt: user.updatedAt,
-    };
+    return this.usersService.findByIdFormatted(id);
   }
 
   /**
@@ -242,9 +160,7 @@ export class UsersController {
     @Body() connectDeviceDto: ConnectDeviceDto,
     @CurrentUser() currentUser: any
   ) {
-    this.logger.log(
-      `[CONNECT_DEVICE] Admin: ${currentUser?.username || "unknown"} connecting User ID: ${userId} to Device ID: ${connectDeviceDto.device_id}`
-    );
+    this.logger.log(`[CONNECT_DEVICE] Admin: ${currentUser?.username || "unknown"} connecting User ID: ${userId} to Device ID: ${connectDeviceDto.device_id}`);
 
     try {
       const user: any = await this.usersService.connectDevice(
@@ -254,10 +170,7 @@ export class UsersController {
       );
 
       const userIdStr = user._id.toString();
-
-      this.logger.log(
-        `[CONNECT_DEVICE] ✅ Success - User ID: ${userIdStr}, Device ID: ${connectDeviceDto.device_id}, Status: ${user.status}`
-      );
+      this.logger.log(`[CONNECT_DEVICE] ✅ Success - User ID: ${userIdStr}, Device ID: ${connectDeviceDto.device_id}, Status: ${user.status}`);
 
       return {
         message: "User connected to device successfully",
@@ -268,10 +181,8 @@ export class UsersController {
           device_id: user.device_id,
         },
       };
-    } catch (error) {
-      this.logger.error(
-        `[CONNECT_DEVICE] ❌ Failed - User ID: ${userId}, Device ID: ${connectDeviceDto.device_id}, Error: ${error.message}`
-      );
+    } catch (error: any) {
+      this.logger.error(`[CONNECT_DEVICE] ❌ Failed - User ID: ${userId}, Device ID: ${connectDeviceDto.device_id}, Error: ${error.message}`);
       throw error;
     }
   }
