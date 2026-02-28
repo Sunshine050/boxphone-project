@@ -384,7 +384,7 @@ export class SessionsService {
     const sessions = await this.sessionModel.find({
       user_id: userId,
       status: SessionStatus.ACTIVE
-    }).exec();
+    }).populate('device_id').exec();
 
     const now = new Date();
 

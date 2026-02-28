@@ -6,6 +6,12 @@ import { promisify } from 'util';
 const execFileAsync = promisify(execFile);
 const execAsync = promisify(exec);
 
+export interface AdbInputCommand {
+    type: 'tap' | 'swipe' | 'key' | 'text';
+    /** tap: {x, y}  swipe: {x1,y1,x2,y2,duration?}  key: {keycode}  text: {value} */
+    payload: Record<string, any>;
+}
+
 export const PLACEHOLDER_PNG = Buffer.from(
     'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
     'base64'
@@ -73,6 +79,12 @@ export class AdbScreenshotService {
         return PLACEHOLDER_PNG;
     }
 
+    /** ลบ cache ของ serial นั้นทันทีเพื่อให้ screenshot ถัดไปดึงใหม่ */
+    clearCacheForSerial(serial: string): void {
+        this.screenshotCache.delete(serial);
+        this.logger.debug(`[SCREENSHOT] Cache cleared for ${serial}`);
+    }
+
     /** ดึงหน้าจอผ่าน ADB แบบ async — ไม่บล็อก event loop */
     private async screenshotViaAdb(serial: string): Promise<Buffer> {
         const adbPath = this.configService.get<string>('ADB_PATH') || 'adb';
@@ -98,5 +110,53 @@ export class AdbScreenshotService {
             throw new Error(`ADB screencap failed: ${e1.message}`);
         }
         throw new Error('ADB screencap returned empty');
+    }
+
+    /* ==============================
+       ADB INPUT CONTROL
+    ============================== */
+
+    /**
+     * ส่งคำสั่ง input ไปยังเครื่อง Android ผ่าน ADB
+     * type: 'tap' | 'swipe' | 'key' | 'text'
+     */
+    async sendInput(serial: string, cmd: AdbInputCommand): Promise<void> {
+        const adbPath = this.configService.get<string>('ADB_PATH') || 'adb';
+        const base = ['-s', serial, 'shell', 'input'];
+        let args: string[];
+
+        switch (cmd.type) {
+            case 'tap': {
+                const { x, y } = cmd.payload;
+                args = [...base, 'tap', String(Math.round(x)), String(Math.round(y))];
+                break;
+            }
+            case 'swipe': {
+                const { x1, y1, x2, y2, duration = 200 } = cmd.payload;
+                args = [...base, 'swipe',
+                String(Math.round(x1)), String(Math.round(y1)),
+                String(Math.round(x2)), String(Math.round(y2)),
+                String(duration)];
+                break;
+            }
+            case 'key': {
+                // keycode: number (KEYCODE_BACK=4, KEYCODE_HOME=3, KEYCODE_APP_SWITCH=187)
+                args = [...base, 'keyevent', String(cmd.payload.keycode)];
+                break;
+            }
+            case 'text': {
+                // escape spaces with %s
+                const escaped = String(cmd.payload.value).replace(/ /g, '%s');
+                args = [...base, 'text', escaped];
+                break;
+            }
+            default:
+                throw new Error(`Unknown input type: ${(cmd as any).type}`);
+        }
+
+        this.logger.debug(`[INPUT] adb ${args.join(' ')}`);
+        const opts = { timeout: 5000 };
+        const { stderr } = await execFileAsync(adbPath, args, opts as any);
+        if (stderr) this.logger.warn(`[INPUT] stderr: ${stderr}`);
     }
 }

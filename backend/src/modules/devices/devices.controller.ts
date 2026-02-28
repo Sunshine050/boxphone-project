@@ -8,7 +8,7 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import { UserRole } from '../users/user.schema';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { XiaoweiWebSocketService } from './xiaowei-websocket.service';
-import { AdbScreenshotService } from './adb-screenshot.service';
+import { AdbScreenshotService, AdbInputCommand } from './adb-screenshot.service';
 
 @Controller('devices')
 @UseGuards(JwtAuthGuard)
@@ -171,6 +171,37 @@ export class DevicesController {
                 message: error.message || 'Failed to fetch screenshot',
                 error: error.message
             });
+        }
+    }
+
+    /**
+     * ส่งคำสั่ง input (tap, swipe, key, text) ไปยังเครื่อง Android ผ่าน ADB
+     * POST /devices/:id/input
+     * Body: { type: 'tap'|'swipe'|'key'|'text', payload: {...} }
+     * ทุก logged-in user เข้าถึงได้ (ไม่ต้อง admin) — ต้องมี session ที่ valid ก่อน
+     */
+    @Post(':id/input')
+    async sendInput(
+        @Param('id') id: string,
+        @Body() body: AdbInputCommand,
+        @Res() res: Response,
+    ) {
+        try {
+            const device = await this.devicesService.findOne(id);
+            if (!device) {
+                return res.status(404).json({ message: 'Device not found' });
+            }
+            const serial = device.serial_number;
+            if (!serial) {
+                return res.status(400).json({ message: 'Device has no serial number' });
+            }
+            await this.adbScreenshotService.sendInput(serial, body);
+            // ล้าง cache ทันทีหลัง input เพื่อให้ screenshot ถัดไปดึงภาพใหม่ (ลด delay)
+            this.adbScreenshotService.clearCacheForSerial(serial);
+            return res.status(200).json({ ok: true });
+        } catch (error: any) {
+            this.logger.error(`[INPUT] Failed for device ${id}: ${error.message}`);
+            return res.status(500).json({ message: error.message });
         }
     }
 

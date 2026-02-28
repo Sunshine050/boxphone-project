@@ -15,7 +15,9 @@ export interface Session {
   resume_time?: string
   remaining_seconds: number
   device_id: {
+    _id: string
     name: string
+    serial_number: string
   }
 }
 
@@ -75,8 +77,8 @@ export default function DashboardPage() {
   }
 
   return (
-    <SessionDashboard 
-      initialSessions={sessions} 
+    <SessionDashboard
+      initialSessions={sessions}
       lastSyncTimestamp={lastSyncTimestamp}
       refreshData={loadSessions}
     />
