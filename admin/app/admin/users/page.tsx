@@ -16,12 +16,37 @@ import { DevicesService } from "@/services/devices.service";
 import { DeviceMini } from "@/components/users/user-table";
 
 
-export default function UserManagementPage() {
-  const [users, setUsers] = useState<User[]>([]);
-  const [loading, setLoading] = useState(true);
+import useSWR from "swr";
 
-  // ✅ current user
-  const [me, setMe] = useState<User | null>(null);
+export default function UserManagementPage() {
+  const { data: rawUsers, isLoading: isUsersLoading, mutate: mutateUsers } = useSWR('/api/users', () => UsersService.getAll(), { refreshInterval: 10000 });
+  const { data: rawDevices, isLoading: isDevicesLoading, mutate: mutateDevices } = useSWR('/api/devices', () => DevicesService.getAll(), { refreshInterval: 10000 });
+  const { data: meData } = useSWR('/api/users/me', () => UsersService.getMe());
+
+  const loading = (isUsersLoading || isDevicesLoading) && !rawUsers && !rawDevices;
+
+  const users: User[] = useMemo(() => {
+    return (rawUsers || []).map((u: any) => ({
+      ...u,
+      id: u.id || u._id,
+    }));
+  }, [rawUsers]);
+
+  const me: User | null = useMemo(() => {
+    if (!meData) return null;
+    return {
+      ...(meData as any),
+      id: (meData as any).id || (meData as any)._id,
+    };
+  }, [meData]);
+
+  const devices: DeviceMini[] = useMemo(() => {
+    return (rawDevices || []).map((d: any) => ({
+      id: String(d._id || d.id).trim(),
+      name: d.name || "Unnamed",
+      serial_number: d.serial_number || "-",
+    }));
+  }, [rawDevices]);
 
   // ✅ Search
   const [searchInput, setSearchInput] = useState("");
@@ -40,72 +65,22 @@ export default function UserManagementPage() {
   // delete dialog
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteUser, setDeleteUser] = useState<User | null>(null);
-  // ✅ devices list (เอาไว้แปลง id -> name)
-  const [devices, setDevices] = useState<DeviceMini[]>([]);
 
   // ✅ ทำ map ไว้ lookup device name เร็วๆ
   const deviceMap = useMemo(() => {
-  return devices.reduce((acc, d) => {
-    // ใช้ d.id ซึ่งเราแปลงมาจาก _id แล้วใน fetchDevices
-    const idStr = d.id?.toString();
-    if (idStr) {
-      acc[idStr] = d;
-    }
-    return acc;
-  }, {} as Record<string, DeviceMini>);
-}, [devices]);
-  // ✅ fetch devices จาก backend
-const fetchDevices = async () => {
-  try {
-    const data = (await DevicesService.getAll()) as any[];
-    if (data && Array.isArray(data)) {
-      setDevices(
-        data.map((d) => ({
-          // 🎯 บังคับให้ key ใน Map เป็น String ที่สะอาด
-          id: String(d._id || d.id).trim(), 
-          name: d.name || "Unnamed",
-          serial_number: d.serial_number || "-",
-        }))
-      );
-    }
-  } catch (e) {
-    console.error("fetchDevices failed:", e);
-  }
-};
+    return devices.reduce((acc, d) => {
+      // ใช้ d.id ซึ่งเราแปลงมาจาก _id แล้วใน fetchDevices
+      const idStr = d.id?.toString();
+      if (idStr) {
+        acc[idStr] = d;
+      }
+      return acc;
+    }, {} as Record<string, DeviceMini>);
+  }, [devices]);
 
-  const fetchUsers = async (isSilent = false) => {
-    if (!isSilent) setLoading(true); // 🎯 สั่งโหลดเฉพาะตอนเปิดหน้าหรือ Search
-    try {
-      const data: any[] = await UsersService.getAll();
-      setUsers(
-        data.map((u) => ({
-          ...u,
-          id: u.id || u._id,
-        }))
-      );
-    } finally {
-      if (!isSilent) setLoading(false);
-    }
+  const fetchUsers = async () => {
+    await mutateUsers();
   };
-
-  const fetchMe = async () => {
-    try {
-      const data: any = await UsersService.getMe();
-      setMe({
-        ...data,
-        id: data.id || data._id,
-      });
-    } catch (e) {
-      console.error("fetchMe failed:", e);
-      setMe(null);
-    }
-  };
-
-  useEffect(() => {
-    fetchUsers();
-    fetchMe();
-    fetchDevices();
-  }, []);
 
   const handleSearch = () => {
     setSearch(searchInput.trim());
@@ -127,13 +102,6 @@ const fetchDevices = async () => {
     });
   }, [users, search]);
 
-  useEffect(() => {
-    const interval = setInterval(() => {
-      fetchUsers(true);
-    }, 10000);
-
-    return () => clearInterval(interval);
-  }, []);
   const handleAction = async (action: UserAction | "refresh", user: User) => {
     switch (action) {
       case "refresh" as any:

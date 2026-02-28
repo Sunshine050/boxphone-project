@@ -17,65 +17,51 @@ import {
 } from "@/components/ui/dialog";
 import { DevicesService } from "@/services/devices.service";
 import { UsersService } from "@/services/users.service";
+import useSWR from "swr";
 
 export default function DeviceManagementPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [mode, setMode] = useState<"create" | "edit">("create");
-  const [users, setUsers] = useState<any[]>([]);
   const [selected, setSelected] = useState<Device | null>(null);
-
-  // 👁️ View dialog
   const [viewDevice, setViewDevice] = useState<Device | null>(null);
+  const { data: rawDevices, isLoading: isDevicesLoading, mutate: mutateDevices } = useSWR('/api/devices', () => DevicesService.getAll(), { refreshInterval: 10000 });
+  const { data: rawUsers, isLoading: isUsersLoading, mutate: mutateUsers } = useSWR('/api/users', () => UsersService.getAll(), { refreshInterval: 10000 });
 
-  // ✅ API devices
-  const [devices, setDevices] = useState<Device[]>([]);
-  const [loading, setLoading] = useState(true);
+  const loading = (isDevicesLoading || isUsersLoading) && !rawDevices && !rawUsers;
+
+  const users = rawUsers || [];
+
+  const devices: Device[] = useMemo(() => {
+    return (rawDevices || []).map((d: any) => {
+      const raw = String(d.status || "").trim().toUpperCase();
+
+      let normalized: Device["status"];
+
+      if (raw === "AVAILABLE") normalized = "AVAILABLE";
+      else if (raw === "BUSY" || raw === "INUSE" || raw === "ACTIVE") normalized = "BUSY";
+      else if (raw === "OFFLINE") normalized = "OFFLINE";
+      else normalized = "AVAILABLE";
+
+      return {
+        id: d.id || d._id,
+        name: d.name,
+        serial_number: d.serial_number,
+        status: normalized,
+        current_user_id: d.current_user_id ?? null,
+      };
+    });
+  }, [rawDevices]);
 
   const userMap = useMemo(() => {
-    return users.reduce((acc, u) => {
+    return users.reduce((acc: any, u: any) => {
       acc[u.id || u._id] = u.name;
       return acc;
     }, {} as Record<string, string>);
   }, [users]);
 
   const fetchDevices = async () => {
-    setLoading(true);
-    try {
-      // 🎯 ดึงทั้ง Devices และ Users พร้อมกัน
-      const [deviceData, userData] = await Promise.all([
-        DevicesService.getAll(),
-        UsersService.getAll()
-      ]);
-
-      const mapped: Device[] = deviceData.map((d: any) => {
-        const raw = String(d.status || "").trim().toUpperCase();
-
-        let normalized: Device["status"];
-
-        if (raw === "AVAILABLE") normalized = "AVAILABLE";
-        else if (raw === "BUSY" || raw === "INUSE" || raw === "ACTIVE") normalized = "BUSY";
-        else if (raw === "OFFLINE") normalized = "OFFLINE";
-        else normalized = "AVAILABLE";
-
-        return {
-          id: d.id || d._id,
-          name: d.name,
-          serial_number: d.serial_number,
-          status: normalized,
-          current_user_id: d.current_user_id ?? null,
-        };
-      });
-
-      setDevices(mapped);
-      setUsers(userData);
-    } finally {
-      setLoading(false);
-    }
+    await Promise.all([mutateDevices(), mutateUsers()]);
   };
-
-  useEffect(() => {
-    fetchDevices();
-  }, []);
 
   // ✅ ย้าย logic มาไว้ตรงนี้แทน
   const handleDeleteDevice = async (device: Device) => {

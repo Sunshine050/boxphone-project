@@ -9,35 +9,25 @@ import { Search, RotateCw } from "lucide-react";
 import { AdminLog, LogType } from "@/types/log";
 import { LogItem } from "@/components/logs/log-item";
 import { apiFetch } from "@/services/api";
+import useSWR from "swr";
 
 const PAGE_SIZE = 10;
 
 export default function AdminLogsPage() {
-  const [logs, setLogs] = useState<AdminLog[]>([]);
-  const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState<LogType | "all">("all");
   const [selectedLog, setSelectedLog] = useState<AdminLog | null>(null);
 
   const [page, setPage] = useState(1);
 
+  const { data: rawLogs, isLoading: isLogsLoading, mutate: mutateLogs } = useSWR('/api/admin-logs', () => apiFetch<AdminLog[]>("/admin-logs"), { refreshInterval: 10000 });
+
+  const loading = isLogsLoading && !rawLogs;
+  const logs = rawLogs || [];
+
   const fetchLogs = async () => {
-    try {
-      setLoading(true);
-
-      const data = await apiFetch<AdminLog[]>("/admin-logs");
-
-      setLogs(data);
-    } catch (err: any) {
-      console.error("Fetch error:", err.message);
-    } finally {
-      setLoading(false);
-    }
+    await mutateLogs();
   };
-
-  useEffect(() => {
-    fetchLogs();
-  }, []);
 
   const filteredLogs = useMemo(() => {
     return logs.filter((l) => {

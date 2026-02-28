@@ -13,6 +13,8 @@ import { Button } from "@/components/ui/button";
 import { DevicesService } from "@/services/devices.service";
 import { UsersService } from "@/services/users.service";
 
+import useSWR from "swr";
+
 export type DeviceStatus =
   | "all"
   | "in-use"
@@ -25,9 +27,7 @@ function mapDeviceStatus(status: string): Exclude<DeviceStatus, "all"> {
 
   if (s === "AVAILABLE") return "available";
 
-  if (s === "INUSE") {
-    return "in-use";
-  }
+  if (s === "INUSE") return "in-use";
 
   if (s === "OFFLINE" || s === "DISCONNECTED" || s === "MAINTENANCE") {
     return "maintenance";
@@ -39,47 +39,34 @@ function mapDeviceStatus(status: string): Exclude<DeviceStatus, "all"> {
 export default function AdminOverviewPage() {
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<DeviceStatus>("all");
+  const [syncing, setSyncing] = useState(false);
 
-  const [users, setUsers] = useState<any[]>([]);
-  const [devices, setDevices] = useState<OverviewDevice[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [fetchError, setFetchError] = useState<string | null>(null);
+  const { data: rawDevices, error: devicesError, isLoading: isDevicesLoading, mutate: mutateDevices } = useSWR('/api/devices', () => DevicesService.getAll(), { refreshInterval: 10000 });
+  const { data: rawUsers, error: usersError, isLoading: isUsersLoading, mutate: mutateUsers } = useSWR('/api/users', () => UsersService.getAll(), { refreshInterval: 10000 });
+
+  const fetchError = (devicesError || usersError)?.message || null;
+  const loading = (isDevicesLoading || isUsersLoading) && !rawDevices && !rawUsers;
+
+  const users = rawUsers || [];
+  const devices = useMemo(() => {
+    return (rawDevices || []).map((d: any) => ({
+      id: d.id || d._id,
+      name: d.name,
+      status: mapDeviceStatus(d.status),
+      user: d.current_user_id ?? undefined,
+    }));
+  }, [rawDevices]);
+
+  const fetchDevices = async () => {
+    await Promise.all([mutateDevices(), mutateUsers()]);
+  };
 
   const userMap = useMemo(() => {
-    return users.reduce((acc, u) => {
+    return users.reduce((acc: any, u: any) => {
       acc[u.id || u._id] = u.name;
       return acc;
     }, {} as Record<string, string>);
   }, [users]);
-
-  const fetchDevices = async () => {
-    setLoading(true);
-    setFetchError(null);
-    try {
-      const [data, userData] = await Promise.all([
-        DevicesService.getAll(),
-        UsersService.getAll(),
-      ]);
-
-      const mapped: OverviewDevice[] = (data || []).map((d: any) => ({
-        id: d.id || d._id,
-        name: d.name,
-        status: mapDeviceStatus(d.status),
-        user: d.current_user_id ?? undefined,
-      }));
-
-      setDevices(mapped);
-      setUsers(userData);
-    } catch (e: any) {
-      setFetchError(e?.message || "ไม่สามารถโหลดข้อมูลได้");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchDevices();
-  }, []);
 
   /** ✅ Summary counts (ส่งให้ cards ได้ ถ้าอยากใช้ต่อ) */
   const summary = useMemo(() => {
@@ -114,20 +101,20 @@ export default function AdminOverviewPage() {
             variant="default"
             onClick={async () => {
               try {
-                setLoading(true);
+                setSyncing(true);
                 const result = await DevicesService.syncFromXiaowei();
                 alert(`Sync สำเร็จ! พบ ${result.total} เครื่อง, Sync แล้ว ${result.synced} เครื่อง`);
                 await fetchDevices();
               } catch (error: any) {
                 alert(`Sync ไม่สำเร็จ: ${error.message}`);
               } finally {
-                setLoading(false);
+                setSyncing(false);
               }
             }}
-            disabled={loading}
+            disabled={syncing || loading}
             className="shrink-0"
           >
-            {loading ? "กำลัง Sync..." : "Sync จากเสี่ยวเหว๋ย"}
+            {syncing ? "กำลัง Sync..." : "Sync จากเสี่ยวเหว๋ย"}
           </Button>
 
           {/* ✅ refresh button */}
