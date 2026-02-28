@@ -7,7 +7,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Clock, Smartphone, LogOut } from "lucide-react"
 import { NotificationBell } from "./notification-bell"
-import { Session } from "@/app/dashboard/page" // Import interface มาใช้
+import { Session } from "@/app/dashboard/page"
 
 interface DashboardProps {
   initialSessions: Session[]

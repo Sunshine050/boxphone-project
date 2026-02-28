@@ -34,8 +34,26 @@ export class UserDevice {
 
 export const UserDeviceSchema = SchemaFactory.createForClass(UserDevice);
 
+
+@Schema({ _id: false })
+export class UserDeviceHistory {
+  @Prop({ required: true })
+  device_id: string;
+
+  @Prop({ required: true })
+  last_used_at: Date;
+
+  @Prop({ default: 1 })
+  use_count: number;
+}
+
+export const UserDeviceHistorySchema =
+  SchemaFactory.createForClass(UserDeviceHistory);
+
+
 @Schema({ timestamps: true })
 export class User {
+
   @Prop({ required: true })
   name: string;
 
@@ -54,7 +72,6 @@ export class User {
   @Prop({ type: String, enum: UserStatus, default: UserStatus.PENDING })
   status: UserStatus;
 
-  // ✅ เวลารวม (ของเดิม)
   @Prop({ default: 0 })
   total_seconds: number;
 
@@ -72,6 +89,9 @@ export class User {
   
   @Prop({ type: [UserDeviceSchema], default: [] })
   devices: UserDevice[];
+
+  @Prop({ type: [UserDeviceHistorySchema], default: [] })
+  device_history: UserDeviceHistory[];
 }
 
 export const UserSchema = SchemaFactory.createForClass(User);

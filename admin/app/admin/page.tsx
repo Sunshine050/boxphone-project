@@ -20,11 +20,19 @@ export type DeviceStatus =
   | "error"
   | "maintenance";
 
-/** ✅ map backend status -> overview status */
 function mapDeviceStatus(status: string): Exclude<DeviceStatus, "all"> {
-  if (status === "AVAILABLE") return "available";
-  if (status === "BUSY") return "in-use";
-  if (status === "OFFLINE") return "maintenance";
+  const s = String(status || "").trim().toUpperCase();
+
+  if (s === "AVAILABLE") return "available";
+
+  if (s === "INUSE") {
+    return "in-use";
+  }
+
+  if (s === "OFFLINE" || s === "DISCONNECTED" || s === "MAINTENANCE") {
+    return "maintenance";
+  }
+
   return "error";
 }
 

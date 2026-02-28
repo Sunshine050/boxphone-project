@@ -38,7 +38,7 @@ export default function DeviceManagementPage() {
     }, {} as Record<string, string>);
   }, [users]);
 
- const fetchDevices = async () => {
+  const fetchDevices = async () => {
     setLoading(true);
     try {
       // 🎯 ดึงทั้ง Devices และ Users พร้อมกัน
@@ -47,16 +47,27 @@ export default function DeviceManagementPage() {
         UsersService.getAll()
       ]);
 
-      const mapped: Device[] = deviceData.map((d: any) => ({
-        id: d.id || d._id,
-        name: d.name,
-        serial_number: d.serial_number,
-        status: d.status,
-        current_user_id: d.current_user_id ?? null,
-      }));
+      const mapped: Device[] = deviceData.map((d: any) => {
+        const raw = String(d.status || "").trim().toUpperCase();
+
+        let normalized: Device["status"];
+
+        if (raw === "AVAILABLE") normalized = "AVAILABLE";
+        else if (raw === "BUSY" || raw === "INUSE" || raw === "ACTIVE") normalized = "BUSY";
+        else if (raw === "OFFLINE") normalized = "OFFLINE";
+        else normalized = "AVAILABLE";
+
+        return {
+          id: d.id || d._id,
+          name: d.name,
+          serial_number: d.serial_number,
+          status: normalized,
+          current_user_id: d.current_user_id ?? null,
+        };
+      });
 
       setDevices(mapped);
-      setUsers(userData); // เก็บข้อมูล user ลง state
+      setUsers(userData);
     } finally {
       setLoading(false);
     }

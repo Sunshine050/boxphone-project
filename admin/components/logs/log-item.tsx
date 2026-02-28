@@ -71,10 +71,6 @@ export function LogItem({ log, idx, onSelect }: LogItemProps) {
           <span>โดย: {log.admin_username || "System"}</span>
         </div>
       </div>
-      <Button size="sm" variant="ghost" className="h-8 gap-2" onClick={() => onSelect(log)}>
-        <Eye className="h-4 w-4" />
-        รายละเอียด
-      </Button>
     </motion.div>
   );
 }

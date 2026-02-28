@@ -12,6 +12,7 @@ import * as bcrypt from "bcrypt";
 import { CreateUserByAdminDto } from "./dto/create-user-by-admin.dto";
 import { DeviceStatus } from "../devices/device.schema";
 import { LogService } from "../log/log.service";
+import { SessionsService } from "../sessions/sessions.service";
 
 @Injectable()
 export class UsersService {
@@ -19,6 +20,7 @@ export class UsersService {
     @InjectModel(User.name) private userModel: Model<UserDocument>,
     private readonly configService: ConfigService,
     private readonly logService: LogService,
+    private readonly sessionsService: SessionsService,
   ) { }
 
   // ✅ map duration → seconds
@@ -277,8 +279,9 @@ export class UsersService {
           status: UserStatus.PENDING,
         });
       } else {
-        exists.total_seconds = (exists.total_seconds ?? 0) + seconds;
-        exists.remaining_seconds = (exists.remaining_seconds ?? 0) + seconds;
+        exists.total_seconds = seconds;
+        exists.remaining_seconds = seconds;
+        exists.started_at = null;
       }
     }
 
@@ -314,21 +317,31 @@ export class UsersService {
     const users = await this.userModel.find({ status: UserStatus.INUSE }).exec();
 
     for (const u of users) {
-      await this.userModel
-        .findByIdAndUpdate(u._id, {
-          $inc: {
-            total_seconds: addSeconds,
-            remaining_seconds: addSeconds,
-          },
-        })
-        .exec();
+      const devices = Array.isArray(u.devices) ? u.devices : [];
+
+      for (const d of devices) {
+
+        if (d.status === UserStatus.INUSE) {
+          d.total_seconds = (d.total_seconds ?? 0) + addSeconds;
+          d.remaining_seconds = (d.remaining_seconds ?? 0) + addSeconds;
+        }
+      }
+
+      await u.save();
+
+      await this.sessionsService.addTimeToActiveSessions(
+        u._id.toString(),
+        addSeconds
+      );
     }
+
     await this.logService.createLog({
-      type: 'TIME_ADDED',
-      level: 'INFO',
+      type: "TIME_ADDED",
+      level: "INFO",
       message: `เติมเวลาให้ผู้ใช้ที่กำลังใช้งานทั้งหมด (+ ${addSeconds} วินาที)`,
-      meta: { count: users.length, added_seconds: addSeconds }
+      meta: { count: users.length, added_seconds: addSeconds },
     });
+
     return {
       message: "Bulk add time success",
       count: users.length,
@@ -361,6 +374,7 @@ export class UsersService {
         username: u.username,
         status: u.status,
         devices: updatedDevices,
+        device_history: u.device_history || [],
         password_plain: u.password_plain,
       };
     });

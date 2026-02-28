@@ -24,6 +24,14 @@ export type User = {
   devices?: UserDeviceItem[];
 
   device_id?: string | null;
+
+  device_history?: {
+
+    device_id: string;
+    last_used_at: string;
+    use_count: number;
+
+  }[];
 };
 
 export type UserAction = "assign" | "disconnect" | "delete" | "time";
