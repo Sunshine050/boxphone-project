@@ -131,8 +131,12 @@ export function OverviewPhoneGrid({
 
 /* ================= DEVICE SCREENSHOT ================= */
 
+import { useScreenshotStore } from "@/stores/screenshot.store";
+
 function DeviceScreenshot({ deviceId, status }: { deviceId: string; status: DeviceStatus }) {
-  const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const imageUrl = useScreenshotStore((state) => state.images[deviceId]);
+  const setImageUrl = useScreenshotStore((state) => state.setImage);
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string>("");
@@ -193,22 +197,14 @@ function DeviceScreenshot({ deviceId, status }: { deviceId: string; status: Devi
       const blob = await response.blob();
       const blobUrl = URL.createObjectURL(blob);
 
-      if (imageUrl && imageUrl.startsWith("blob:")) {
-        URL.revokeObjectURL(imageUrl);
-      }
-
-      setImageUrl(blobUrl);
+      setImageUrl(deviceId, blobUrl);
       setLoading(false);
     } catch (err: any) {
       console.error("Failed to fetch screenshot:", err);
       setError(true);
       setErrorMessage(err.message || "ไม่สามารถดึงหน้าจอได้");
       setLoading(false);
-      // หยุด auto-refresh เมื่อดึงไม่ได้ — ลดการกระพริบ
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-        intervalRef.current = null;
-      }
+      // ไม่ต้อง clear interval ตรงนี้ เพื่อให้มันพยายามโหลดใหม่เรื่อยๆ อัตโนมัติ (auto-retry)
     }
   };
 
@@ -225,9 +221,6 @@ function DeviceScreenshot({ deviceId, status }: { deviceId: string; status: Devi
         clearInterval(intervalRef.current);
         intervalRef.current = null;
       }
-      if (imageUrl && imageUrl.startsWith("blob:")) {
-        URL.revokeObjectURL(imageUrl);
-      }
     };
   }, [deviceId, status, isInView]);
 
@@ -239,7 +232,7 @@ function DeviceScreenshot({ deviceId, status }: { deviceId: string; status: Devi
         <p className="text-xs text-muted-foreground">เลื่อนเพื่อโหลด</p>
       ) : loading && !imageUrl ? (
         <RefreshCw className="w-4 h-4 animate-spin text-muted-foreground" />
-      ) : error || !imageUrl ? (
+      ) : error && !imageUrl ? (
         <div className="flex flex-col items-center justify-center gap-2 p-2">
           <p className="text-xs text-muted-foreground text-center">
             {errorMessage || "ไม่สามารถดึงหน้าจอได้"}
@@ -257,7 +250,7 @@ function DeviceScreenshot({ deviceId, status }: { deviceId: string; status: Devi
       ) : (
         <>
           <img
-            src={imageUrl}
+            src={imageUrl || ""}
             alt={`Device ${deviceId} screenshot`}
             className="w-full h-full object-contain"
             onError={() => setError(true)}

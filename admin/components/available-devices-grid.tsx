@@ -118,6 +118,8 @@ export function AvailableDevicesGrid({
 
 /* ================= DEVICE SCREENSHOT ================= */
 
+import { useScreenshotStore } from "@/stores/screenshot.store";
+
 function DeviceScreenshot({
   deviceId,
   serialNumber,
@@ -125,7 +127,9 @@ function DeviceScreenshot({
   deviceId: string;
   serialNumber: string;
 }) {
-  const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const imageUrl = useScreenshotStore((state) => state.images[deviceId]);
+  const setImageUrl = useScreenshotStore((state) => state.setImage);
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string>("");
@@ -166,21 +170,14 @@ function DeviceScreenshot({
       const blob = await response.blob();
       const blobUrl = URL.createObjectURL(blob);
 
-      if (imageUrl && imageUrl.startsWith("blob:")) {
-        URL.revokeObjectURL(imageUrl);
-      }
-
-      setImageUrl(blobUrl);
+      setImageUrl(deviceId, blobUrl);
       setLoading(false);
     } catch (err: any) {
       console.error("Failed to fetch screenshot:", err);
       setError(true);
       setErrorMessage(err.message || "ไม่สามารถดึงหน้าจอได้");
       setLoading(false);
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-        intervalRef.current = null;
-      }
+      // ไม่ต้อง clear interval ตรงนี้ เพื่อให้มันพยายามโหลดใหม่เรื่อยๆ อัตโนมัติ (auto-retry)
     }
   };
 
@@ -196,9 +193,6 @@ function DeviceScreenshot({
         clearInterval(intervalRef.current);
         intervalRef.current = null;
       }
-      if (imageUrl && imageUrl.startsWith("blob:")) {
-        URL.revokeObjectURL(imageUrl);
-      }
     };
   }, [deviceId, serialNumber]);
 
@@ -210,7 +204,7 @@ function DeviceScreenshot({
     );
   }
 
-  if (error || !imageUrl) {
+  if (error && !imageUrl) {
     return (
       <div className="w-full h-full flex flex-col items-center justify-center gap-2 p-2">
         <p className="text-xs text-muted-foreground text-center">
@@ -232,7 +226,7 @@ function DeviceScreenshot({
   return (
     <>
       <img
-        src={imageUrl}
+        src={imageUrl || ""}
         alt={`Device ${serialNumber} screenshot`}
         className="w-full h-full object-contain"
         onError={() => setError(true)}
