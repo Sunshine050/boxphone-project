@@ -3,7 +3,6 @@ import { AppModule } from "./app.module";
 import { ConfigService } from "@nestjs/config";
 import { ValidationPipe, Logger } from "@nestjs/common";
 import { seedAdmin } from "./seed/seed-admin";
-import { getCorsConfig } from "./config/cors.config";
 import { getValidationPipeConfig, getLoggerConfig } from "./config/app.config";
 
 /**
