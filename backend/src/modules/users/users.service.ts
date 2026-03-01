@@ -219,91 +219,114 @@ export class UsersService {
   /**
    * ✅ NEW: Assign หลายเครื่อง + เพิ่มเวลา per-device ในคำขอเดียว
    */
-  async assignDevices(
-    userId: string,
-    items: { device_id: string; assign_seconds?: number }[],
-    deviceService: any
-  ) {
-    const user: any = await this.findById(userId);
-    if (!user) throw new NotFoundException("User not found");
+ async assignDevices(
+  userId: string,
+  items: { device_id: string; assign_seconds?: number }[],
+  deviceService: any
+) {
+  const user: any = await this.findById(userId);
+  if (!user) throw new NotFoundException("User not found");
 
-    if (!Array.isArray(items) || items.length === 0) {
-      throw new BadRequestException("items is required");
+  if (!Array.isArray(items)) {
+    throw new BadRequestException("items must be an array");
+  }
+
+  // 🔴 device เดิมของ user
+  const oldDevices = Array.isArray(user.devices) ? user.devices : [];
+
+  // 🔴 validate device exists + availability
+  for (const item of items) {
+    if (!item.device_id) {
+      throw new BadRequestException("device_id is required");
     }
 
-    // ✅ validate device exists
-    for (const item of items) {
-      if (!item.device_id) {
-        throw new BadRequestException("device_id is required");
-      }
-
-      const device = await deviceService.findOne(item.device_id);
-      if (!device) {
-        throw new NotFoundException(`Device not found: ${item.device_id}`);
-      }
-
-      // ✅ NEW: device ต้อง AVAILABLE เท่านั้น
-      if (device.status !== DeviceStatus.AVAILABLE) {
-        throw new ConflictException(
-          `Device ${device.name || item.device_id} is not available`
-        );
-      }
-
-      // ✅ NEW: device ห้ามถูก assign ให้ user คนอื่น
-      const assignedUser = await this.userModel.findOne({
-        _id: { $ne: userId },
-        "devices.device_id": item.device_id,
-      });
-
-      if (assignedUser) {
-        throw new ConflictException(
-          `Device ${device.name || item.device_id} is already assigned`
-        );
-      }
-
+    const device = await deviceService.findOne(item.device_id);
+    if (!device) {
+      throw new NotFoundException(`Device not found: ${item.device_id}`);
     }
 
-    const devicesArr = Array.isArray(user.devices) ? user.devices : [];
+    // ✔ อนุญาตถ้าเป็น device เดิมของ user
+    const alreadyAssignedToUser = oldDevices.some(
+      (d: any) => d.device_id === item.device_id
+    );
 
-    for (const item of items) {
-      const seconds = Math.max(0, Number(item.assign_seconds ?? 0));
-
-      const exists = devicesArr.find((d: any) => d.device_id === item.device_id);
-
-      if (!exists) {
-        devicesArr.push({
-          device_id: item.device_id,
-          total_seconds: seconds,
-          remaining_seconds: seconds,
-          started_at: null,
-          status: UserStatus.PENDING,
-        });
-      } else {
-        exists.total_seconds = seconds;
-        exists.remaining_seconds = seconds;
-        exists.started_at = null;
-      }
+    if (
+      device.status !== DeviceStatus.AVAILABLE &&
+      !alreadyAssignedToUser
+    ) {
+      throw new ConflictException(
+        `Device ${device.name || item.device_id} is not available`
+      );
     }
 
-    user.devices = devicesArr;
-    await user.save();
-    for (const item of items) {
-      await this.logService.createLog({
-        type: 'DEVICE_ASSIGNED',
-        level: 'SUCCESS',
-        message: `มอบหมายอุปกรณ์ให้ผู้ใช้สำเร็จ`,
-        target_user_id: userId,
-        target_device_id: item.device_id,
-        meta: { assign_seconds: item.assign_seconds }
-      });
+    // ✔ ห้ามซ้ำกับ user คนอื่น
+    const assignedUser = await this.userModel.findOne({
+      _id: { $ne: userId },
+      "devices.device_id": item.device_id,
+    });
+
+    if (assignedUser) {
+      throw new ConflictException(
+        `Device ${device.name || item.device_id} is already assigned`
+      );
     }
+  }
+
+  // 🔴 map device ใหม่
+  const newDeviceIds = new Set(items.map(i => i.device_id));
+
+  // 🔴 หา device ที่ถูกลบ
+  const removedDevices = oldDevices.filter(
+    (d: any) => !newDeviceIds.has(d.device_id)
+  );
+
+  // 🔴 สร้าง device list ใหม่ (replace logic)
+  const updatedDevices = items.map(item => {
+    const seconds = Math.max(0, Number(item.assign_seconds ?? 0));
 
     return {
-      message: "Assigned devices successfully",
-      userId,
-      devices: user.devices,
+      device_id: item.device_id,
+      total_seconds: seconds,
+      remaining_seconds: seconds,
+      started_at: null,
+      status: UserStatus.PENDING,
     };
+  });
+
+  // 🔴 replace devices ทั้งชุด
+  user.devices = updatedDevices;
+  await user.save();
+
+  // 🔴 log device removed
+  for (const d of removedDevices) {
+    await this.logService.createLog({
+      type: "DEVICE_DISCONNECTED",
+      level: "INFO",
+      message: "ลบการมอบหมายอุปกรณ์ออกจากผู้ใช้",
+      target_user_id: userId,
+      target_device_id: d.device_id,
+      meta: { reason: "unassigned" }
+    });
   }
+
+  // 🔴 log device assigned/updated
+  for (const item of items) {
+    await this.logService.createLog({
+      type: "DEVICE_ASSIGNED",
+      level: "SUCCESS",
+      message: "มอบหมายอุปกรณ์ให้ผู้ใช้สำเร็จ",
+      target_user_id: userId,
+      target_device_id: item.device_id,
+      meta: { assign_seconds: item.assign_seconds }
+    });
+  }
+
+  return {
+    message: "Assigned devices successfully",
+    userId,
+    devices: user.devices,
+  };
+}
 
   /**
    * ✅ NEW: เพิ่มเวลาให้ user ที่กำลังใช้งานทั้งหมด (INUSE) ทีเดียว

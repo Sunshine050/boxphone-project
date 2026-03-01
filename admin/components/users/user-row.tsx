@@ -10,14 +10,28 @@ import {
   Settings2,
   ChevronDown,
   ArrowRightLeft,
+  MoreVertical,
+  Pause,
+  Play,
+  Square,
 } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
-import { User, UserAction } from "@/types/user";
+import { motion } from "framer-motion";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
+
 import { SessionsService } from "@/services/sessions.service";
 import { UserMoveSessionDialog } from "./user-move-session-dialog";
 import { UserDevicesDialog } from "./user-devices-dialog";
+import { User, UserAction } from "@/types/user";
 
-const statusMap: Record<User["status"], { label: string; className: string }> = {
+/* ================= STATUS UI ================= */
+
+const statusMap: Record<string, any> = {
   PENDING: {
     label: "รอเชื่อมต่อ",
     className: "bg-yellow-500/10 text-yellow-600 border-yellow-500/30",
@@ -32,12 +46,17 @@ const statusMap: Record<User["status"], { label: string; className: string }> = 
   },
 };
 
+/* ================= TIME FORMAT ================= */
+
 function formatHMS(sec: number) {
   if (!sec || sec <= 0) return "00:00:00";
   const h = Math.floor(sec / 3600);
   const m = Math.floor((sec % 3600) / 60);
   const s = Math.floor(sec % 60);
-  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(
+    2,
+    "0"
+  )}:${String(s).padStart(2, "0")}`;
 }
 
 function formatPrettyTime(sec: number) {
@@ -54,88 +73,104 @@ function formatPrettyTime(sec: number) {
   return formatHMS(sec);
 }
 
-export type DeviceMini = {
-  id: string;
-  name: string;
-  serial_number: string;
-  status?: "AVAILABLE" | "BUSY" | "OFFLINE";
-};
-
-export type UserDeviceAssigned = {
-  device_id: string;
-  assign_seconds?: number;
-};
+/* ===================================================== */
 
 export function UserRow({
   user,
   index,
   currentUserId,
   onAction,
-  userDevices,
-  deviceMap,
+  userDevices = [],
+  deviceMap = {},
 }: {
   user: User;
   index: number;
   currentUserId: string | null;
   onAction: (action: UserAction) => void;
-  userDevices: UserDeviceAssigned[];
-  deviceMap: Record<string, DeviceMini>;
+  userDevices?: {
+    device_id: string;
+    assign_seconds?: number;
+  }[];
+  deviceMap?: Record<string, any>;
 }) {
   const [showPass, setShowPass] = useState(false);
   const [moveOpen, setMoveOpen] = useState(false);
-  const [sessionId, setSessionId] = useState<string | null>(null);
   const [devicesDialogOpen, setDevicesDialogOpen] = useState(false);
+  const [session, setSession] = useState<any | null>(null);
 
-  /* ================= TIME LOGIC เดิมของนาย ================= */
+  /* ================= LOAD SESSION ================= */
 
-  const initialTime = useMemo(() => {
-    if (userDevices && userDevices.length > 0) {
-      return userDevices[0].assign_seconds || 0;
+  const loadSession = async () => {
+    try {
+      const s = await SessionsService.getByUser(user.id);
+      setSession(s || null);
+    } catch {
+      setSession(null);
     }
-    return 0;
-  }, [userDevices]);
-
-  const [liveRemaining, setLiveRemaining] = useState<number>(initialTime);
+  };
 
   useEffect(() => {
-    setLiveRemaining(initialTime);
-  }, [initialTime]);
+    if (user?.id) loadSession();
+  }, [user?.id, user.status]); // 🔴 สำคัญ: login แล้วโหลดใหม่ทันที
 
-  const hasTime = initialTime > 0;
-  const isStarted = user.status === "INUSE";
+  /* ================= REALTIME CLOCK ================= */
+
+  const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
-    if (!isStarted || liveRemaining <= 0) return;
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
 
-    const timer = setInterval(() => {
-      setLiveRemaining((prev) => {
-        if (prev <= 1) {
-          clearInterval(timer);
-          setTimeout(() => onAction("refresh" as any), 0);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
+  /* ================= BASE REMAINING ================= */
 
-    return () => clearInterval(timer);
-  }, [isStarted, onAction]);
+  const baseRemaining = session?.remaining_seconds
+    ?? userDevices?.[0]?.assign_seconds
+    ?? 0;
+
+  /* ================= CALCULATE REAL TIME ================= */
+
+  const remaining = useMemo(() => {
+    if (!session) return baseRemaining;
+
+    let base = session.remaining_seconds ?? 0;
+
+    if (session.status === "ACTIVE") {
+      const ref = session.resume_time || session.start_time;
+      if (!ref) return base;
+
+      const elapsed = Math.floor(
+        (now - new Date(ref).getTime()) / 1000
+      );
+
+      return Math.max(0, base - elapsed);
+    }
+
+    return base;
+  }, [session, baseRemaining, now]);
+
+  /* ================= PROGRESS ================= */
 
   const percent = useMemo(() => {
-    const total = userDevices[0]?.assign_seconds || 1;
-    return Math.max(0, Math.min(100, (liveRemaining / total) * 100));
-  }, [liveRemaining, userDevices]);
+    const total =
+      session?.total_seconds ||
+      userDevices?.[0]?.assign_seconds ||
+      1;
+    return Math.max(0, Math.min(100, (remaining / total) * 100));
+  }, [remaining, session, userDevices]);
 
   /* ================= DEVICE LABEL ================= */
 
   const firstDeviceLabel = useMemo(() => {
     if (!userDevices?.length) return "-";
-    const firstId = userDevices[0].device_id;
-    const meta = deviceMap[firstId];
-    return meta ? meta.name : `รหัส: ..${firstId.slice(-4)}`;
+    const id = userDevices[0].device_id;
+    const meta = deviceMap[id];
+    return meta?.name || `..${String(id).slice(-4)}`;
   }, [userDevices, deviceMap]);
 
   const isSelf = currentUserId && user.id === currentUserId;
+
+  /* ===================================================== */
 
   return (
     <>
@@ -153,44 +188,58 @@ export function UserRow({
           <div className="flex items-center justify-center gap-2 font-mono text-sm">
             {user.password_plain ? (
               <>
-                <span>{showPass ? user.password_plain : "•".repeat(user.password_plain.length)}</span>
-                <Button size="icon" variant="ghost" onClick={() => setShowPass((s) => !s)}>
+                <span>
+                  {showPass
+                    ? user.password_plain
+                    : "•".repeat(user.password_plain.length)}
+                </span>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  onClick={() => setShowPass((s) => !s)}
+                >
                   {showPass ? <EyeOff size={16} /> : <Eye size={16} />}
                 </Button>
               </>
             ) : (
-              <span className="text-muted-foreground italic">ไม่มีข้อมูล</span>
+              <span className="text-muted-foreground italic">
+                ไม่มีข้อมูล
+              </span>
             )}
           </div>
         </td>
 
         {/* STATUS */}
         <td className="text-center">
-          <Badge className={statusMap[user.status].className}>
-            {statusMap[user.status].label}
+          <Badge className={statusMap[user.status]?.className}>
+            {statusMap[user.status]?.label}
           </Badge>
         </td>
 
-        {/* TIME — เดิม 100% */}
+        {/* TIME */}
         <td className="text-center">
-          {hasTime ? (
+          {remaining > 0 ? (
             <div className="flex flex-col items-center gap-1">
               <span className="text-xs font-medium">
-                {formatPrettyTime(liveRemaining)}
+                {formatPrettyTime(remaining)}
               </span>
               <div className="h-1.5 w-28 bg-muted rounded-full overflow-hidden">
                 <div
-                  className={`h-full ${percent < 20 ? "bg-red-500" : "bg-green-500"}`}
+                  className={`h-full ${
+                    percent < 20 ? "bg-red-500" : "bg-green-500"
+                  }`}
                   style={{ width: `${percent}%` }}
                 />
               </div>
             </div>
           ) : (
-            <span className="text-muted-foreground">ยังไม่มีเวลาใช้งาน</span>
+            <span className="text-muted-foreground">
+              ยังไม่มีเวลาใช้งาน
+            </span>
           )}
         </td>
 
-        {/* DEVICE + DROPDOWN */}
+        {/* DEVICE */}
         <td className="text-center">
           <div className="flex items-center justify-center gap-2">
             <span>{firstDeviceLabel}</span>
@@ -199,7 +248,6 @@ export function UserRow({
               <Button
                 size="icon"
                 variant="ghost"
-                className="h-6 w-6"
                 onClick={() => setDevicesDialogOpen(true)}
               >
                 <ChevronDown size={16} />
@@ -208,45 +256,97 @@ export function UserRow({
           </div>
         </td>
 
-        {/* ACTIONS */}
-        <td className="p-4">
-          <div className="flex justify-end gap-2">
-            {isStarted && userDevices.length > 0 && (
-              <Button
-                size="icon"
-                variant="outline"
-                title="ย้ายเครื่อง"
-                onClick={async () => {
-                  const session: any = await SessionsService.getByUser(user.id);
-                  if (!session?._id) return alert("ไม่พบ session");
-
-                  setSessionId(session._id);
-                  setMoveOpen(true);
-                }}
-              >
-                <ArrowRightLeft size={16} />
+        {/* ACTION MENU */}
+        <td className="p-4 text-right">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button size="icon" variant="ghost">
+                <MoreVertical size={18} />
               </Button>
-            )}
+            </DropdownMenuTrigger>
 
-            <Button size="icon" variant="outline" onClick={() => onAction("assign")}>
-              <Settings2 size={16} />
-            </Button>
+            <DropdownMenuContent align="end" className="w-44">
 
-            {user.role !== "ADMIN" && !isSelf && (
-              <Button size="icon" variant="destructive" onClick={() => onAction("delete")}>
-                <Trash2 size={16} />
-              </Button>
-            )}
-          </div>
+              {session && (
+                <>
+                  {session.status === "ACTIVE" && (
+                    <DropdownMenuItem
+                      onClick={async () => {
+                        await SessionsService.pause(session._id);
+                        await loadSession();
+                        onAction("refresh");
+                      }}
+                    >
+                      <Pause size={14} className="mr-2" />
+                      Pause
+                    </DropdownMenuItem>
+                  )}
+
+                  {(session.status === "PAUSED" ||
+                    session.status === "DISCONNECTED") && (
+                    <DropdownMenuItem
+                      onClick={async () => {
+                        await SessionsService.resume(session._id);
+                        await loadSession();
+                        onAction("refresh");
+                      }}
+                    >
+                      <Play size={14} className="mr-2" />
+                      Resume
+                    </DropdownMenuItem>
+                  )}
+
+                  <DropdownMenuItem onClick={() => setMoveOpen(true)}>
+                    <ArrowRightLeft size={14} className="mr-2" />
+                    Move
+                  </DropdownMenuItem>
+
+                  <DropdownMenuItem
+                    className="text-red-500"
+                    onClick={async () => {
+                      if (!confirm("Cancel session?")) return;
+                      await SessionsService.cancel(session._id);
+                      await loadSession();
+                      onAction("refresh");
+                    }}
+                  >
+                    <Square size={14} className="mr-2" />
+                    Cancel
+                  </DropdownMenuItem>
+
+                  <DropdownMenuSeparator />
+                </>
+              )}
+
+              <DropdownMenuItem onClick={() => onAction("assign")}>
+                <Settings2 size={14} className="mr-2" />
+                Assign device/time
+              </DropdownMenuItem>
+
+              {user.role !== "ADMIN" && !isSelf && (
+                <DropdownMenuItem
+                  className="text-red-500"
+                  onClick={() => onAction("delete")}
+                >
+                  <Trash2 size={14} className="mr-2" />
+                  Delete user
+                </DropdownMenuItem>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </td>
       </motion.tr>
 
       <UserMoveSessionDialog
         open={moveOpen}
-        sessionId={sessionId}
+        sessionId={session?._id}
         onClose={() => setMoveOpen(false)}
-        onSuccess={() => onAction("refresh" as any)}
+        onSuccess={() => {
+          loadSession();
+          onAction("refresh");
+        }}
       />
+
       <UserDevicesDialog
         open={devicesDialogOpen}
         onClose={() => setDevicesDialogOpen(false)}

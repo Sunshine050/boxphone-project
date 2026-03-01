@@ -108,20 +108,6 @@ export function OverviewPhoneGrid({
               </p>
             )}
 
-            <div className="flex items-center justify-end gap-1 pt-2">
-              <Button size="icon" variant="ghost" className="h-8 w-8">
-                <Eye className="w-4 h-4" />
-              </Button>
-
-              <Button
-                size="icon"
-                variant="ghost"
-                className="h-8 w-8"
-                disabled={d.status === "maintenance"}
-              >
-                <Power className="w-4 h-4" />
-              </Button>
-            </div>
           </div>
         </motion.div>
       ))}

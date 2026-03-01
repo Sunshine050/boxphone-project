@@ -1,7 +1,7 @@
 "use client";
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { DeviceMini, UserDeviceAssigned } from "./user-row";
+import { DeviceMini, UserDeviceAssigned } from "./user-table";
 
 function formatHMS(sec: number) {
   if (!sec || sec <= 0) return "00:00:00";

@@ -181,7 +181,10 @@ export function UserAssignDevicesTimeDialog({
       .filter((x) => x.device_id !== "" && x.assign_seconds > 0);
   }, [rows]);
 
-  const canSubmit = useMemo(() => !!user?.id && validItems.length > 0, [user?.id, validItems.length]);
+  const canSubmit = useMemo(
+    () => !!user?.id,
+    [user?.id]
+  );
 
   const addRow = () => setRows((prev) => [...prev, createEmptyRow()]);
   const removeRow = (idx: number) => setRows((prev) => prev.filter((_, i) => i !== idx));
@@ -242,7 +245,7 @@ export function UserAssignDevicesTimeDialog({
                     size="icon"
                     variant="ghost"
                     onClick={() => removeRow(idx)}
-                    disabled={rows.length === 1}
+                    disabled={false}
                     className="h-8 w-8 text-zinc-500 hover:text-red-400 hover:bg-red-400/10"
                   >
                     <Trash2 size={16} />
@@ -277,7 +280,7 @@ export function UserAssignDevicesTimeDialog({
                         const label =
                           `${d.name} • SN: ${d.serial_number} • ${d.status}` +
                           (count > 0 ? ` • ใช้ ${count} ครั้ง` : "");
-                          
+
                         return (
                           <option key={d.id} value={d.id} disabled={isDisabled} className="bg-zinc-950 py-2">
                             {statusIndicator} {label} {isDisabled ? " (เลือกแล้ว)" : ""}

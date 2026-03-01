@@ -191,18 +191,32 @@ export class SessionsController {
     try {
       const session = await this.sessionsService.pauseSession(id, body?.reason);
       const sessionId = (session as any)._id.toString();
+
+      // 🔴 คืนเครื่องให้ AVAILABLE
+      if (session.device_id) {
+        await this.sessionsService["deviceModel"].findByIdAndUpdate(
+          session.device_id,
+          {
+            status: "AVAILABLE",
+            current_user_id: null,
+          }
+        );
+      }
+
       this.logger.log(
         `[PAUSE_SESSION] ✅ Success - Session ID: ${sessionId}, Status: ${session.status}, Remaining: ${session.remaining_seconds}s (FROZEN)`
       );
 
       await this.logService.createLog({
-        type: 'SYSTEM_WARNING',
-        level: 'INFO',
-        message: `สั่งหยุดเวลา (Pause) สำหรับ Session: ${id}`,
+        type: "SESSION_ENDED",
+        level: "INFO",
+        message: `หยุดการใช้งานชั่วคราว (Pause Session)`,
         target_user_id: (session as any).user_id,
-        admin_username: currentUser?.username || 'admin',
-        meta: { reason: body?.reason }
+        target_device_id: (session as any).device_id,
+        admin_username: currentUser?.username || "admin",
+        meta: { reason: body?.reason || "manual pause" },
       });
+
       return {
         message: "Session paused successfully",
         session: {

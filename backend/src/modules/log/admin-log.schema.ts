@@ -1,13 +1,30 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
 
+export enum LogType {
+  USER_CREATED = "USER_CREATED",
+  TIME_ADDED = "TIME_ADDED",
+  DEVICE_ASSIGNED = "DEVICE_ASSIGNED",
+  DEVICE_DISCONNECTED = "DEVICE_DISCONNECTED",
+  SESSION_STARTED = "SESSION_STARTED",
+  SESSION_ENDED = "SESSION_ENDED",
+}
+
+export enum LogLevel {
+  INFO = "INFO",
+  SUCCESS = "SUCCESS",
+  WARNING = "WARNING",
+  ERROR = "ERROR",
+}
+
 @Schema({ timestamps: true })
 export class AdminLog extends Document {
-  @Prop({ required: true })
-  type: string; // 'USER_CREATED' | 'TIME_ADDED' | 'DEVICE_ASSIGNED' | 'SESSION_START' | 'SESSION_END'
 
-  @Prop({ required: true })
-  level: string; // 'INFO' | 'SUCCESS' | 'WARNING' | 'ERROR'
+  @Prop({ required: true, enum: LogType })
+  type: LogType;
+
+  @Prop({ required: true, enum: LogLevel })
+  level: LogLevel;
 
   @Prop({ required: true })
   message: string;
@@ -22,7 +39,7 @@ export class AdminLog extends Document {
   admin_username: string;
 
   @Prop({ type: Object })
-  meta: Record<string, any>; 
+  meta: Record<string, any>;
 }
 
 export const AdminLogSchema = SchemaFactory.createForClass(AdminLog);
