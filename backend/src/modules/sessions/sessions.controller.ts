@@ -20,6 +20,7 @@ import { UserRole } from "../users/user.schema";
 import { CreateSessionDto } from "./dto/create-session.dto";
 import { MoveSessionDto } from "./dto/move-session.dto";
 import { LogService } from "../log/log.service";
+import { NotificationService } from "../notification/notification.service";
 
 @Controller("sessions")
 @UseGuards(JwtAuthGuard)
@@ -28,7 +29,8 @@ export class SessionsController {
 
   constructor(
     private readonly sessionsService: SessionsService,
-    private readonly logService: LogService
+    private readonly logService: LogService,
+    private readonly notificationService: NotificationService
   ) { }
   /**
    * USER: ดึง session ของตัวเอง
@@ -188,6 +190,7 @@ export class SessionsController {
       `[PAUSE_SESSION] Admin: ${currentUser?.username || "unknown"} pausing Session ID: ${id}, Reason: ${body?.reason || "N/A"}`
     );
 
+
     try {
       const session = await this.sessionsService.pauseSession(id, body?.reason);
       const sessionId = (session as any)._id.toString();
@@ -216,6 +219,12 @@ export class SessionsController {
         admin_username: currentUser?.username || "admin",
         meta: { reason: body?.reason || "manual pause" },
       });
+      await this.notificationService.createAndSend(
+        (session as any).user_id,
+        "SESSION_PAUSED",
+        `การใช้งานของคุณถูกหยุดชั่วคราวโดยผู้ดูแล`,
+        "WARNING"
+      );
 
       return {
         message: "Session paused successfully",
@@ -248,6 +257,12 @@ export class SessionsController {
       const sessionId = (session as any)._id.toString();
       this.logger.log(
         `[RESUME_SESSION] ✅ Success - Session ID: ${sessionId}, Status: ${session.status}, Remaining: ${session.remaining_seconds}s`
+      );
+      await this.notificationService.createAndSend(
+        (session as any).user_id,
+        "SESSION_RESUMED",
+        `การใช้งานของคุณถูกเริ่มต่อ`,
+        "SUCCESS"
       );
       return {
         message: "Session resumed successfully",
@@ -304,6 +319,12 @@ export class SessionsController {
         admin_username: currentUser?.username || 'admin',
         meta: { reason: moveSessionDto.reason }
       });
+      await this.notificationService.createAndSend(
+        (session as any).user_id,
+        "DEVICE_MOVED",
+        `คุณถูกย้ายไปอุปกรณ์ใหม่`,
+        "INFO"
+      );
       return {
         message: "Session moved successfully",
         session: {
@@ -329,11 +350,19 @@ export class SessionsController {
   @Roles(UserRole.ADMIN)
   @HttpCode(HttpStatus.OK)
   async cancel(@Param("id") id: string) {
-    const session = await this.sessionsService.cancelSession(id);
+    const session: any = await this.sessionsService.cancelSession(id);
+
+    await this.notificationService.createAndSend(
+      session.user_id,
+      "SESSION_CANCELLED",
+      `การใช้งานของคุณถูกยกเลิกโดยผู้ดูแล`,
+      "DANGER"
+    );
+
     return {
       message: "Session cancelled successfully",
       session: {
-        id: (session as any)._id.toString(),
+        id: session._id.toString(),
         status: session.status,
       },
     };

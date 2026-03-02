@@ -333,44 +333,56 @@ export class UsersService {
    * - custom seconds ได้
    */
   async bulkAddTimeToInuseUsers(addSeconds: number) {
-    if (!addSeconds || addSeconds <= 0) {
-      throw new BadRequestException("add_seconds must be > 0");
-    }
+  const seconds = Number(addSeconds) || 0;
 
-    const users = await this.userModel.find({ status: UserStatus.INUSE }).exec();
-
-    for (const u of users) {
-      const devices = Array.isArray(u.devices) ? u.devices : [];
-
-      for (const d of devices) {
-
-        if (d.status === UserStatus.INUSE) {
-          d.total_seconds = (d.total_seconds ?? 0) + addSeconds;
-          d.remaining_seconds = (d.remaining_seconds ?? 0) + addSeconds;
-        }
-      }
-
-      await u.save();
-
-      await this.sessionsService.addTimeToActiveSessions(
-        u._id.toString(),
-        addSeconds
-      );
-    }
-
-    await this.logService.createLog({
-      type: "TIME_ADDED",
-      level: "INFO",
-      message: `เติมเวลาให้ผู้ใช้ที่กำลังใช้งานทั้งหมด (+ ${addSeconds} วินาที)`,
-      meta: { count: users.length, added_seconds: addSeconds },
-    });
-
-    return {
-      message: "Bulk add time success",
-      count: users.length,
-      add_seconds: addSeconds,
-    };
+  if (seconds <= 0) {
+    throw new BadRequestException("add_seconds must be > 0");
   }
+
+  // ⭐ หา user ที่กำลังใช้งาน
+  const users = await this.userModel
+    .find({ status: UserStatus.INUSE })
+    .exec();
+
+  const updatedUsers: any[] = [];
+
+  for (const u of users) {
+    let updated = false;
+
+    const devices = Array.isArray(u.devices) ? u.devices : [];
+
+    // ⭐ เพิ่มเวลาให้ทุก device ที่มี remaining
+    for (const d of devices) {
+      if ((d.remaining_seconds ?? 0) > 0) {
+        d.total_seconds = Number(d.total_seconds ?? 0) + seconds;
+        d.remaining_seconds = Number(d.remaining_seconds ?? 0) + seconds;
+        updated = true;
+      }
+    }
+
+    // ⭐ sync session (สำคัญมาก)
+    await this.sessionsService.addTimeToActiveSessions(
+      u._id.toString(),
+      seconds
+    );
+
+    if (updated) {
+      await u.save();
+      updatedUsers.push(u);
+    }
+  }
+
+  // ⭐ log ระบบ
+  await this.logService.createLog({
+    type: "TIME_ADDED",
+    level: "INFO",
+    message: `เติมเวลาให้ผู้ใช้ที่กำลังใช้งานทั้งหมด (+${seconds}s)`,
+    meta: { count: updatedUsers.length, added_seconds: seconds },
+  });
+
+  // ⭐ RETURN ARRAY → Controller ใช้ loop ได้
+  return updatedUsers;
+}
 
   // users.service.ts
 

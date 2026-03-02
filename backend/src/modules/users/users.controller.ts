@@ -27,6 +27,7 @@ import { AddTimeDto } from "./dto/add-time.dto";
 import { AssignDevicesDto } from "./dto/assign-devices.dto";
 import { BulkAddTimeDto } from "./dto/bulk-add-time.dto";
 import { LogService } from "../log/log.service";
+import { NotificationService } from "../notification/notification.service";
 
 @Controller("users")
 export class UsersController {
@@ -35,7 +36,8 @@ export class UsersController {
   constructor(
     private readonly usersService: UsersService,
     private readonly devicesService: DevicesService,
-    private readonly logService: LogService
+    private readonly logService: LogService,
+    private readonly notificationService: NotificationService
   ) { }
 
   /**
@@ -121,7 +123,17 @@ export class UsersController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
   async addTime(@Param("id") id: string, @Body() dto: AddTimeDto) {
-    return this.usersService.addTime(id, dto.duration, dto.start_time);
+
+    const result = await this.usersService.addTime(id, dto.duration, dto.start_time);
+
+    await this.notificationService.createAndSend(
+      id,
+      "TIME_ADDED",
+      `ผู้ดูแลเพิ่มเวลาให้คุณ ${Math.floor(Number(dto.duration) / 60)} นาที`,
+      "SUCCESS"
+    );
+
+    return result;
   }
 
   /**
@@ -165,19 +177,34 @@ export class UsersController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
   @HttpCode(HttpStatus.OK)
-  async bulkAddTime(@Body() dto: BulkAddTimeDto, @CurrentUser() currentUser: any) {
-    this.logger.log(
-      `[BULK_ADD_TIME] Admin: ${currentUser?.username || "unknown"} adding ${dto.add_seconds}s to INUSE users`
-    );
-    await this.logService.createLog({
-    type: 'TIME_ADDED',
-    level: 'INFO',
-    message: `เติมเวลาแบบกลุ่ม (Bulk) จำนวน ${dto.add_seconds} วินาที ให้ผู้ใช้ที่ INUSE`,
-    admin_username: currentUser?.username || 'admin',
-    meta: { seconds_added: dto.add_seconds }
-  });
+  async bulkAddTime(
+    @Body() dto: BulkAddTimeDto,
+    @CurrentUser() currentUser: any
+  ) {
+    const seconds = Number(dto.add_seconds) || 0;
 
-    return this.usersService.bulkAddTimeToInuseUsers(dto.add_seconds);
+    this.logger.log(
+      `[BULK_ADD_TIME] Admin: ${currentUser?.username || "unknown"} adding ${seconds}s`
+    );
+
+    // ⭐ service return array
+    const users = await this.usersService.bulkAddTimeToInuseUsers(seconds);
+
+    // ⭐ ส่ง notification ให้ user ทีละคน
+    for (const u of users) {
+      await this.notificationService.createAndSend(
+        u._id.toString(),
+        "TIME_ADDED",
+        `ผู้ดูแลเพิ่มเวลาให้คุณ ${Math.floor(seconds / 60)} นาที`,
+        "SUCCESS"
+      );
+    }
+
+    return {
+      message: "Bulk time added successfully",
+      count: users.length,
+      add_seconds: seconds,
+    };
   }
 
   @Get("me")
