@@ -14,6 +14,7 @@ import {
   Pause,
   Play,
   Square,
+  Layers,
 } from "lucide-react";
 import { motion } from "framer-motion";
 import {
@@ -27,6 +28,7 @@ import {
 import { SessionsService } from "@/services/sessions.service";
 import { UserMoveSessionDialog } from "./user-move-session-dialog";
 import { UserDevicesDialog } from "./user-devices-dialog";
+import { UserMultiSessionDialog } from "./user-multi-session-dialog";
 import { User, UserAction } from "@/types/user";
 
 /* ================= STATUS UI ================= */
@@ -61,15 +63,6 @@ function formatHMS(sec: number) {
 
 function formatPrettyTime(sec: number) {
   if (!sec || sec <= 0) return "หมดเวลา";
-  const day = Math.floor(sec / 86400);
-  const hour = Math.floor((sec % 86400) / 3600);
-  const minute = Math.floor((sec % 3600) / 60);
-
-  if (day >= 1) {
-    if (hour > 0) return `${day} วัน ${hour} ชม.`;
-    if (minute > 0) return `${day} วัน ${minute} นาที`;
-    return `${day} วัน`;
-  }
   return formatHMS(sec);
 }
 
@@ -96,47 +89,62 @@ export function UserRow({
   const [showPass, setShowPass] = useState(false);
   const [moveOpen, setMoveOpen] = useState(false);
   const [devicesDialogOpen, setDevicesDialogOpen] = useState(false);
-  const [session, setSession] = useState<any | null>(null);
+  const [multiDialogOpen, setMultiDialogOpen] = useState(false);
+  const [sessions, setSessions] = useState<any[]>([]);
+  const [now, setNow] = useState(() => Date.now());
 
-  /* ================= LOAD SESSION ================= */
+  /* ================= LOAD SESSIONS ================= */
 
-  const loadSession = async () => {
+  const loadSessions = async () => {
     try {
-      const s = await SessionsService.getByUser(user.id);
-      setSession(s || null);
+      const all = await SessionsService.getAll();
+
+      const filtered = (all || []).filter(
+        (s: any) =>
+          s.user_id?._id === user.id &&
+          ["ACTIVE", "PAUSED", "DISCONNECTED"].includes(s.status)
+      );
+
+      setSessions(filtered);
+
+      // 🔥 ถ้าเหลือเครื่องเดียว → ปิด multi dialog อัตโนมัติ
+      if (filtered.length <= 1) {
+        setMultiDialogOpen(false);
+      }
     } catch {
-      setSession(null);
+      setSessions([]);
+      setMultiDialogOpen(false);
     }
   };
 
   useEffect(() => {
-    if (user?.id) loadSession();
-  }, [user?.id, user.status]); // 🔴 สำคัญ: login แล้วโหลดใหม่ทันที
+    if (user?.id) loadSessions();
+  }, [user?.id, user.status]);
 
   /* ================= REALTIME CLOCK ================= */
-
-  const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(t);
   }, []);
 
-  /* ================= BASE REMAINING ================= */
+  /* ================= PRIMARY SESSION ================= */
 
-  const baseRemaining = session?.remaining_seconds
-    ?? userDevices?.[0]?.assign_seconds
-    ?? 0;
+  const primarySession = sessions[0] || null;
 
-  /* ================= CALCULATE REAL TIME ================= */
+  const baseRemaining =
+    primarySession?.remaining_seconds ??
+    userDevices?.[0]?.assign_seconds ??
+    0;
 
   const remaining = useMemo(() => {
-    if (!session) return baseRemaining;
+    if (!primarySession) return baseRemaining;
 
-    let base = session.remaining_seconds ?? 0;
+    let base = primarySession.remaining_seconds ?? 0;
 
-    if (session.status === "ACTIVE") {
-      const ref = session.resume_time || session.start_time;
+    if (primarySession.status === "ACTIVE") {
+      const ref =
+        primarySession.resume_time || primarySession.start_time;
       if (!ref) return base;
 
       const elapsed = Math.floor(
@@ -147,17 +155,16 @@ export function UserRow({
     }
 
     return base;
-  }, [session, baseRemaining, now]);
-
-  /* ================= PROGRESS ================= */
+  }, [primarySession, baseRemaining, now]);
 
   const percent = useMemo(() => {
     const total =
-      session?.total_seconds ||
+      primarySession?.total_seconds ||
       userDevices?.[0]?.assign_seconds ||
       1;
+
     return Math.max(0, Math.min(100, (remaining / total) * 100));
-  }, [remaining, session, userDevices]);
+  }, [remaining, primarySession, userDevices]);
 
   /* ================= DEVICE LABEL ================= */
 
@@ -267,13 +274,14 @@ export function UserRow({
 
             <DropdownMenuContent align="end" className="w-44">
 
-              {session && (
+              {/* 🔥 SINGLE SESSION MODE */}
+              {sessions.length === 1 && primarySession && (
                 <>
-                  {session.status === "ACTIVE" && (
+                  {primarySession.status === "ACTIVE" && (
                     <DropdownMenuItem
                       onClick={async () => {
-                        await SessionsService.pause(session._id);
-                        await loadSession();
+                        await SessionsService.pause(primarySession._id);
+                        await loadSessions();
                         onAction("refresh");
                       }}
                     >
@@ -282,12 +290,12 @@ export function UserRow({
                     </DropdownMenuItem>
                   )}
 
-                  {(session.status === "PAUSED" ||
-                    session.status === "DISCONNECTED") && (
+                  {(primarySession.status === "PAUSED" ||
+                    primarySession.status === "DISCONNECTED") && (
                     <DropdownMenuItem
                       onClick={async () => {
-                        await SessionsService.resume(session._id);
-                        await loadSession();
+                        await SessionsService.resume(primarySession._id);
+                        await loadSessions();
                         onAction("refresh");
                       }}
                     >
@@ -296,17 +304,12 @@ export function UserRow({
                     </DropdownMenuItem>
                   )}
 
-                  <DropdownMenuItem onClick={() => setMoveOpen(true)}>
-                    <ArrowRightLeft size={14} className="mr-2" />
-                    Move
-                  </DropdownMenuItem>
-
                   <DropdownMenuItem
                     className="text-red-500"
                     onClick={async () => {
                       if (!confirm("Cancel session?")) return;
-                      await SessionsService.cancel(session._id);
-                      await loadSession();
+                      await SessionsService.cancel(primarySession._id);
+                      await loadSessions();
                       onAction("refresh");
                     }}
                   >
@@ -316,6 +319,14 @@ export function UserRow({
 
                   <DropdownMenuSeparator />
                 </>
+              )}
+
+              {/* 🔥 MULTI SESSION MODE */}
+              {sessions.length > 1 && (
+                <DropdownMenuItem onClick={() => setMultiDialogOpen(true)}>
+                  <Layers size={14} className="mr-2" />
+                  จัดการหลายเครื่อง
+                </DropdownMenuItem>
               )}
 
               <DropdownMenuItem onClick={() => onAction("assign")}>
@@ -339,10 +350,10 @@ export function UserRow({
 
       <UserMoveSessionDialog
         open={moveOpen}
-        sessionId={session?._id}
+        sessionId={primarySession?._id}
         onClose={() => setMoveOpen(false)}
         onSuccess={() => {
-          loadSession();
+          loadSessions();
           onAction("refresh");
         }}
       />
@@ -352,6 +363,19 @@ export function UserRow({
         onClose={() => setDevicesDialogOpen(false)}
         devices={userDevices}
         deviceMap={deviceMap}
+      />
+
+      <UserMultiSessionDialog
+        open={multiDialogOpen}
+        sessions={sessions}
+        onClose={() => {
+          setMultiDialogOpen(false);
+          loadSessions(); // 🔥 รีโหลดเมื่อปิด dialog
+        }}
+        onRefresh={() => {
+          loadSessions();
+          onAction("refresh");
+        }}
       />
     </>
   );

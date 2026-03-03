@@ -14,7 +14,7 @@ export const SessionsService = {
     }),
 
   // GET /sessions - Get all sessions (Admin only)
-  getAll: () => apiFetch("/sessions"),
+  getAll: () => apiFetch<any[]>("/sessions"),
 
   // GET /sessions/:id - Get session by ID (Admin only)
   getById: (id: string) => apiFetch(`/sessions/${id}`),

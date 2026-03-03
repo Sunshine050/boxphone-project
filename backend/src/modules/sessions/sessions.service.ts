@@ -434,17 +434,17 @@ export class SessionsService {
       actualRemaining = Math.max(0, actualRemaining - elapsed);
     }
 
-    // 🔹 ถ้ายังไม่หมดเวลา → คืนค่าเลย
+    // 🔹 ถ้ายังไม่หมดเวลา → คืนค่า
     if (actualRemaining > 0) return actualRemaining;
 
     // =========================================================
-    // 🎯 TIMEOUT → CLEANUP SESSION + UPDATE HISTORY
+    // 🎯 TIMEOUT CLEANUP
     // =========================================================
 
     const userId = session.user_id?.toString();
     const deviceId = session.device_id?.toString();
 
-    // 🔹 log ก่อน
+    // 🔹 log
     await this.logService.createLog({
       type: "DEVICE_DISCONNECTED",
       level: "WARNING",
@@ -454,7 +454,7 @@ export class SessionsService {
       meta: { reason: "timeout" },
     });
 
-    // 🔹 คืนสถานะเครื่อง
+    // 🔹 คืนสถานะ device
     if (deviceId) {
       await this.deviceModel.findByIdAndUpdate(deviceId, {
         status: DeviceStatus.AVAILABLE,
@@ -462,50 +462,20 @@ export class SessionsService {
       });
     }
 
-    // =========================================================
-    // 🎯 UPDATE USER HISTORY (แก้ bug use_count ไม่เพิ่ม)
-    // =========================================================
+    // 🔹 ลบ session ก่อน
+    await this.sessionModel.findByIdAndDelete(sessionId);
 
-    if (userId && deviceId) {
+    // 🔥 เช็คว่ายังมี ACTIVE session อื่นไหม
+    const stillActive = await this.sessionModel.exists({
+      user_id: userId,
+      status: SessionStatus.ACTIVE,
+    });
 
-      const hasHistory = await this.userModel.findOne({
-        _id: userId,
-        "device_history.device_id": deviceId,
-      });
-
-      if (hasHistory) {
-        // ✔ เพิ่ม use_count
-        await this.userModel.updateOne(
-          {
-            _id: userId,
-            "device_history.device_id": deviceId,
-          },
-          {
-            $inc: { "device_history.$.use_count": 1 },
-            $set: { "device_history.$.last_used_at": new Date() },
-          }
-        );
-      } else {
-        // ✔ push ใหม่ครั้งแรก
-        await this.userModel.updateOne(
-          { _id: userId },
-          {
-            $push: {
-              device_history: {
-                device_id: deviceId,
-                last_used_at: new Date(),
-                use_count: 1,
-              },
-            },
-          }
-        );
-      }
-
-      // 🔹 remove device from active list + reset status
+    // 🔹 ถ้าไม่มี session อื่นแล้ว → ค่อย set user เป็น PENDING
+    if (!stillActive && userId) {
       await this.userModel.updateOne(
         { _id: userId },
         {
-          $pull: { devices: { device_id: deviceId } },
           $set: {
             status: UserStatus.PENDING,
             device_id: null,
@@ -513,9 +483,6 @@ export class SessionsService {
         }
       );
     }
-
-    // 🔹 ลบ session สุดท้าย
-    await this.sessionModel.findByIdAndDelete(sessionId);
 
     return 0;
   }
@@ -544,6 +511,7 @@ export class SessionsService {
     const deviceId = session.device_id;
     const userId = session.user_id;
 
+    // 🔹 คืนสถานะเครื่อง
     if (deviceId) {
       await this.deviceModel.findByIdAndUpdate(deviceId, {
         status: DeviceStatus.AVAILABLE,
@@ -551,16 +519,34 @@ export class SessionsService {
       });
     }
 
+    // 🔹 ลบ session ก่อน
+    await this.sessionModel.findByIdAndDelete(sessionId);
+
+    // 🔥 ดึง device ออกจาก user.devices เสมอ
     await this.userModel.updateOne(
       { _id: userId },
       {
         $pull: { devices: { device_id: deviceId } },
-        $set: {
-          status: UserStatus.PENDING,
-          device_id: null,
-        },
       }
     );
+
+    // 🔥 เช็คว่ายังมี ACTIVE session อื่นไหม
+    const stillActive = await this.sessionModel.exists({
+      user_id: userId,
+      status: SessionStatus.ACTIVE,
+    });
+
+    if (!stillActive) {
+      await this.userModel.updateOne(
+        { _id: userId },
+        {
+          $set: {
+            status: UserStatus.PENDING,
+            device_id: null,
+          },
+        }
+      );
+    }
 
     await this.logService.createLog({
       type: "SESSION_ENDED",
@@ -570,8 +556,6 @@ export class SessionsService {
       target_device_id: deviceId?.toString(),
       meta: { reason: "cancelled" },
     });
-
-    await this.sessionModel.findByIdAndDelete(sessionId);
 
     return session;
   }
