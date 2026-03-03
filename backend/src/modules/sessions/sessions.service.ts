@@ -157,12 +157,13 @@ export class SessionsService {
       );
     }
 
-    // Freeze remaining_seconds - คำนวณเวลาที่เหลือจริงๆ
     const now = new Date();
     const lastResumeTime = session.resume_time || session.start_time;
+
     const elapsedSeconds = Math.floor(
       (now.getTime() - lastResumeTime.getTime()) / 1000
     );
+
     const actualRemaining = Math.max(
       0,
       session.remaining_seconds - elapsedSeconds
@@ -171,12 +172,10 @@ export class SessionsService {
     const updatedSession = await this.sessionModel.findByIdAndUpdate(
       sessionId,
       {
-        status: SessionStatus.DISCONNECTED,
+        status: SessionStatus.PAUSED,   // ⭐ FIX ตรงนี้
         remaining_seconds: actualRemaining,
         pause_time: now,
-        disconnect_reason:
-          reason ||
-          this.configService.get<string>("SESSION_DEFAULT_DISCONNECT_REASON"),
+        disconnect_reason: reason || null,
       },
       { new: true }
     );
@@ -206,6 +205,24 @@ export class SessionsService {
 
     if (session.remaining_seconds <= 0) {
       throw new BadRequestException("Session has no remaining time");
+    }
+
+    if (session.device_id) {
+      const device = await this.deviceModel.findById(session.device_id);
+      if (!device) {
+        throw new NotFoundException("Device not found");
+      }
+
+      if (device.status !== DeviceStatus.AVAILABLE) {
+        throw new ConflictException(
+          "Device is not available to resume session"
+        );
+      }
+
+      await this.deviceModel.findByIdAndUpdate(session.device_id, {
+        status: DeviceStatus.BUSY,
+        current_user_id: session.user_id,
+      });
     }
 
     const updatedSession = await this.sessionModel.findByIdAndUpdate(
@@ -351,35 +368,6 @@ export class SessionsService {
       .exec();
   }
 
-
-  // async getActiveSessionsByUser(userId: string): Promise<Session[]> {
-  //   const sessions = await this.sessionModel.find({
-  //     user_id: userId,
-  //     status: SessionStatus.ACTIVE
-  //   }).exec();
-
-  //   const now = new Date();
-
-  //   for (const session of sessions) {
-  //     const startTime = session.resume_time || session.start_time;
-  //     const elapsedSeconds = Math.floor((now.getTime() - startTime.getTime()) / 1000);
-
-  //     // เวลาที่เหลือจริง = เวลาตั้งต้น - เวลาที่ใช้ไปแล้ว
-  //     const actualRemaining = Math.max(0, session.remaining_seconds - elapsedSeconds);
-
-  //     // อัปเดตค่านี้กลับไปใน Object ที่จะส่งออกไป (แต่อาจจะยังไม่ต้อง Save ลง DB ทันทีเพื่อลด Load)
-  //     (session as any).remaining_seconds = actualRemaining;
-
-  //     // ถ้าน้อยกว่าหรือเท่ากับ 0 ให้สั่งปิด Session ทันที
-  //     if (actualRemaining <= 0) {
-  //       await this.getRemainingTime(session._id.toString());
-  //     }
-  //   }
-
-  //   return sessions;
-  // }
-  // sessions.service.ts
-
   async getActiveSessionsByUser(userId: string): Promise<Session[]> {
     const sessions = await this.sessionModel.find({
       user_id: userId,
@@ -430,66 +418,73 @@ export class SessionsService {
   }
 
   /**
-   * คำนวณเวลาที่เหลือและล้างข้อมูลเมื่อเวลาหมด (Auto-Cleanup)
-   */
+ * คำนวณเวลาที่เหลือและล้างข้อมูลเมื่อเวลาหมด (Auto-Cleanup)
+ */
   async getRemainingTime(sessionId: string): Promise<number> {
     const session = await this.sessionModel.findById(sessionId).exec();
     if (!session) return 0;
 
-    let actualRemaining = session.remaining_seconds;
+    let actualRemaining = session.remaining_seconds ?? 0;
+
+    // 🔹 คำนวณเวลาที่เหลือจริง
     if (session.status === SessionStatus.ACTIVE) {
-      const now = new Date();
-      const lastResumeTime = session.resume_time || session.start_time;
-      const elapsedSeconds = Math.floor((now.getTime() - lastResumeTime.getTime()) / 1000);
-      actualRemaining = Math.max(0, session.remaining_seconds - elapsedSeconds);
+      const now = Date.now();
+      const ref = (session.resume_time || session.start_time)?.getTime?.() ?? now;
+      const elapsed = Math.floor((now - ref) / 1000);
+      actualRemaining = Math.max(0, actualRemaining - elapsed);
     }
 
-    if (actualRemaining <= 0) {
-      const userId = session.user_id;
-      const deviceId = session.device_id;
-      await this.logService.createLog({
-        type: 'DEVICE_DISCONNECTED',
-        level: 'WARNING',
-        message: `สิ้นสุดการใช้งาน: หมดเวลาการใช้งานอุปกรณ์`,
-        target_user_id: session.user_id.toString(),
-        target_device_id: session.device_id.toString(),
-        meta: { reason: 'timeout' }
-      });
-      // A. คืนค่าสถานะเครื่อง
-      if (deviceId) {
-        await this.deviceModel.findByIdAndUpdate(deviceId, {
-          status: DeviceStatus.AVAILABLE,
-          current_user_id: null,
-        }).exec();
-      }
+    // 🔹 ถ้ายังไม่หมดเวลา → คืนค่า
+    if (actualRemaining > 0) return actualRemaining;
 
-      // B. 🎯 อัปเดต User: ดีดเครื่องออก ($pull) และกลับสถานะเป็น PENDING
+    // =========================================================
+    // 🎯 TIMEOUT CLEANUP
+    // =========================================================
+
+    const userId = session.user_id?.toString();
+    const deviceId = session.device_id?.toString();
+
+    // 🔹 log
+    await this.logService.createLog({
+      type: "DEVICE_DISCONNECTED",
+      level: "WARNING",
+      message: `สิ้นสุดการใช้งาน: หมดเวลาการใช้งานอุปกรณ์`,
+      target_user_id: userId,
+      target_device_id: deviceId,
+      meta: { reason: "timeout" },
+    });
+
+    // 🔹 คืนสถานะ device
+    if (deviceId) {
+      await this.deviceModel.findByIdAndUpdate(deviceId, {
+        status: DeviceStatus.AVAILABLE,
+        current_user_id: null,
+      });
+    }
+
+    // 🔹 ลบ session ก่อน
+    await this.sessionModel.findByIdAndDelete(sessionId);
+
+    // 🔥 เช็คว่ายังมี ACTIVE session อื่นไหม
+    const stillActive = await this.sessionModel.exists({
+      user_id: userId,
+      status: SessionStatus.ACTIVE,
+    });
+
+    // 🔹 ถ้าไม่มี session อื่นแล้ว → ค่อย set user เป็น PENDING
+    if (!stillActive && userId) {
       await this.userModel.updateOne(
         { _id: userId },
         {
-          $pull: { devices: { device_id: deviceId } },
-
           $set: {
             status: UserStatus.PENDING,
-            device_id: null
+            device_id: null,
           },
-
-          $push: {
-            device_history: {
-              device_id: deviceId?.toString(),
-              last_used_at: new Date(),
-              use_count: 1
-            }
-          }
         }
-      ).exec();
-
-      // C. ลบ Session
-      await this.sessionModel.findByIdAndDelete(sessionId).exec();
-      return 0;
+      );
     }
 
-    return actualRemaining;
+    return 0;
   }
 
   /**
@@ -513,20 +508,56 @@ export class SessionsService {
       throw new NotFoundException("Session not found");
     }
 
-    const updatedSession = await this.sessionModel.findByIdAndUpdate(
-      sessionId,
-      {
-        status: SessionStatus.CANCELLED,
-        pause_time: new Date(),
-      },
-      { new: true }
-    );
+    const deviceId = session.device_id;
+    const userId = session.user_id;
 
-    if (!updatedSession) {
-      throw new NotFoundException("Session not found after update");
+    // 🔹 คืนสถานะเครื่อง
+    if (deviceId) {
+      await this.deviceModel.findByIdAndUpdate(deviceId, {
+        status: DeviceStatus.AVAILABLE,
+        current_user_id: null,
+      });
     }
 
-    return updatedSession;
+    // 🔹 ลบ session ก่อน
+    await this.sessionModel.findByIdAndDelete(sessionId);
+
+    // 🔥 ดึง device ออกจาก user.devices เสมอ
+    await this.userModel.updateOne(
+      { _id: userId },
+      {
+        $pull: { devices: { device_id: deviceId } },
+      }
+    );
+
+    // 🔥 เช็คว่ายังมี ACTIVE session อื่นไหม
+    const stillActive = await this.sessionModel.exists({
+      user_id: userId,
+      status: SessionStatus.ACTIVE,
+    });
+
+    if (!stillActive) {
+      await this.userModel.updateOne(
+        { _id: userId },
+        {
+          $set: {
+            status: UserStatus.PENDING,
+            device_id: null,
+          },
+        }
+      );
+    }
+
+    await this.logService.createLog({
+      type: "SESSION_ENDED",
+      level: "INFO",
+      message: "Session ถูกยกเลิกโดยผู้ดูแลระบบ",
+      target_user_id: userId.toString(),
+      target_device_id: deviceId?.toString(),
+      meta: { reason: "cancelled" },
+    });
+
+    return session;
   }
 
   /**

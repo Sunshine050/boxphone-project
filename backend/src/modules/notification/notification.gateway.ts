@@ -1,23 +1,39 @@
-import { WebSocketGateway, WebSocketServer, OnGatewayConnection, OnGatewayDisconnect } from '@nestjs/websockets';
-import { Server, Socket } from 'socket.io';
+import {
+  WebSocketGateway,
+  WebSocketServer,
+  OnGatewayConnection,
+  OnGatewayDisconnect
+} from "@nestjs/websockets";
+import { Server, Socket } from "socket.io";
 
-@WebSocketGateway({ cors: { origin: '*' }, namespace: 'notifications' })
-export class NotificationGateway implements OnGatewayConnection, OnGatewayDisconnect {
-  @WebSocketServer() server: Server;
+@WebSocketGateway({
+  cors: { origin: "*" },
+  pingInterval: 25000,
+  pingTimeout: 60000,
+})
+export class NotificationGateway
+  implements OnGatewayConnection, OnGatewayDisconnect
+{
+  @WebSocketServer()
+  server: Server;
 
   handleConnection(client: Socket) {
-    const userId = client.handshake.query.userId;
-    if (userId) {
-      client.join(`user_${userId}`);
-      console.log(`User connected to notification room: user_${userId}`);
+    const userId = client.handshake.query.userId as string;
+
+    if (!userId) {
+      client.disconnect();
+      return;
     }
+
+    client.join(`user_${userId}`);
+    console.log(`🔔 CONNECT user_${userId} (${client.id})`);
   }
 
   handleDisconnect(client: Socket) {
-    console.log('User disconnected from notification');
+    console.log(`❌ DISCONNECT ${client.id}`);
   }
 
-  sendToUser(userId: string, data: any) {
-    this.server.to(`user_${userId}`).emit('new_notification', data);
+  sendToUser(userId: string, payload: any) {
+    this.server.to(`user_${userId}`).emit("new_notification", payload);
   }
 }

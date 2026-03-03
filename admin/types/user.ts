@@ -34,4 +34,4 @@ export type User = {
   }[];
 };
 
-export type UserAction = "assign" | "disconnect" | "delete" | "time";
+export type UserAction = "assign" | "disconnect" | "delete" | "time" | "refresh";

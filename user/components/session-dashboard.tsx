@@ -8,11 +8,22 @@ import { Clock, Smartphone, LogOut, Maximize2 } from "lucide-react"
 import { NotificationBell } from "./notification-bell"
 import { Session } from "@/app/dashboard/page"
 
+<<<<<<< HEAD
 const BASE_URL = (
   process.env.NEXT_PUBLIC_API_BASE_URL ||
   process.env.NEXT_PUBLIC_BACKEND_URL ||
   ""
 ).replace(/\/$/, "")
+=======
+import {
+  Dialog,
+  DialogTrigger,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog"
+>>>>>>> f86868e6e11e90b97677ce3a6e9d109325ba82b2
 
 interface DashboardProps {
   initialSessions: Session[]
@@ -20,6 +31,7 @@ interface DashboardProps {
   refreshData: () => Promise<void>
 }
 
+<<<<<<< HEAD
 /* ==============================
    PHONE THUMBNAIL (mini preview)
 ============================== */
@@ -89,23 +101,41 @@ function PhoneThumbnail({ deviceId }: { deviceId: string }) {
    MAIN DASHBOARD
 ============================== */
 export function SessionDashboard({ initialSessions, lastSyncTimestamp, refreshData }: DashboardProps) {
+=======
+export function SessionDashboard({
+  initialSessions,
+  lastSyncTimestamp,
+  refreshData,
+}: DashboardProps) {
+>>>>>>> f86868e6e11e90b97677ce3a6e9d109325ba82b2
   const router = useRouter()
-  const [selected, setSelected] = useState<Session | null>(initialSessions[0] || null)
+  const [selected, setSelected] = useState<Session | null>(
+    initialSessions[0] || null
+  )
   const [, setTick] = useState(0)
 
-  // UI Heartbeat สั่งให้ UI Re-render ทุกวินาทีเพื่อให้ตัวเลขขยับ
+  /* ================= HEARTBEAT ================= */
+
   useEffect(() => {
-    const timer = setInterval(() => setTick(t => t + 1), 1000)
+    const timer = setInterval(() => setTick((t) => t + 1), 1000)
     return () => clearInterval(timer)
   }, [])
 
-  // ฟังก์ชันคำนวณเวลาที่เหลือจากข้อมูลล่าสุดที่ Page ส่งมาให้
+  /* ================= TIME ================= */
+
   const getRemaining = (s: Session) => {
     let remaining = s.remaining_seconds
+
     if (s.status === "ACTIVE") {
-      const secondsElapsedSinceSync = Math.floor((Date.now() - lastSyncTimestamp) / 1000)
-      remaining = Math.max(0, s.remaining_seconds - secondsElapsedSinceSync)
+      const secondsElapsedSinceSync = Math.floor(
+        (Date.now() - lastSyncTimestamp) / 1000
+      )
+      remaining = Math.max(
+        0,
+        s.remaining_seconds - secondsElapsedSinceSync
+      )
     }
+
     return {
       minutes: Math.floor(remaining / 60),
       seconds: remaining % 60,
@@ -113,24 +143,70 @@ export function SessionDashboard({ initialSessions, lastSyncTimestamp, refreshDa
     }
   }
 
+  /* ================= LOGOUT ================= */
+
   const handleLogout = () => {
     localStorage.clear()
     router.push("/login")
   }
 
+  /* ================= RENDER ================= */
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-blue-950 to-slate-900 text-white">
       <div className="container mx-auto p-6">
+
+        {/* HEADER */}
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-2xl font-bold">CloudPhone Devices</h1>
+
           <div className="flex items-center gap-4">
             <NotificationBell />
-            <Button variant="outline" onClick={handleLogout} className="border-slate-700 hover:bg-slate-800">
-              <LogOut className="h-4 w-4 mr-2" /> Logout
-            </Button>
+
+            {/* ===== LOGOUT DIALOG ===== */}
+            {/* ===== LOGOUT DIALOG ===== */}
+            <Dialog>
+              <DialogTrigger asChild>
+                <Button
+                  variant="outline"
+                  className="border-slate-700 hover:bg-slate-800"
+                >
+                  <LogOut className="h-4 w-4 mr-2" />
+                  ออกจากระบบ
+                </Button>
+              </DialogTrigger>
+
+              <DialogContent className="bg-slate-900 border-slate-800 text-white">
+                <DialogHeader>
+                  <DialogTitle>
+                    ยืนยันการออกจากระบบ
+                  </DialogTitle>
+                </DialogHeader>
+
+                <p className="text-slate-400 text-sm mt-2">
+                  คุณต้องการออกจากระบบใช่หรือไม่?
+                  หากออกจากระบบแล้ว จะต้องเข้าสู่ระบบใหม่อีกครั้ง
+                </p>
+
+                <DialogFooter className="mt-6 flex gap-3">
+                  <Button variant="outline">
+                    ยกเลิก
+                  </Button>
+
+                  <Button
+                    variant="destructive"
+                    onClick={handleLogout}
+                  >
+                    ออกจากระบบ
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+
           </div>
         </div>
 
+        {/* EMPTY */}
         {initialSessions.length === 0 ? (
           <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-10 text-center text-slate-400">
             ยังไม่มีอุปกรณ์ที่ได้รับมอบหมาย กรุณาติดต่อแอดมิน
@@ -138,35 +214,58 @@ export function SessionDashboard({ initialSessions, lastSyncTimestamp, refreshDa
         ) : (
           <div className="flex flex-col md:flex-row gap-6">
 
+<<<<<<< HEAD
             {/* LEFT: SESSION LIST */}
             <div className="w-full md:w-64 space-y-3 flex-shrink-0">
+=======
+            {/* LEFT LIST */}
+            <div className="w-full md:w-72 space-y-3">
+>>>>>>> f86868e6e11e90b97677ce3a6e9d109325ba82b2
               {initialSessions.map((s) => {
-                const { minutes, seconds, expired } = getRemaining(s)
+                const { minutes, seconds, expired } =
+                  getRemaining(s)
+
                 const isActive = selected?._id === s._id
+
                 return (
                   <div
                     key={s._id}
                     onClick={() => setSelected(s)}
+<<<<<<< HEAD
                     className={`cursor-pointer rounded-xl border p-4 transition-all ${isActive ? "border-cyan-500 bg-slate-800" : "border-slate-800 bg-slate-900/70 hover:border-slate-600"
+=======
+                    className={`cursor-pointer rounded-xl border p-4 transition-all ${isActive
+                        ? "border-cyan-500 bg-slate-800"
+                        : "border-slate-800 bg-slate-900/70 hover:border-slate-600"
+>>>>>>> f86868e6e11e90b97677ce3a6e9d109325ba82b2
                       }`}
                   >
-                    <p className="font-semibold truncate">{s.device_id.name}</p>
+                    <p className="font-semibold truncate">
+                      {s.device_id.name}
+                    </p>
+
                     {!expired ? (
                       <div className="flex items-center gap-2 mt-2">
                         <Clock className="h-4 w-4 text-cyan-400" />
                         <span className="font-mono text-cyan-400 text-lg">
-                          {minutes.toString().padStart(2, "0")}:{seconds.toString().padStart(2, "0")}
+                          {minutes.toString().padStart(2, "0")}:
+                          {seconds.toString().padStart(2, "0")}
                         </span>
-                        <Badge className="bg-green-500/20 text-green-400 border-green-500/50">Live</Badge>
+                        <Badge className="bg-green-500/20 text-green-400 border-green-500/50">
+                          Live
+                        </Badge>
                       </div>
                     ) : (
-                      <span className="text-red-400 text-sm mt-2 block">Expired</span>
+                      <span className="text-red-400 text-sm mt-2 block">
+                        Expired
+                      </span>
                     )}
                   </div>
                 )
               })}
             </div>
 
+<<<<<<< HEAD
             {/* RIGHT: DEVICE DETAIL + LIVE PREVIEW */}
             {selected && (() => {
               const { minutes, seconds, expired } = getRemaining(selected)
@@ -208,6 +307,36 @@ export function SessionDashboard({ initialSessions, lastSyncTimestamp, refreshDa
                 </div>
               )
             })()}
+=======
+            {/* RIGHT DETAIL */}
+            {selected && (
+              <Card className="flex-1 bg-slate-900/70 border-slate-800">
+                <CardContent className="p-8">
+                  <div className="flex items-start justify-between mb-6">
+                    <div>
+                      <h2 className="text-3xl font-bold mb-2">
+                        {selected.device_id.name}
+                      </h2>
+                      <p className="text-slate-400">
+                        Ready for remote access
+                      </p>
+                    </div>
+                    <Smartphone className="h-12 w-12 text-slate-700" />
+                  </div>
+
+                  <Button
+                    onClick={() =>
+                      router.push(`/control/${selected._id}`)
+                    }
+                    className="w-full md:w-auto px-8 py-6 text-lg bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500"
+                  >
+                    <Smartphone className="mr-2 h-5 w-5" />
+                    Open Full Control
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
+>>>>>>> f86868e6e11e90b97677ce3a6e9d109325ba82b2
           </div>
         )}
       </div>

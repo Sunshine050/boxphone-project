@@ -23,6 +23,7 @@ import { ConnectDeviceDto } from "./dto/connect-device.dto";
 import { AddTimeDto } from "./dto/add-time.dto";
 import { AssignDevicesDto } from "./dto/assign-devices.dto";
 import { BulkAddTimeDto } from "./dto/bulk-add-time.dto";
+import { LogService } from "../log/log.service";
 
 @Controller("users")
 export class UsersController {
@@ -31,6 +32,7 @@ export class UsersController {
   constructor(
     private readonly usersService: UsersService,
     private readonly devicesService: DevicesService,
+    private readonly logService: LogService
   ) { }
 
   /**
@@ -79,7 +81,9 @@ export class UsersController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
   async addTime(@Param("id") id: string, @Body() dto: AddTimeDto) {
-    return this.usersService.addTime(id, dto.duration, dto.start_time);
+    const result = await this.usersService.addTime(id, dto.duration, dto.start_time);
+
+    return result;
   }
 
   /**
@@ -115,10 +119,18 @@ export class UsersController {
   @Roles(UserRole.ADMIN)
   @HttpCode(HttpStatus.OK)
   async bulkAddTime(@Body() dto: BulkAddTimeDto, @CurrentUser() currentUser: any) {
-    const adminUsername = currentUser?.username || "unknown";
-    this.logger.log(`[BULK_ADD_TIME] Admin: ${adminUsername} adding ${dto.add_seconds}s to INUSE users`);
+    this.logger.log(
+      `[BULK_ADD_TIME] Admin: ${currentUser?.username || "unknown"} adding ${dto.add_seconds}s to INUSE users`
+    );
+    await this.logService.createLog({
+      type: 'TIME_ADDED',
+      level: 'INFO',
+      message: `เติมเวลาแบบกลุ่ม (Bulk) จำนวน ${dto.add_seconds} วินาที ให้ผู้ใช้ที่ INUSE`,
+      admin_username: currentUser?.username || 'admin',
+      meta: { seconds_added: dto.add_seconds }
+    });
 
-    return this.usersService.bulkAddTimeToInuseUsers(dto.add_seconds, adminUsername);
+    return this.usersService.bulkAddTimeToInuseUsers(dto.add_seconds);
   }
 
   @Get("me")

@@ -257,11 +257,14 @@ export class UsersService {
     const user: any = await this.findById(userId);
     if (!user) throw new NotFoundException("User not found");
 
-    if (!Array.isArray(items) || items.length === 0) {
-      throw new BadRequestException("items is required");
+    if (!Array.isArray(items)) {
+      throw new BadRequestException("items must be an array");
     }
 
-    // ✅ validate device exists
+    // 🔴 device เดิมของ user
+    const oldDevices = Array.isArray(user.devices) ? user.devices : [];
+
+    // 🔴 validate device exists + availability
     for (const item of items) {
       if (!item.device_id) {
         throw new BadRequestException("device_id is required");
@@ -272,14 +275,21 @@ export class UsersService {
         throw new NotFoundException(`Device not found: ${item.device_id}`);
       }
 
-      // ✅ NEW: device ต้อง AVAILABLE เท่านั้น
-      if (device.status !== DeviceStatus.AVAILABLE) {
+      // ✔ อนุญาตถ้าเป็น device เดิมของ user
+      const alreadyAssignedToUser = oldDevices.some(
+        (d: any) => d.device_id === item.device_id
+      );
+
+      if (
+        device.status !== DeviceStatus.AVAILABLE &&
+        !alreadyAssignedToUser
+      ) {
         throw new ConflictException(
           `Device ${device.name || item.device_id} is not available`
         );
       }
 
-      // ✅ NEW: device ห้ามถูก assign ให้ user คนอื่น
+      // ✔ ห้ามซ้ำกับ user คนอื่น
       const assignedUser = await this.userModel.findOne({
         _id: { $ne: userId },
         "devices.device_id": item.device_id,
@@ -290,32 +300,31 @@ export class UsersService {
           `Device ${device.name || item.device_id} is already assigned`
         );
       }
-
     }
 
-    const devicesArr = Array.isArray(user.devices) ? user.devices : [];
+    // 🔴 map device ใหม่
+    const newDeviceIds = new Set(items.map(i => i.device_id));
 
-    for (const item of items) {
+    // 🔴 หา device ที่ถูกลบ
+    const removedDevices = oldDevices.filter(
+      (d: any) => !newDeviceIds.has(d.device_id)
+    );
+
+    // 🔴 สร้าง device list ใหม่ (replace logic)
+    const updatedDevices = items.map(item => {
       const seconds = Math.max(0, Number(item.assign_seconds ?? 0));
 
-      const exists = devicesArr.find((d: any) => d.device_id === item.device_id);
+      return {
+        device_id: item.device_id,
+        total_seconds: seconds,
+        remaining_seconds: seconds,
+        started_at: null,
+        status: UserStatus.PENDING,
+      };
+    });
 
-      if (!exists) {
-        devicesArr.push({
-          device_id: item.device_id,
-          total_seconds: seconds,
-          remaining_seconds: seconds,
-          started_at: null,
-          status: UserStatus.PENDING,
-        });
-      } else {
-        exists.total_seconds = seconds;
-        exists.remaining_seconds = seconds;
-        exists.started_at = null;
-      }
-    }
-
-    user.devices = devicesArr;
+    // 🔴 replace devices ทั้งชุด
+    user.devices = updatedDevices;
     await user.save();
 
     await this.logService.createLog({
@@ -326,6 +335,30 @@ export class UsersService {
       admin_username: adminUsername,
       meta: { devices: items }
     });
+
+    // 🔴 log device removed
+    for (const d of removedDevices) {
+      await this.logService.createLog({
+        type: "DEVICE_DISCONNECTED",
+        level: "INFO",
+        message: "ลบการมอบหมายอุปกรณ์ออกจากผู้ใช้",
+        target_user_id: userId,
+        target_device_id: d.device_id,
+        meta: { reason: "unassigned" }
+      });
+    }
+
+    // 🔴 log device assigned/updated
+    for (const item of items) {
+      await this.logService.createLog({
+        type: "DEVICE_ASSIGNED",
+        level: "SUCCESS",
+        message: "มอบหมายอุปกรณ์ให้ผู้ใช้สำเร็จ",
+        target_user_id: userId,
+        target_device_id: item.device_id,
+        meta: { assign_seconds: item.assign_seconds }
+      });
+    }
 
     return {
       message: "Assigned devices successfully",
@@ -339,44 +372,56 @@ export class UsersService {
    * - custom seconds ได้
    */
   async bulkAddTimeToInuseUsers(addSeconds: number, adminUsername: string = "admin") {
-    if (!addSeconds || addSeconds <= 0) {
+    const seconds = Number(addSeconds) || 0;
+
+    if (seconds <= 0) {
       throw new BadRequestException("add_seconds must be > 0");
     }
 
-    const users = await this.userModel.find({ status: UserStatus.INUSE }).exec();
+    // ⭐ หา user ที่กำลังใช้งาน
+    const users = await this.userModel
+      .find({ status: UserStatus.INUSE })
+      .exec();
+
+    const updatedUsers: any[] = [];
 
     for (const u of users) {
+      let updated = false;
+
       const devices = Array.isArray(u.devices) ? u.devices : [];
 
+      // ⭐ เพิ่มเวลาให้ทุก device ที่มี remaining
       for (const d of devices) {
-
-        if (d.status === UserStatus.INUSE) {
-          d.total_seconds = (d.total_seconds ?? 0) + addSeconds;
-          d.remaining_seconds = (d.remaining_seconds ?? 0) + addSeconds;
+        if (d.status === UserStatus.INUSE || (d.remaining_seconds ?? 0) > 0) {
+          d.total_seconds = Number(d.total_seconds ?? 0) + seconds;
+          d.remaining_seconds = Number(d.remaining_seconds ?? 0) + seconds;
+          updated = true;
         }
       }
 
-      await u.save();
-
+      // ⭐ sync session (สำคัญมาก)
       await this.sessionsService.addTimeToActiveSessions(
         u._id.toString(),
-        addSeconds
+        seconds
       );
+
+      if (updated) {
+        await u.save();
+        updatedUsers.push(u);
+      }
     }
 
+    // ⭐ log ระบบ
     await this.logService.createLog({
       type: "TIME_ADDED",
       level: "INFO",
-      message: `เติมเวลาแบบกลุ่ม (Bulk) จำนวน ${addSeconds} วินาที ให้ผู้ใช้ที่ INUSE`,
+      message: `เติมเวลาแบบกลุ่ม (Bulk) จำนวน ${seconds} วินาที ให้ผู้ใช้ที่ INUSE`,
       admin_username: adminUsername,
-      meta: { count: users.length, added_seconds: addSeconds },
+      meta: { count: updatedUsers.length, added_seconds: seconds },
     });
 
-    return {
-      message: "Bulk add time success",
-      count: users.length,
-      add_seconds: addSeconds,
-    };
+    // ⭐ RETURN ARRAY → Controller ใช้ loop ได้
+    return updatedUsers;
   }
 
   // users.service.ts
@@ -393,7 +438,7 @@ export class UsersService {
         }
         return {
           ...d,
-          device_id: d.device_id.toString(),
+          device_id: !!d.device_id ? d.device_id.toString() : null,
           remaining_seconds: currentRem,
         };
       });
