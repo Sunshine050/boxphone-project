@@ -9,32 +9,13 @@ import {
   type OverviewDevice,
 } from "@/components/overview-phone-grid";
 import { StatusSummaryCards } from "@/components/status-summary-cards";
+import { AssignUserDialog } from "@/components/assign-user-dialog";
 import { Button } from "@/components/ui/button";
 import { DevicesService } from "@/services/devices.service";
 import { UsersService } from "@/services/users.service";
+import { normalizeDeviceStatus, toOverviewStatus, type OverviewStatus } from "@/lib/device-status";
 
-export type DeviceStatus =
-  | "all"
-  | "in-use"
-  | "available"
-  | "error"
-  | "maintenance";
-
-function mapDeviceStatus(status: string): Exclude<DeviceStatus, "all"> {
-  const s = String(status || "").trim().toUpperCase();
-
-  if (s === "AVAILABLE") return "available";
-
-  if (s === "INUSE") {
-    return "in-use";
-  }
-
-  if (s === "OFFLINE" || s === "DISCONNECTED" || s === "MAINTENANCE") {
-    return "maintenance";
-  }
-
-  return "error";
-}
+export type DeviceStatus = "all" | OverviewStatus;
 
 export default function AdminOverviewPage() {
   const [query, setQuery] = useState("");
@@ -44,6 +25,7 @@ export default function AdminOverviewPage() {
   const [devices, setDevices] = useState<OverviewDevice[]>([]);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
+  const [deviceToAssign, setDeviceToAssign] = useState<OverviewDevice | null>(null);
 
   const userMap = useMemo(() => {
     return users.reduce((acc, u) => {
@@ -64,7 +46,8 @@ export default function AdminOverviewPage() {
       const mapped: OverviewDevice[] = (data || []).map((d: any) => ({
         id: d.id || d._id,
         name: d.name,
-        status: mapDeviceStatus(d.status),
+        serial_number: d.serial_number,
+        status: toOverviewStatus(normalizeDeviceStatus(d.status)),
         user: d.current_user_id ?? undefined,
       }));
 
@@ -199,8 +182,20 @@ export default function AdminOverviewPage() {
           statusFilter={statusFilter}
           devices={devices}
           userMap={userMap}
+          onAssign={(device) => setDeviceToAssign(device)}
         />
       )}
+
+      {/* Dialog มอบหมายเครื่อง (จากภาพรวม) */}
+      <AssignUserDialog
+        open={!!deviceToAssign}
+        device={deviceToAssign ? { id: deviceToAssign.id, name: deviceToAssign.name, serial_number: deviceToAssign.serial_number } : null}
+        onClose={() => setDeviceToAssign(null)}
+        onSuccess={() => {
+          setDeviceToAssign(null);
+          fetchDevices();
+        }}
+      />
     </motion.div>
   );
 }

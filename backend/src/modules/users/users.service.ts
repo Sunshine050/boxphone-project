@@ -295,6 +295,27 @@ export class UsersService {
 
   // 🔴 replace devices ทั้งชุด
   user.devices = updatedDevices;
+
+  // 🔴 อัปเดต device_history (จำนวนครั้งที่ user ใช้เครื่องนี้) เพื่อให้ตัวเลข "ใช้ X ครั้ง" ขึ้นตาม
+  const history = Array.isArray(user.device_history) ? user.device_history : [];
+  const now = new Date();
+  for (const item of items) {
+    const devId = String(item.device_id).trim();
+    if (!devId) continue;
+    const existing = history.find((h: any) => String(h.device_id) === devId);
+    if (existing) {
+      existing.use_count = (existing.use_count ?? 0) + 1;
+      existing.last_used_at = now;
+    } else {
+      history.push({
+        device_id: devId,
+        last_used_at: now,
+        use_count: 1,
+      });
+    }
+  }
+  user.device_history = history;
+
   await user.save();
 
   // 🔴 log device removed
@@ -331,8 +352,9 @@ export class UsersService {
   /**
    * ✅ NEW: เพิ่มเวลาให้ user ที่กำลังใช้งานทั้งหมด (INUSE) ทีเดียว
    * - custom seconds ได้
+   * - note หมายเหตุ (ส่งไปใน notification ให้ user)
    */
-  async bulkAddTimeToInuseUsers(addSeconds: number) {
+  async bulkAddTimeToInuseUsers(addSeconds: number, note?: string) {
   const seconds = Number(addSeconds) || 0;
 
   if (seconds <= 0) {
@@ -368,7 +390,7 @@ export class UsersService {
 
     if (updated) {
       await u.save();
-      updatedUsers.push(u);
+      updatedUsers.push({ user: u, note });
     }
   }
 
@@ -376,11 +398,11 @@ export class UsersService {
   await this.logService.createLog({
     type: "TIME_ADDED",
     level: "INFO",
-    message: `เติมเวลาให้ผู้ใช้ที่กำลังใช้งานทั้งหมด (+${seconds}s)`,
-    meta: { count: updatedUsers.length, added_seconds: seconds },
+    message: `เติมเวลาให้ผู้ใช้ที่กำลังใช้งานทั้งหมด (+${seconds}s)${note ? ` หมายเหตุ: ${note}` : ""}`,
+    meta: { count: updatedUsers.length, added_seconds: seconds, note: note || null },
   });
 
-  // ⭐ RETURN ARRAY → Controller ใช้ loop ได้
+  // ⭐ RETURN ARRAY → Controller ใช้ส่ง notification พร้อม note
   return updatedUsers;
 }
 

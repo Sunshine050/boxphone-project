@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Logger, Res, Query } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Logger, Res, Query, BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Response } from 'express';
 import { execFile, exec } from 'child_process';
@@ -149,17 +149,20 @@ export class DevicesController {
                         });
                         this.logger.log(`[SYNC] Created new device: ${name} (${serial})`);
                     } else {
-                        // อัปเดต device ที่มีอยู่ - ใช้ id จาก device
+                        // อัปเดต device ที่มีอยู่ — ไม่ทับสถานะ แจ้งซ่อม/ชำรุด
                         const deviceId = (device as any)._id?.toString() || (device as any).id?.toString();
+                        const currentStatus = (device as any).status;
+                        const keepManualStatus = currentStatus === 'UNDER_REPAIR' || currentStatus === 'DAMAGED';
                         if (deviceId) {
-                            await this.devicesService.update(deviceId, {
+                            const updatePayload: any = {
                                 name,
                                 model,
-                                status,
                                 metadata: xiaoweiDevice,
                                 last_connected_at: new Date(),
-                            });
-                            this.logger.log(`[SYNC] Updated device: ${name} (${serial})`);
+                            };
+                            if (!keepManualStatus) updatePayload.status = status;
+                            await this.devicesService.update(deviceId, updatePayload);
+                            this.logger.log(`[SYNC] Updated device: ${name} (${serial})${keepManualStatus ? ' [status kept]' : ''}`);
                         }
                     }
 
@@ -280,6 +283,27 @@ export class DevicesController {
     @Roles(UserRole.ADMIN)
     async update(@Param('id') id: string, @Body() updateDeviceDto: any): Promise<Device> {
         return this.devicesService.update(id, updateDeviceDto);
+    }
+
+    /**
+     * Mark device: แจ้งซ่อม (UNDER_REPAIR) หรือ ชำรุด (DAMAGED)
+     * PATCH /devices/:id/mark-status
+     */
+    @Patch(':id/mark-status')
+    @UseGuards(RolesGuard)
+    @Roles(UserRole.ADMIN)
+    async markStatus(
+        @Param('id') id: string,
+        @Body() body: { status: 'UNDER_REPAIR' | 'DAMAGED' | 'AVAILABLE' },
+        @CurrentUser() currentUser: any,
+    ) {
+        const status = body?.status;
+        if (!status || !['UNDER_REPAIR', 'DAMAGED', 'AVAILABLE'].includes(status)) {
+            throw new BadRequestException('status must be one of: UNDER_REPAIR, DAMAGED, AVAILABLE');
+        }
+        this.logger.log(`[MARK_STATUS] Admin: ${currentUser?.username || 'unknown'} set device ${id} → ${status}`);
+        const device = await this.devicesService.update(id, { status });
+        return { message: 'Device status updated', device };
     }
 
     

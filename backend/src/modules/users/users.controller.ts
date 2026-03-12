@@ -182,28 +182,32 @@ export class UsersController {
     @CurrentUser() currentUser: any
   ) {
     const seconds = Number(dto.add_seconds) || 0;
+    const note = typeof dto.note === "string" ? dto.note.trim() : undefined;
 
     this.logger.log(
-      `[BULK_ADD_TIME] Admin: ${currentUser?.username || "unknown"} adding ${seconds}s`
+      `[BULK_ADD_TIME] Admin: ${currentUser?.username || "unknown"} adding ${seconds}s${note ? `, note: ${note}` : ""}`
     );
 
-    // ⭐ service return array
-    const users = await this.usersService.bulkAddTimeToInuseUsers(seconds);
+    const result = await this.usersService.bulkAddTimeToInuseUsers(seconds, note);
 
-    // ⭐ ส่ง notification ให้ user ทีละคน
-    for (const u of users) {
+    const baseMessage = `ผู้ดูแลเพิ่มเวลาให้คุณ ${Math.floor(seconds / 60)} นาที`;
+    const message = note ? `${baseMessage}\nหมายเหตุ: ${note}` : baseMessage;
+
+    for (const item of result) {
+      const u = item.user;
       await this.notificationService.createAndSend(
         u._id.toString(),
         "TIME_ADDED",
-        `ผู้ดูแลเพิ่มเวลาให้คุณ ${Math.floor(seconds / 60)} นาที`,
+        message,
         "SUCCESS"
       );
     }
 
     return {
       message: "Bulk time added successfully",
-      count: users.length,
+      count: result.length,
       add_seconds: seconds,
+      note: note ?? null,
     };
   }
 

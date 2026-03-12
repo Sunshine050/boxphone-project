@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/dialog";
 
 import { Plus, Trash2 } from "lucide-react";
+import { normalizeDeviceStatus } from "@/lib/device-status";
 
 /** ✅ Packages */
 type PackageKey = "1h" | "1d" | "1w" | "1m" | "1y" | "custom";
@@ -98,7 +99,7 @@ export function UserAssignDevicesTimeDialog({
         id: d.id || d._id,
         name: d.name,
         serial_number: d.serial_number,
-        status: d.status,
+        status: normalizeDeviceStatus(d.status) as DeviceItem["status"],
       }));
       setDevices(mapped);
       return mapped;

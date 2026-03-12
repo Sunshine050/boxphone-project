@@ -53,10 +53,10 @@ export const UsersService = {
     }),
 
   // POST /users/bulk-add-time - Add time to all INUSE users (Admin only)
-  bulkAddTimeToInuse: (addSeconds: number) =>
+  bulkAddTimeToInuse: (addSeconds: number, note?: string) =>
     apiFetch(`/users/bulk-add-time`, {
       method: "POST",
-      body: { add_seconds: addSeconds },
+      body: { add_seconds: addSeconds, ...(note && note.trim() ? { note: note.trim() } : {}) },
     }),
 
   // POST /users/:id/connect-device - Connect user to device (Admin only)

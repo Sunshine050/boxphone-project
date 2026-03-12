@@ -8,13 +8,10 @@ import {
   Eye,
   EyeOff,
   Settings2,
-  ChevronDown,
-  ArrowRightLeft,
   MoreVertical,
   Pause,
   Play,
   Square,
-  Layers,
 } from "lucide-react";
 import { motion } from "framer-motion";
 import {
@@ -27,9 +24,8 @@ import {
 
 import { SessionsService } from "@/services/sessions.service";
 import { UserMoveSessionDialog } from "./user-move-session-dialog";
-import { UserDevicesDialog } from "./user-devices-dialog";
-import { UserMultiSessionDialog } from "./user-multi-session-dialog";
 import { User, UserAction } from "@/types/user";
+import { escapeHtml } from "@/lib/sanitize";
 
 /* ================= STATUS UI ================= */
 
@@ -61,11 +57,6 @@ function formatHMS(sec: number) {
   )}:${String(s).padStart(2, "0")}`;
 }
 
-function formatPrettyTime(sec: number) {
-  if (!sec || sec <= 0) return "หมดเวลา";
-  return formatHMS(sec);
-}
-
 /* ===================================================== */
 
 export function UserRow({
@@ -75,6 +66,7 @@ export function UserRow({
   onAction,
   userDevices = [],
   deviceMap = {},
+  sessionsRefreshKey = 0,
 }: {
   user: User;
   index: number;
@@ -85,11 +77,10 @@ export function UserRow({
     assign_seconds?: number;
   }[];
   deviceMap?: Record<string, any>;
+  sessionsRefreshKey?: number;
 }) {
   const [showPass, setShowPass] = useState(false);
   const [moveOpen, setMoveOpen] = useState(false);
-  const [devicesDialogOpen, setDevicesDialogOpen] = useState(false);
-  const [multiDialogOpen, setMultiDialogOpen] = useState(false);
   const [sessions, setSessions] = useState<any[]>([]);
   const [now, setNow] = useState(() => Date.now());
 
@@ -106,20 +97,14 @@ export function UserRow({
       );
 
       setSessions(filtered);
-
-      // 🔥 ถ้าเหลือเครื่องเดียว → ปิด multi dialog อัตโนมัติ
-      if (filtered.length <= 1) {
-        setMultiDialogOpen(false);
-      }
     } catch {
       setSessions([]);
-      setMultiDialogOpen(false);
     }
   };
 
   useEffect(() => {
     if (user?.id) loadSessions();
-  }, [user?.id, user.status]);
+  }, [user?.id, user.status, sessionsRefreshKey]);
 
   /* ================= REALTIME CLOCK ================= */
 
@@ -132,48 +117,29 @@ export function UserRow({
 
   const primarySession = sessions[0] || null;
 
-  const baseRemaining =
-    primarySession?.remaining_seconds ??
-    userDevices?.[0]?.assign_seconds ??
-    0;
-
-  const remaining = useMemo(() => {
-    if (!primarySession) return baseRemaining;
-
-    let base = primarySession.remaining_seconds ?? 0;
-
-    if (primarySession.status === "ACTIVE") {
-      const ref =
-        primarySession.resume_time || primarySession.start_time;
+  /** คำนวณเวลาที่เหลือของแต่ละ session (รองรับ ACTIVE = นับจาก resume/start) */
+  const getRemainingForSession = (s: any) => {
+    if (!s) return 0;
+    const base = s.remaining_seconds ?? 0;
+    if (s.status === "ACTIVE") {
+      const ref = s.resume_time || s.start_time;
       if (!ref) return base;
-
       const elapsed = Math.floor(
         (now - new Date(ref).getTime()) / 1000
       );
-
       return Math.max(0, base - elapsed);
     }
-
     return base;
-  }, [primarySession, baseRemaining, now]);
+  };
 
-  const percent = useMemo(() => {
-    const total =
-      primarySession?.total_seconds ||
-      userDevices?.[0]?.assign_seconds ||
-      1;
-
-    return Math.max(0, Math.min(100, (remaining / total) * 100));
-  }, [remaining, primarySession, userDevices]);
-
-  /* ================= DEVICE LABEL ================= */
-
-  const firstDeviceLabel = useMemo(() => {
-    if (!userDevices?.length) return "-";
-    const id = userDevices[0].device_id;
-    const meta = deviceMap[id];
-    return meta?.name || `..${String(id).slice(-4)}`;
-  }, [userDevices, deviceMap]);
+  /** ชื่อเครื่องจาก session (populate หรือ deviceMap) */
+  const getDeviceLabel = (s: any) => {
+    if (!s) return "-";
+    const id =
+      s.device_id?._id ?? s.device_id ?? "";
+    const name = s.device_id?.name ?? deviceMap[id]?.name;
+    return name || (id ? `..${String(id).slice(-4)}` : "-");
+  };
 
   const isSelf = currentUserId && user.id === currentUserId;
 
@@ -187,8 +153,8 @@ export function UserRow({
         transition={{ delay: index * 0.05 }}
         className="border-b"
       >
-        <td className="p-4 font-medium">{user.name}</td>
-        <td className="text-center font-mono text-sm">{user.username}</td>
+        <td className="p-4 font-medium" title={escapeHtml(user.name)}>{user.name}</td>
+        <td className="text-center font-mono text-sm" title={escapeHtml(user.username)}>{user.username}</td>
 
         {/* PASSWORD */}
         <td className="text-center">
@@ -223,42 +189,115 @@ export function UserRow({
           </Badge>
         </td>
 
-        {/* TIME */}
-        <td className="text-center">
-          {remaining > 0 ? (
-            <div className="flex flex-col items-center gap-1">
-              <span className="text-xs font-medium">
-                {formatPrettyTime(remaining)}
+        {/* เครื่อง + เวลา — แสดงแบบสะอาด (เครื่องเดียวหรือหลายเครื่อง) */}
+        <td className="p-3 align-top text-center">
+          <div className="inline-block text-left space-y-1.5">
+            {sessions.length > 0 ? (
+              sessions.map((s, idx) => {
+                const remainingSec = getRemainingForSession(s);
+                const total = s.total_seconds || 1;
+                const percent = Math.max(
+                  0,
+                  Math.min(100, (remainingSec / total) * 100)
+                );
+                const isActive = s.status === "ACTIVE";
+                return (
+                  <div
+                    key={s._id}
+                    className={`flex items-center gap-3 py-1.5 ${
+                      idx > 0 ? "border-t border-border/40" : ""
+                    }`}
+                  >
+                    <span className="w-24 shrink-0 truncate text-left text-sm text-foreground" title={escapeHtml(getDeviceLabel(s))}>
+                      {getDeviceLabel(s)}
+                    </span>
+                    <span className="w-16 shrink-0 font-mono text-xs tabular-nums text-muted-foreground">
+                      {formatHMS(remainingSec)}
+                    </span>
+                    <div className="h-1 w-14 shrink-0 rounded-full bg-muted overflow-hidden">
+                      <div
+                        className={`h-full transition-[width] ${
+                          percent < 20 ? "bg-red-500" : "bg-emerald-500"
+                        }`}
+                        style={{ width: `${percent}%` }}
+                      />
+                    </div>
+                    <div className="flex shrink-0 gap-0.5">
+                      {isActive && (
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-7 w-7 text-muted-foreground hover:text-amber-600"
+                          onClick={async () => {
+                            await SessionsService.pause(s._id);
+                            await loadSessions();
+                            onAction("refresh");
+                          }}
+                          title="Pause"
+                        >
+                          <Pause size={12} />
+                        </Button>
+                      )}
+                      {!isActive && (s.status === "PAUSED" || s.status === "DISCONNECTED") && (
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-7 w-7 text-muted-foreground hover:text-emerald-600"
+                          onClick={async () => {
+                            await SessionsService.resume(s._id);
+                            await loadSessions();
+                            onAction("refresh");
+                          }}
+                          title="Resume"
+                        >
+                          <Play size={12} />
+                        </Button>
+                      )}
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                        onClick={async () => {
+                          if (!confirm("ยกเลิก session นี้?")) return;
+                          await SessionsService.cancel(s._id);
+                          await loadSessions();
+                          onAction("refresh");
+                        }}
+                        title="Cancel"
+                      >
+                        <Square size={12} />
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })
+            ) : userDevices?.length > 0 ? (
+              userDevices.map((d, i) => {
+                const meta = deviceMap[d.device_id];
+                const sec = d.assign_seconds ?? 0;
+                return (
+                  <div
+                    key={d.device_id || i}
+                    className={`flex items-center gap-3 py-1.5 ${
+                      i > 0 ? "border-t border-border/40" : ""
+                    }`}
+                  >
+                    <span className="w-24 shrink-0 truncate text-left text-sm text-foreground">
+                      {meta?.name || `..${String(d.device_id).slice(-4)}`}
+                    </span>
+                    <span className="w-16 font-mono text-xs text-muted-foreground">
+                      {formatHMS(sec)}
+                    </span>
+                    <span className="text-[11px] text-muted-foreground italic">
+                      ยังไม่เริ่ม
+                    </span>
+                  </div>
+                );
+              })
+            ) : (
+              <span className="text-muted-foreground text-sm">
+                —
               </span>
-              <div className="h-1.5 w-28 bg-muted rounded-full overflow-hidden">
-                <div
-                  className={`h-full ${
-                    percent < 20 ? "bg-red-500" : "bg-green-500"
-                  }`}
-                  style={{ width: `${percent}%` }}
-                />
-              </div>
-            </div>
-          ) : (
-            <span className="text-muted-foreground">
-              ยังไม่มีเวลาใช้งาน
-            </span>
-          )}
-        </td>
-
-        {/* DEVICE */}
-        <td className="text-center">
-          <div className="flex items-center justify-center gap-2">
-            <span>{firstDeviceLabel}</span>
-
-            {userDevices.length > 1 && (
-              <Button
-                size="icon"
-                variant="ghost"
-                onClick={() => setDevicesDialogOpen(true)}
-              >
-                <ChevronDown size={16} />
-              </Button>
             )}
           </div>
         </td>
@@ -273,62 +312,6 @@ export function UserRow({
             </DropdownMenuTrigger>
 
             <DropdownMenuContent align="end" className="w-44">
-
-              {/* 🔥 SINGLE SESSION MODE */}
-              {sessions.length === 1 && primarySession && (
-                <>
-                  {primarySession.status === "ACTIVE" && (
-                    <DropdownMenuItem
-                      onClick={async () => {
-                        await SessionsService.pause(primarySession._id);
-                        await loadSessions();
-                        onAction("refresh");
-                      }}
-                    >
-                      <Pause size={14} className="mr-2" />
-                      Pause
-                    </DropdownMenuItem>
-                  )}
-
-                  {(primarySession.status === "PAUSED" ||
-                    primarySession.status === "DISCONNECTED") && (
-                    <DropdownMenuItem
-                      onClick={async () => {
-                        await SessionsService.resume(primarySession._id);
-                        await loadSessions();
-                        onAction("refresh");
-                      }}
-                    >
-                      <Play size={14} className="mr-2" />
-                      Resume
-                    </DropdownMenuItem>
-                  )}
-
-                  <DropdownMenuItem
-                    className="text-red-500"
-                    onClick={async () => {
-                      if (!confirm("Cancel session?")) return;
-                      await SessionsService.cancel(primarySession._id);
-                      await loadSessions();
-                      onAction("refresh");
-                    }}
-                  >
-                    <Square size={14} className="mr-2" />
-                    Cancel
-                  </DropdownMenuItem>
-
-                  <DropdownMenuSeparator />
-                </>
-              )}
-
-              {/* 🔥 MULTI SESSION MODE */}
-              {sessions.length > 1 && (
-                <DropdownMenuItem onClick={() => setMultiDialogOpen(true)}>
-                  <Layers size={14} className="mr-2" />
-                  จัดการหลายเครื่อง
-                </DropdownMenuItem>
-              )}
-
               <DropdownMenuItem onClick={() => onAction("assign")}>
                 <Settings2 size={14} className="mr-2" />
                 Assign device/time
@@ -358,25 +341,6 @@ export function UserRow({
         }}
       />
 
-      <UserDevicesDialog
-        open={devicesDialogOpen}
-        onClose={() => setDevicesDialogOpen(false)}
-        devices={userDevices}
-        deviceMap={deviceMap}
-      />
-
-      <UserMultiSessionDialog
-        open={multiDialogOpen}
-        sessions={sessions}
-        onClose={() => {
-          setMultiDialogOpen(false);
-          loadSessions(); // 🔥 รีโหลดเมื่อปิด dialog
-        }}
-        onRefresh={() => {
-          loadSessions();
-          onAction("refresh");
-        }}
-      />
     </>
   );
 }

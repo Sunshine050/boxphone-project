@@ -7,6 +7,8 @@ export enum DeviceStatus {
     AVAILABLE = 'AVAILABLE',
     BUSY = 'INUSE',
     OFFLINE = 'OFFLINE',
+    UNDER_REPAIR = 'UNDER_REPAIR',
+    DAMAGED = 'DAMAGED',
 }
 
 @Schema({ timestamps: true })

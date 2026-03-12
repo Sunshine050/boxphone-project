@@ -36,4 +36,9 @@ export class NotificationGateway
   sendToUser(userId: string, payload: any) {
     this.server.to(`user_${userId}`).emit("new_notification", payload);
   }
+
+  /** แจ้งให้ฝั่ง user รีเฟรช session (เมื่อ admin pause/resume/cancel หรือหมดเวลา) */
+  sendSessionUpdate(userId: string) {
+    this.server.to(`user_${userId}`).emit("session_updated", {});
+  }
 }

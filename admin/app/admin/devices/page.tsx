@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/dialog";
 import { DevicesService } from "@/services/devices.service";
 import { UsersService } from "@/services/users.service";
+import { normalizeDeviceStatus } from "@/lib/device-status";
 
 export default function DeviceManagementPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -47,24 +48,13 @@ export default function DeviceManagementPage() {
         UsersService.getAll()
       ]);
 
-      const mapped: Device[] = deviceData.map((d: any) => {
-        const raw = String(d.status || "").trim().toUpperCase();
-
-        let normalized: Device["status"];
-
-        if (raw === "AVAILABLE") normalized = "AVAILABLE";
-        else if (raw === "BUSY" || raw === "INUSE" || raw === "ACTIVE") normalized = "BUSY";
-        else if (raw === "OFFLINE") normalized = "OFFLINE";
-        else normalized = "AVAILABLE";
-
-        return {
-          id: d.id || d._id,
-          name: d.name,
-          serial_number: d.serial_number,
-          status: normalized,
-          current_user_id: d.current_user_id ?? null,
-        };
-      });
+      const mapped: Device[] = deviceData.map((d: any) => ({
+        id: d.id || d._id,
+        name: d.name,
+        serial_number: d.serial_number,
+        status: normalizeDeviceStatus(d.status),
+        current_user_id: d.current_user_id ?? null,
+      }));
 
       setDevices(mapped);
       setUsers(userData);
@@ -83,6 +73,15 @@ export default function DeviceManagementPage() {
     if (!ok) return;
 
     await DevicesService.delete(device.id);
+    await fetchDevices();
+  };
+
+  const handleMarkStatus = async (device: Device, status: "UNDER_REPAIR" | "DAMAGED" | "AVAILABLE") => {
+    const labels = { UNDER_REPAIR: "แจ้งซ่อม", DAMAGED: "ชำรุด", AVAILABLE: "คืนสถานะเป็นว่าง" };
+    const ok = confirm(`ตั้งค่าอุปกรณ์ "${device.name}" เป็น "${labels[status]}"?`);
+    if (!ok) return;
+
+    await DevicesService.markStatus(device.id, status);
     await fetchDevices();
   };
 
@@ -128,6 +127,7 @@ export default function DeviceManagementPage() {
             setDialogOpen(true);
           }}
           onDelete={handleDeleteDevice}
+          onMarkStatus={handleMarkStatus}
         />
       )}
 

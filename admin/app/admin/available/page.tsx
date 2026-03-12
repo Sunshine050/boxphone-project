@@ -7,12 +7,13 @@ import { DevicesService } from "@/services/devices.service";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Smartphone, RefreshCw } from "lucide-react";
+import { normalizeDeviceStatus, type DeviceStatusUI } from "@/lib/device-status";
 
 export type AvailableDevice = {
   id: string;
   name: string;
   serial_number: string;
-  status: "AVAILABLE" | "BUSY" | "OFFLINE";
+  status: DeviceStatusUI;
   model?: string;
   sdk_version?: number;
 };
@@ -32,7 +33,7 @@ export default function AvailableDevicesPage() {
         id: d.id || d._id,
         name: d.name,
         serial_number: d.serial_number,
-        status: d.status,
+        status: normalizeDeviceStatus(d.status),
         model: d.model,
         sdk_version: d.sdk_version,
       }));

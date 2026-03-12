@@ -7,6 +7,7 @@ import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { useEffect, useMemo, useState } from "react";
 import { DevicesService } from "@/services/devices.service";
+import { normalizeDeviceStatus, type DeviceStatusUI } from "@/lib/device-status";
 
 /* ================= TYPES ================= */
 
@@ -20,7 +21,7 @@ interface BackendDevice {
   _id: string;
   name: string;
   serial_number: string;
-  status: "AVAILABLE" | "BUSY" | "OFFLINE";
+  status: DeviceStatusUI;
   model?: string;
   sdk_version?: number;
   current_user_id?: string;
@@ -46,8 +47,13 @@ export function StatusSummaryCards() {
     const fetchDevices = async () => {
       try {
         setLoading(true);
-        const data = await DevicesService.getAll();
-        setDevices((data || []) as BackendDevice[]);
+        const data = (await DevicesService.getAll()) as any[];
+        const normalized = (data || []).map((d: any) => ({
+          ...d,
+          _id: d._id || d.id,
+          status: normalizeDeviceStatus(d.status),
+        })) as BackendDevice[];
+        setDevices(normalized);
       } catch (error) {
         console.error("Failed to fetch devices:", error);
         setDevices([]);
@@ -64,7 +70,7 @@ export function StatusSummaryCards() {
       inUse: devices.filter((d) => d.status === "BUSY").length,
       available: devices.filter((d) => d.status === "AVAILABLE").length,
       error: devices.filter((d) => d.status === "OFFLINE").length,
-      maintenance: 0, // TODO: add status in backend later
+      maintenance: devices.filter((d) => d.status === "UNDER_REPAIR" || d.status === "DAMAGED").length,
     };
   }, [devices]);
 

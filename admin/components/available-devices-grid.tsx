@@ -105,13 +105,12 @@ export function AvailableDevicesGrid({
         ))}
       </motion.div>
 
-      {selected && (
-        <AssignUserDialog
-          device={selected}
-          onClose={onCloseDialog}
-          onSuccess={onSuccess}
-        />
-      )}
+      <AssignUserDialog
+        open={!!selected}
+        device={selected}
+        onClose={onCloseDialog}
+        onSuccess={onSuccess}
+      />
     </>
   );
 }
