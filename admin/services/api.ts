@@ -1,4 +1,6 @@
 // Admin Panel API Service — ใช้ env เท่านั้น (ห้าม hardcode URL)
+import { getToken, removeToken } from "@/lib/cookies";
+
 export const BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL || process.env.NEXT_PUBLIC_BACKEND_URL || "";
 
@@ -23,10 +25,7 @@ export async function apiFetch<T>(
 
   const { method = "GET", body } = options;
 
-  const token =
-    typeof window !== "undefined"
-      ? localStorage.getItem("access_token")
-      : null;
+  const token = typeof window !== "undefined" ? getToken() : null;
 
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -54,6 +53,9 @@ export async function apiFetch<T>(
   }
 
   if (!res.ok) {
+    if (res.status === 401 && typeof window !== "undefined") {
+      removeToken();
+    }
     const error = await res.json().catch(() => ({}));
     throw new Error(error.message || "API Error");
   }

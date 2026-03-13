@@ -1,4 +1,5 @@
 import { apiFetch } from "@/lib/api";
+import { setToken, clearAuthCookies } from "@/lib/cookies";
 
 export const AuthService = {
   async login(username: string, password: string) {
@@ -11,7 +12,7 @@ export const AuthService = {
       auth: false, // ❗ login ไม่มี token
     });
 
-    localStorage.setItem("access_token", res.access_token);
+    setToken(res.access_token);
     localStorage.setItem("user", JSON.stringify(res.user));
 
     return res.user;
@@ -23,7 +24,7 @@ export const AuthService = {
   },
 
   logout() {
-    localStorage.removeItem("access_token");
+    clearAuthCookies();
     localStorage.removeItem("user");
   },
 };

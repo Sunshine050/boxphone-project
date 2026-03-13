@@ -9,6 +9,7 @@ import { Clock, Smartphone, LogOut } from "lucide-react"
 import { NotificationBell } from "./notification-bell"
 import { Session } from "@/app/dashboard/page"
 import { escapeHtml } from "@/lib/sanitize"
+import { AuthService } from "@/services/auth.service"
 
 import {
   Dialog,
@@ -17,6 +18,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
+  DialogClose,
 } from "@/components/ui/dialog"
 
 interface DashboardProps {
@@ -82,7 +84,7 @@ export function SessionDashboard({
   /* ================= LOGOUT ================= */
 
   const handleLogout = () => {
-    localStorage.clear()
+    AuthService.logout()
     router.push("/login")
   }
 
@@ -125,10 +127,11 @@ export function SessionDashboard({
                 </p>
 
                 <DialogFooter className="mt-6 flex gap-3">
-                  <Button variant="outline">
-                    ยกเลิก
-                  </Button>
-
+                  <DialogClose asChild>
+                    <Button variant="outline" className="border-slate-600 hover:bg-slate-800">
+                      ยกเลิก
+                    </Button>
+                  </DialogClose>
                   <Button
                     variant="destructive"
                     onClick={handleLogout}

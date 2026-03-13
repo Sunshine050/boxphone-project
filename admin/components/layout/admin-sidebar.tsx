@@ -17,6 +17,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useSidebar } from "@/components/layout/admin-sidebar-context";
 import { useState } from "react";
 import { LogoutConfirmDialog } from "./logout-confirm-dialog";
+import { clearAuthCookies } from "@/lib/cookies";
 
 /* ===== เมนูภาษาไทย ===== */
 
@@ -182,7 +183,7 @@ export function AdminSidebar() {
         open={logoutOpen}
         onClose={() => setLogoutOpen(false)}
         onConfirm={() => {
-          // TODO: clear token / cookie / session
+          clearAuthCookies();
           window.location.href = "/login";
         }}
       />

@@ -18,21 +18,24 @@ const DiscordIcon = ({ className }: { className?: string }) => (
 
 interface LoginFormProps {
   onSubmit: (username: string, password: string) => Promise<void> | void;
+  error?: string;
+  loading?: boolean;
 }
 
-export function LoginForm({ onSubmit }: LoginFormProps) {
+export function LoginForm({ onSubmit, error = "", loading: externalLoading = false }: LoginFormProps) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [internalLoading, setInternalLoading] = useState(false);
+  const loading = externalLoading || internalLoading;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
+    setInternalLoading(true);
     try {
       await onSubmit(username, password);
     } finally {
-      setLoading(false);
+      setInternalLoading(false);
     }
   };
 
@@ -114,6 +117,12 @@ export function LoginForm({ onSubmit }: LoginFormProps) {
                   </button>
                 </div>
               </div>
+
+              {error ? (
+                <p className="text-sm text-red-400 text-center" role="alert">
+                  {error}
+                </p>
+              ) : null}
 
               <Button
                 type="submit"
