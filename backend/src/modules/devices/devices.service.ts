@@ -22,7 +22,22 @@ export class DevicesService {
     ) { }
 
     async findAll(): Promise<Device[]> {
-        return this.deviceModel.find().sort({ last_connected_at: -1 }).exec();
+        const devices = await this.deviceModel.find().sort({ last_connected_at: -1 }).exec();
+
+        // ==========================================
+        // 🔴 MOCK DEVICE 20 (สำหรับทดสอบ 20 จอ) 🔴
+        // ลบโค้ดบล็อกข้างล่างนี้ออกได้เลยครับหลังจากแก้ Boxphone จริงเสร็จ
+        devices.push({
+            _id: "mock_device_id_20_0000",
+            serial_number: "3875cf71253f",
+            name: "Device 3875cf71253f...",
+            model: "SM-N960F",
+            status: DeviceStatus.AVAILABLE,
+            last_connected_at: new Date()
+        } as any);
+        // ==========================================
+
+        return devices;
     }
 
     async register(deviceId: string, info: any): Promise<Device> {
@@ -49,6 +64,21 @@ export class DevicesService {
     }
 
     async findOne(id: string): Promise<Device | null> {
+        // ==========================================
+        // 🔴 MOCK DEVICE 20 (สำหรับทดสอบ 20 จอ) 🔴
+        // ลบโค้ดบล็อกนี้ออกพร้อมกับข้างบน
+        if (id === "mock_device_id_20_0000") {
+            return {
+                _id: "mock_device_id_20_0000",
+                serial_number: "3875cf71253f",
+                name: "Device 3875cf71253f...",
+                model: "SM-N960F",
+                status: DeviceStatus.AVAILABLE,
+                last_connected_at: new Date()
+            } as any;
+        }
+        // ==========================================
+
         return this.deviceModel.findById(id).exec();
     }
 
