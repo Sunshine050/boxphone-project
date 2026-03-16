@@ -642,51 +642,59 @@ export class SessionsService {
     const user = await this.userModel.findById(userId).exec();
     if (!user || !user.devices) return [];
 
-    for (const d of user.devices) {
-      if (d.status === 'PENDING') {
-        const deviceId = d.device_id;
+    // ป้องกัน CastError จาก mock_device_id_* หรือ id ที่ไม่ใช่ ObjectId
+    const mongoose = await import("mongoose");
 
-        const device = await this.deviceModel.findOneAndUpdate(
-          { _id: deviceId, status: DeviceStatus.AVAILABLE },
-          { $set: { status: DeviceStatus.BUSY, current_user_id: userId } },
-          { new: true }
+    for (const d of user.devices as any[]) {
+      if (d.status !== "PENDING") continue;
+
+      const deviceId = d.device_id;
+      if (!deviceId || !mongoose.isValidObjectId(deviceId)) {
+        this.logger.warn(
+          `[AUTO_START] Skip invalid device_id="${deviceId}" for user=${userId}`,
         );
-
-        if (device) {
-          // 1. สร้าง Session
-          await this.logService.createLog({
-            type: 'DEVICE_ASSIGNED',
-            level: 'SUCCESS',
-            message: `ผู้ใช้เริ่มเข้าใช้งานอุปกรณ์`,
-            target_user_id: userId,
-            target_device_id: deviceId.toString(),
-          });
-
-          await this.sessionModel.create({
-            user_id: userId,
-            device_id: deviceId,
-            package: "ASSIGNED",
-            total_seconds: d.total_seconds,
-            remaining_seconds: d.remaining_seconds,
-            status: SessionStatus.ACTIVE,
-            start_time: new Date(),
-            max_move_count: 3
-          });
-
-          // 2. 🎯 อัปเดต User: เปลี่ยนสถานะรวมเป็น INUSE และอัปเดตสถานะเครื่องใน Array
-          await this.userModel.updateOne(
-            { _id: userId, "devices.device_id": deviceId },
-            {
-              $set: {
-                status: UserStatus.INUSE, // ทำให้ Admin เห็นไฟเขียว
-                "devices.$.status": UserStatus.INUSE,
-                "devices.$.started_at": new Date()
-              }
-            }
-          );
-        }
+        continue;
       }
+
+      const device = await this.deviceModel.findOneAndUpdate(
+        { _id: deviceId, status: DeviceStatus.AVAILABLE },
+        { $set: { status: DeviceStatus.BUSY, current_user_id: userId } },
+        { new: true },
+      );
+
+      if (!device) continue;
+
+      await this.logService.createLog({
+        type: "DEVICE_ASSIGNED",
+        level: "SUCCESS",
+        message: `ผู้ใช้เริ่มเข้าใช้งานอุปกรณ์`,
+        target_user_id: userId,
+        target_device_id: deviceId.toString(),
+      });
+
+      await this.sessionModel.create({
+        user_id: userId,
+        device_id: deviceId,
+        package: "ASSIGNED",
+        total_seconds: d.total_seconds,
+        remaining_seconds: d.remaining_seconds,
+        status: SessionStatus.ACTIVE,
+        start_time: new Date(),
+        max_move_count: 3,
+      });
+
+      await this.userModel.updateOne(
+        { _id: userId, "devices.device_id": deviceId },
+        {
+          $set: {
+            status: UserStatus.INUSE,
+            "devices.$.status": UserStatus.INUSE,
+            "devices.$.started_at": new Date(),
+          },
+        },
+      );
     }
+
     return this.getActiveSessionsByUser(userId);
   }
 
