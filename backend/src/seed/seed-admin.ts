@@ -3,32 +3,42 @@ import { ConfigService } from "@nestjs/config";
 import { UsersService } from "../modules/users/users.service";
 
 /**
- * Seed Admin User
+ * Seed / Reset Admin User
+ * - ถ้าไม่มี admin -> สร้างใหม่
+ * - ถ้ามีอยู่แล้ว -> อัปเดตรหัสผ่านและ role ตามค่าใน .env
  */
 export async function seedAdmin(app: INestApplication) {
+  console.log("[SeedAdmin] start");
+
   const usersService = app.get(UsersService);
   const configService = app.get(ConfigService);
 
   const adminUsername = configService.get<string>("ADMIN_USERNAME");
   const adminPassword = configService.get<string>("ADMIN_PASSWORD");
 
-  if (!adminUsername || !adminPassword) {
-    console.warn("⚠️ ADMIN_USERNAME or ADMIN_PASSWORD not found");
-    return;
-  }
-
-  const existingAdmin = await usersService.findByUsername(adminUsername);
-  if (existingAdmin) {
-    console.log("✓ Admin user already exists");
-    return;
-  }
-
-  // ✅ seed admin ต้องเป็น ADMIN
-  await usersService.createAdmin({
-    name: "Administrator",
-    username: adminUsername,
-    password: adminPassword,
+  console.log("[SeedAdmin] ENV", {
+    ADMIN_USERNAME: adminUsername,
+    hasPassword: !!adminPassword,
   });
 
-  console.log(`✓ Admin user created: ${adminUsername}`);
+  if (!adminUsername || !adminPassword) {
+    console.warn(
+      "[SeedAdmin] ⚠️ ADMIN_USERNAME or ADMIN_PASSWORD not found in .env – skip seeding admin",
+    );
+    return;
+  }
+
+  try {
+    const admin = await usersService.createAdmin({
+      name: "Administrator",
+      username: adminUsername,
+      password: adminPassword,
+    });
+
+    console.log(
+      `[SeedAdmin] ✅ Admin user ensured: username="${admin.username}" (password resetตาม .env)`,
+    );
+  } catch (e: any) {
+    console.error("[SeedAdmin] ❌ Failed to seed admin user:", e?.message || e);
+  }
 }

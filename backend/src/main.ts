@@ -6,14 +6,14 @@ import { seedAdmin } from "./seed/seed-admin";
 import { getValidationPipeConfig, getLoggerConfig } from "./config/app.config";
 
 /**
- * Main Entry Point
- *
- * เพิ่ม:
- * 1. ValidationPipe - Auto validate DTO ทุก Request
- * 2. seedAdmin() - สร้าง Admin User ครั้งแรก (ถ้ายังไม่มี)
- * 3. Global Logger - Log ทุก request และ error
- * 4. CORS Configuration - จาก config file
- */
+ 
+Main Entry Point*
+เพิ่ม:
+ValidationPipe - Auto validate DTO ทุก Request
+seedAdmin() - สร้าง Admin User ครั้งแรก (ถ้ายังไม่มี)
+Global Logger - Log ทุก request และ error
+CORS Configuration - จาก config file
+*/
 async function bootstrap() {
   const logger = new Logger("Bootstrap");
 
@@ -27,7 +27,7 @@ async function bootstrap() {
   // Validation Pipe Configuration
   app.useGlobalPipes(new ValidationPipe(getValidationPipeConfig()));
 
-  
+
   app.enableCors({
     origin: (origin, callback) => {
       // Allow all origins in development
@@ -49,9 +49,7 @@ async function bootstrap() {
   await app.listen(port, "0.0.0.0");
 
   logger.log(`✅ Application is running on: ${await app.getUrl()}`);
-  logger.log(
-    `📝 Logging enabled - All requests and errors will be shown in terminal`
-  );
+  logger.log("📝 Logging enabled - All requests and errors will be shown in terminal");
 
   // Seed Admin User
   logger.log("👤 Seeding admin user...");
