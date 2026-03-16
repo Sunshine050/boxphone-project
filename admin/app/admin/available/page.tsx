@@ -52,8 +52,11 @@ export default function AvailableDevicesPage() {
   const [syncing, setSyncing] = useState(false);
 
   // ✅ เอาเฉพาะเครื่องที่พร้อมใช้งาน
+  const [devices, setDevices] = useState<AvailableDevice[]>([]);
+  const [loading, setLoading] = useState(false);
+
   const availableDevices = useMemo(() => {
-    return devices.filter((d) => d.status === "AVAILABLE");
+    return devices.filter((d: AvailableDevice) => d.status === "AVAILABLE");
   }, [devices]);
 
   const handleSyncFromXiaowei = async () => {
@@ -124,3 +127,7 @@ export default function AvailableDevicesPage() {
     </motion.div>
   );
 }
+function setLoading(arg0: boolean) {
+  throw new Error("Function not implemented.");
+}
+
