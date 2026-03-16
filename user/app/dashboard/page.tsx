@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { apiFetch } from "@/lib/api"
 import { getNotificationSocket } from "@/lib/socket-client"
+import { playNotificationSound } from "@/lib/notification-sound"
 import { toast } from "sonner"
 import { SessionDashboard } from "@/components/session-dashboard"
 
@@ -39,7 +40,7 @@ export default function DashboardPage() {
     }
   }, [router])
 
-  // 2. Initial Load & Socket Notification
+  // 2. Initial Load & Socket: แจ้งเตือน real-time + เสียง, session_updated ให้รีเฟรชโดยไม่ต้อง reload
   useEffect(() => {
     loadSessions()
 
@@ -47,18 +48,31 @@ export default function DashboardPage() {
     if (!userStr) return
     try {
       const userData = JSON.parse(userStr)
-      const userId = userData.id
-      if (userId) {
-        const socket = getNotificationSocket(userId)
-        socket.on("new_notification", (data: any) => {
-          toast[data.type === 'WARNING' ? 'error' : 'success'](data.title, {
-            description: data.message,
-            duration: 5000,
-          })
+      const userId = userData?.id
+      if (!userId) return
+
+      const socket = getNotificationSocket(userId)
+
+      socket.on("new_notification", (data: any) => {
+        playNotificationSound()
+        toast[data.type === "WARNING" || data.type === "DANGER" ? "error" : "success"](data.title ?? "แจ้งเตือน", {
+          description: data.message,
+          duration: 5000,
         })
-        return () => { socket.disconnect() }
+      })
+
+      socket.on("session_updated", () => {
+        loadSessions()
+      })
+
+      return () => {
+        socket.off("new_notification")
+        socket.off("session_updated")
+        socket.disconnect()
       }
-    } catch (e) { console.error("Socket error:", e) }
+    } catch (e) {
+      console.error("Socket error:", e)
+    }
   }, [loadSessions])
 
   // 3. แก้บัคจอดับ: Sync ทันทีที่กลับมาเปิดหน้าจอ

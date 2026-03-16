@@ -23,33 +23,35 @@ export class AuthService {
      */
 
     async login(loginDto: LoginDto) {
-        const { username } = loginDto;
+        const username = typeof loginDto.username === 'string'
+            ? loginDto.username.trim().slice(0, 256)
+            : '';
 
         this.logger.log(`[LOGIN] Attempt username="${username}"`);
 
-        // 1. หา user
+        if (!username) {
+            throw new UnauthorizedException('Invalid credentials');
+        }
+
         const user = await this.usersService.findByUsername(username);
 
         if (!user) {
-            this.logger.warn(`[LOGIN] ❌ User not found: "${username}"`);
-            throw new UnauthorizedException("Invalid credentials");
+            this.logger.warn(`[LOGIN] ❌ User not found`);
+            throw new UnauthorizedException('Invalid credentials');
         }
 
         this.logger.debug(
             `[LOGIN] User found id=${(user as any)._id.toString()} role=${user.role}`
         );
 
-        // 2. ตรวจ password
         const isValid = await bcrypt.compare(
             loginDto.password,
             user.password_hash
         );
 
         if (!isValid) {
-            this.logger.warn(
-                `[LOGIN] ❌ Invalid password for username="${username}"`
-            );
-            throw new UnauthorizedException("Invalid credentials");
+            this.logger.warn(`[LOGIN] ❌ Invalid password`);
+            throw new UnauthorizedException('Invalid credentials');
         }
 
         // 3. สร้าง JWT payload
@@ -64,9 +66,7 @@ export class AuthService {
         // 4. sign token
         const token = this.jwtService.sign(payload);
 
-        this.logger.log(
-            `[LOGIN] ✅ Success username="${username}" id=${userId} role=${user.role}`
-        );
+        this.logger.log(`[LOGIN] ✅ Success id=${userId} role=${user.role}`);
 
         // 5. response (❗ frontend จะใช้ id ไม่ใช่ sub)
         return {

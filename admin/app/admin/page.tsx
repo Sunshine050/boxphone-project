@@ -9,64 +9,60 @@ import {
   type OverviewDevice,
 } from "@/components/overview-phone-grid";
 import { StatusSummaryCards } from "@/components/status-summary-cards";
+import { AssignUserDialog } from "@/components/assign-user-dialog";
 import { Button } from "@/components/ui/button";
 import { DevicesService } from "@/services/devices.service";
 import { UsersService } from "@/services/users.service";
+import { normalizeDeviceStatus, toOverviewStatus, type OverviewStatus } from "@/lib/device-status";
 
-import useSWR from "swr";
-
-export type DeviceStatus =
-  | "all"
-  | "in-use"
-  | "available"
-  | "error"
-  | "maintenance";
-
-function mapDeviceStatus(status: string): Exclude<DeviceStatus, "all"> {
-  const s = String(status || "").trim().toUpperCase();
-
-  if (s === "AVAILABLE") return "available";
-
-  if (s === "INUSE") return "in-use";
-
-  if (s === "OFFLINE" || s === "DISCONNECTED" || s === "MAINTENANCE") {
-    return "maintenance";
-  }
-
-  return "error";
-}
+export type DeviceStatus = "all" | OverviewStatus;
 
 export default function AdminOverviewPage() {
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<DeviceStatus>("all");
-  const [syncing, setSyncing] = useState(false);
 
-  const { data: rawDevices, error: devicesError, isLoading: isDevicesLoading, mutate: mutateDevices } = useSWR('/api/devices', () => DevicesService.getAll(), { refreshInterval: 10000 });
-  const { data: rawUsers, error: usersError, isLoading: isUsersLoading, mutate: mutateUsers } = useSWR('/api/users', () => UsersService.getAll(), { refreshInterval: 10000 });
-
-  const fetchError = (devicesError || usersError)?.message || null;
-  const loading = (isDevicesLoading || isUsersLoading) && !rawDevices && !rawUsers;
-
-  const users = rawUsers || [];
-  const devices = useMemo(() => {
-    return (rawDevices || []).map((d: any) => ({
-      id: d.id || d._id,
-      name: d.name,
-      status: mapDeviceStatus(d.status),
-      user: d.current_user_id ?? undefined,
-    }));
-  }, [rawDevices]);
-
-  const fetchDevices = async () => {
-    await Promise.all([mutateDevices(), mutateUsers()]);
-  };
+  const [users, setUsers] = useState<any[]>([]);
+  const [devices, setDevices] = useState<OverviewDevice[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
+  const [deviceToAssign, setDeviceToAssign] = useState<OverviewDevice | null>(null);
 
   const userMap = useMemo(() => {
-    return users.reduce((acc: any, u: any) => {
+    return users.reduce((acc, u) => {
       acc[u.id || u._id] = u.name;
       return acc;
     }, {} as Record<string, string>);
   }, [users]);
+
+  const fetchDevices = async () => {
+    setLoading(true);
+    setFetchError(null);
+    try {
+      const [data, userData] = await Promise.all([
+        DevicesService.getAll(),
+        UsersService.getAll(),
+      ]);
+
+      const mapped: OverviewDevice[] = (data || []).map((d: any) => ({
+        id: d.id || d._id,
+        name: d.name,
+        serial_number: d.serial_number,
+        status: toOverviewStatus(normalizeDeviceStatus(d.status)),
+        user: d.current_user_id ?? undefined,
+      }));
+
+      setDevices(mapped);
+      setUsers(userData);
+    } catch (e: any) {
+      setFetchError(e?.message || "ไม่สามารถโหลดข้อมูลได้");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchDevices();
+  }, []);
 
   /** ✅ Summary counts (ส่งให้ cards ได้ ถ้าอยากใช้ต่อ) */
   const summary = useMemo(() => {
@@ -101,20 +97,20 @@ export default function AdminOverviewPage() {
             variant="default"
             onClick={async () => {
               try {
-                setSyncing(true);
+                setLoading(true);
                 const result = await DevicesService.syncFromXiaowei();
                 alert(`Sync สำเร็จ! พบ ${result.total} เครื่อง, Sync แล้ว ${result.synced} เครื่อง`);
                 await fetchDevices();
               } catch (error: any) {
                 alert(`Sync ไม่สำเร็จ: ${error.message}`);
               } finally {
-                setSyncing(false);
+                setLoading(false);
               }
             }}
-            disabled={syncing || loading}
+            disabled={loading}
             className="shrink-0"
           >
-            {syncing ? "กำลัง Sync..." : "Sync จากเสี่ยวเหว๋ย"}
+            {loading ? "กำลัง Sync..." : "Sync จากเสี่ยวเหว๋ย"}
           </Button>
 
           {/* ✅ refresh button */}
@@ -186,8 +182,20 @@ export default function AdminOverviewPage() {
           statusFilter={statusFilter}
           devices={devices}
           userMap={userMap}
+          onAssign={(device) => setDeviceToAssign(device)}
         />
       )}
+
+      {/* Dialog มอบหมายเครื่อง (จากภาพรวม) */}
+      <AssignUserDialog
+        open={!!deviceToAssign}
+        device={deviceToAssign ? { id: deviceToAssign.id, name: deviceToAssign.name, serial_number: deviceToAssign.serial_number } : null}
+        onClose={() => setDeviceToAssign(null)}
+        onSuccess={() => {
+          setDeviceToAssign(null);
+          fetchDevices();
+        }}
+      />
     </motion.div>
   );
 }

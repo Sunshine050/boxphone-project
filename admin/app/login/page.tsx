@@ -4,6 +4,8 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { LoginForm } from "@/components/login-form";
 import { AuthService } from "@/services/auth.service";
+import { getSafeLoginErrorMessage, sanitizeLoginInput } from "@/lib/login-error";
+import { setToken } from "@/lib/cookies";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -15,20 +17,19 @@ export default function LoginPage() {
     setIsLoading(true);
     setError("");
 
+    const { username: u, password: p } = sanitizeLoginInput(username, password);
+
     try {
-      // backend ใช้ username → map จาก email
       const res: any = await AuthService.login({
-        username,
-        password,
+        username: u,
+        password: p,
       });
 
-      // เก็บ token
-      localStorage.setItem("access_token", res.access_token);
-
-      // redirect
+      setToken(res.access_token);
       router.push("/admin");
     } catch (err: any) {
-      setError(err.message || "เข้าสู่ระบบไม่สำเร็จ");
+      setError(getSafeLoginErrorMessage(err));
+    } finally {
       setIsLoading(false);
     }
   };

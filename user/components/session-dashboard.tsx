@@ -1,12 +1,15 @@
 "use client"
 
-import { useEffect, useRef, useState, useCallback } from "react"
+import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
+import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Clock, Smartphone, LogOut, Maximize2 } from "lucide-react"
+import { Clock, Smartphone, LogOut } from "lucide-react"
 import { NotificationBell } from "./notification-bell"
 import { Session } from "@/app/dashboard/page"
+import { escapeHtml } from "@/lib/sanitize"
+import { AuthService } from "@/services/auth.service"
 
 import {
   Dialog,
@@ -15,8 +18,8 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
+  DialogClose,
 } from "@/components/ui/dialog"
-import { Card, CardContent } from "./ui/card"
 
 interface DashboardProps {
   initialSessions: Session[]
@@ -30,10 +33,24 @@ export function SessionDashboard({
   refreshData,
 }: DashboardProps) {
   const router = useRouter()
+  const [sessions, setSessions] = useState<Session[]>(initialSessions)
   const [selected, setSelected] = useState<Session | null>(
     initialSessions[0] || null
   )
+  const [lastSync, setLastSync] = useState(lastSyncTimestamp)
   const [, setTick] = useState(0)
+
+  /* ================= SYNC เมื่อ parent ส่ง initialSessions ใหม่ (real-time จาก session_updated) ================= */
+
+  useEffect(() => {
+    setSessions(initialSessions)
+    setLastSync(lastSyncTimestamp)
+    setSelected((prev) => {
+      if (initialSessions.length === 0) return null
+      const stillExists = prev && initialSessions.some((s) => s._id === prev._id)
+      return stillExists ? prev : initialSessions[0] || null
+    })
+  }, [initialSessions, lastSyncTimestamp])
 
   /* ================= HEARTBEAT ================= */
 
@@ -49,7 +66,7 @@ export function SessionDashboard({
 
     if (s.status === "ACTIVE") {
       const secondsElapsedSinceSync = Math.floor(
-        (Date.now() - lastSyncTimestamp) / 1000
+        (Date.now() - lastSync) / 1000
       )
       remaining = Math.max(
         0,
@@ -67,7 +84,7 @@ export function SessionDashboard({
   /* ================= LOGOUT ================= */
 
   const handleLogout = () => {
-    localStorage.clear()
+    AuthService.logout()
     router.push("/login")
   }
 
@@ -110,10 +127,11 @@ export function SessionDashboard({
                 </p>
 
                 <DialogFooter className="mt-6 flex gap-3">
-                  <Button variant="outline">
-                    ยกเลิก
-                  </Button>
-
+                  <DialogClose asChild>
+                    <Button variant="outline" className="border-slate-600 hover:bg-slate-800">
+                      ยกเลิก
+                    </Button>
+                  </DialogClose>
                   <Button
                     variant="destructive"
                     onClick={handleLogout}
@@ -128,16 +146,18 @@ export function SessionDashboard({
         </div>
 
         {/* EMPTY */}
-        {initialSessions.length === 0 ? (
-          <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-10 text-center text-slate-400">
-            ยังไม่มีอุปกรณ์ที่ได้รับมอบหมาย กรุณาติดต่อแอดมิน
-          </div>
+        {sessions.length === 0 ? (
+          <Card className="bg-slate-900/60 border-slate-800">
+            <CardContent className="p-10 text-center text-slate-400">
+              No active sessions assigned
+            </CardContent>
+          </Card>
         ) : (
           <div className="flex flex-col md:flex-row gap-6">
 
             {/* LEFT LIST */}
             <div className="w-full md:w-72 space-y-3">
-              {initialSessions.map((s) => {
+              {sessions.map((s) => {
                 const { minutes, seconds, expired } =
                   getRemaining(s)
 
@@ -152,8 +172,8 @@ export function SessionDashboard({
                         : "border-slate-800 bg-slate-900/70 hover:border-slate-600"
                       }`}
                   >
-                    <p className="font-semibold truncate">
-                      {s.device_id.name}
+                    <p className="font-semibold truncate" title={escapeHtml(s.device_id?.name)}>
+                      {s.device_id?.name}
                     </p>
 
                     {!expired ? (
@@ -183,8 +203,8 @@ export function SessionDashboard({
                 <CardContent className="p-8">
                   <div className="flex items-start justify-between mb-6">
                     <div>
-                      <h2 className="text-3xl font-bold mb-2">
-                        {selected.device_id.name}
+                      <h2 className="text-3xl font-bold mb-2" title={escapeHtml(selected.device_id?.name)}>
+                        {selected.device_id?.name}
                       </h2>
                       <p className="text-slate-400">
                         Ready for remote access

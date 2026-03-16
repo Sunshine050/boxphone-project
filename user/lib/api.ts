@@ -1,3 +1,5 @@
+import { getToken, removeToken } from "@/lib/cookies";
+
 const BASE_URL = (
   process.env.NEXT_PUBLIC_API_BASE_URL ||
   process.env.NEXT_PUBLIC_BACKEND_URL
@@ -26,7 +28,7 @@ export async function apiFetch<T>(
   };
 
   if (auth) {
-    const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
+    const token = typeof window !== "undefined" ? getToken() : null;
     if (token) {
       headers.Authorization = `Bearer ${token}`;
     } else {
@@ -47,9 +49,8 @@ export async function apiFetch<T>(
   });
 
   if (!res.ok) {
-    // 🎯 ถ้าเป็น 401 Unauthorized ให้จัดการ (เช่น ลบ token ทิ้ง)
     if (res.status === 401 && typeof window !== "undefined") {
-      localStorage.removeItem("access_token");
+      removeToken();
     }
     
     let message = "API Error";

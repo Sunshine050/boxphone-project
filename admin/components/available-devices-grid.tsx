@@ -9,6 +9,7 @@ import { AssignUserDialog } from "./assign-user-dialog";
 import { AvailableDevice } from "@/app/admin/available/page";
 import { useState, useEffect, useRef } from "react";
 import { DevicesService } from "@/services/devices.service";
+import { getToken } from "@/lib/cookies";
 
 interface Props {
   loading: boolean;
@@ -105,13 +106,12 @@ export function AvailableDevicesGrid({
         ))}
       </motion.div>
 
-      {selected && (
-        <AssignUserDialog
-          device={selected}
-          onClose={onCloseDialog}
-          onSuccess={onSuccess}
-        />
-      )}
+      <AssignUserDialog
+        open={!!selected}
+        device={selected}
+        onClose={onCloseDialog}
+        onSuccess={onSuccess}
+      />
     </>
   );
 }
@@ -142,10 +142,7 @@ function DeviceScreenshot({
 
     try {
       const url = DevicesService.getScreenshotUrlBySerial(serialNumber);
-      const token =
-        typeof window !== "undefined"
-          ? localStorage.getItem("access_token")
-          : null;
+      const token = typeof window !== "undefined" ? getToken() : null;
 
       const response = await fetch(url, {
         method: "GET",

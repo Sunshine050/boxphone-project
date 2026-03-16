@@ -19,14 +19,15 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 
 import { motion } from "framer-motion";
-import { MoreHorizontal, Pencil, Trash2, Eye } from "lucide-react";
+import { MoreHorizontal, Pencil, Trash2, Eye, Wrench, AlertTriangle } from "lucide-react";
 
 /* ================= TYPES (match backend) ================= */
 
-export type DeviceStatus = "AVAILABLE" | "BUSY" | "OFFLINE";
+export type DeviceStatus = "AVAILABLE" | "BUSY" | "OFFLINE" | "UNDER_REPAIR" | "DAMAGED";
 
 export interface Device {
   id: string;
@@ -43,7 +44,8 @@ interface Props {
   onView: (device: Device) => void;
   userMap: Record<string, string>;
   onEdit: (device: Device) => void;
-  onDelete: (device: Device) => void; // ✅ เพิ่ม onDelete
+  onDelete: (device: Device) => void;
+  onMarkStatus?: (device: Device, status: "UNDER_REPAIR" | "DAMAGED" | "AVAILABLE") => void;
 }
 
 const statusConfig: Record<
@@ -62,6 +64,14 @@ const statusConfig: Record<
     label: "ออฟไลน์",
     className: "bg-gray-500/10 text-gray-500",
   },
+  UNDER_REPAIR: {
+    label: "แจ้งซ่อม",
+    className: "bg-amber-500/10 text-amber-600",
+  },
+  DAMAGED: {
+    label: "ชำรุด",
+    className: "bg-red-500/10 text-red-700",
+  },
   UNKNOWN: {
     label: "ไม่ทราบ",
     className: "bg-muted text-muted-foreground",
@@ -77,6 +87,7 @@ export function DeviceManagementTable({
   onView,
   onEdit,
   onDelete,
+  onMarkStatus,
 }: Props) {
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
@@ -176,6 +187,34 @@ export function DeviceManagementTable({
                             แก้ไข
                           </DropdownMenuItem>
 
+                          {onMarkStatus && (
+                            <>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                onClick={() => onMarkStatus(d, "UNDER_REPAIR")}
+                                className="cursor-pointer text-amber-600"
+                              >
+                                <Wrench className="mr-2 h-4 w-4" />
+                                แจ้งซ่อม
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => onMarkStatus(d, "DAMAGED")}
+                                className="cursor-pointer text-red-600"
+                              >
+                                <AlertTriangle className="mr-2 h-4 w-4" />
+                                ชำรุด
+                              </DropdownMenuItem>
+                              {(d.status === "UNDER_REPAIR" || d.status === "DAMAGED") && (
+                                <DropdownMenuItem
+                                  onClick={() => onMarkStatus(d, "AVAILABLE")}
+                                  className="cursor-pointer text-green-600"
+                                >
+                                  คืนสถานะเป็นว่าง
+                                </DropdownMenuItem>
+                              )}
+                              <DropdownMenuSeparator />
+                            </>
+                          )}
                           <DropdownMenuItem
                             onClick={() => onDelete(d)}
                             className="cursor-pointer text-red-600 focus:text-red-600"

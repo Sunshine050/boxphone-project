@@ -7,6 +7,7 @@ import { DevicesService } from "@/services/devices.service";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Smartphone, RefreshCw } from "lucide-react";
+import { normalizeDeviceStatus, type DeviceStatusUI } from "@/lib/device-status";
 
 import useSWR from "swr";
 
@@ -14,33 +15,41 @@ export type AvailableDevice = {
   id: string;
   name: string;
   serial_number: string;
-  status: "AVAILABLE" | "BUSY" | "OFFLINE";
+  status: DeviceStatusUI;
   model?: string;
   sdk_version?: number;
 };
 
 export default function AvailableDevicesPage() {
   const [selected, setSelected] = useState<AvailableDevice | null>(null);
-  const [syncing, setSyncing] = useState(false);
-
-  const { data: rawDevices, isLoading: isDevicesLoading, mutate: mutateDevices } = useSWR('/api/devices', () => DevicesService.getAll(), { refreshInterval: 10000 });
-
-  const loading = isDevicesLoading && !rawDevices;
-
-  const devices: AvailableDevice[] = useMemo(() => {
-    return (rawDevices || []).map((d: any) => ({
-      id: d.id || d._id,
-      name: d.name,
-      serial_number: d.serial_number,
-      status: d.status,
-      model: d.model,
-      sdk_version: d.sdk_version,
-    }));
-  }, [rawDevices]);
 
   const fetchDevices = async () => {
-    await mutateDevices();
+    setLoading(true);
+    try {
+      const data = (await DevicesService.getAll()) as any[];
+
+      const mapped: AvailableDevice[] = data.map((d) => ({
+        id: d.id || d._id,
+        name: d.name,
+        serial_number: d.serial_number,
+        status: normalizeDeviceStatus(d.status),
+        model: d.model,
+        sdk_version: d.sdk_version,
+      }));
+
+      setDevices(mapped);
+    } catch (err: any) {
+      alert(err.message || "โหลดรายการอุปกรณ์ไม่สำเร็จ");
+    } finally {
+      setLoading(false);
+    }
   };
+
+  useEffect(() => {
+    fetchDevices();
+  }, []);
+
+  const [syncing, setSyncing] = useState(false);
 
   // ✅ เอาเฉพาะเครื่องที่พร้อมใช้งาน
   const availableDevices = useMemo(() => {

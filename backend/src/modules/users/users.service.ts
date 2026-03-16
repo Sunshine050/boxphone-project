@@ -83,29 +83,11 @@ export class UsersService {
     return createdUser.save();
   }
 
-  formatUserResponse(user: any) {
-    return {
-      id: user._id ? user._id.toString() : user.id,
-      name: user.name,
-      username: user.username,
-      role: user.role,
-      status: user.status,
-      start_date: user.start_date,
-      device_id: user.device_id ?? null,
-      devices: user.devices ?? [],
-      total_seconds: user.total_seconds,
-      remaining_seconds: user.remaining_seconds,
-      password_plain: user.password_plain,
-      createdAt: user.createdAt,
-      updatedAt: user.updatedAt,
-    };
-  }
-
   /**
    * ✅ สร้าง USER โดยแอดมิน
    * - Admin สร้างคนอื่น → ต้องเป็น USER เสมอ ✅
    */
-  async createByAdmin(createUserDto: CreateUserByAdminDto, adminUsername: string = "admin"): Promise<any> {
+  async createByAdmin(createUserDto: CreateUserByAdminDto): Promise<User> {
     const existingUser = await this.findByUsername(createUserDto.username);
     if (existingUser) {
       throw new ConflictException("Username already exists");
@@ -143,18 +125,7 @@ export class UsersService {
       devices: [],
     });
 
-    const savedUser = await newUser.save();
-
-    await this.logService.createLog({
-      type: 'USER_CREATED',
-      level: 'SUCCESS',
-      message: `สร้างผู้ใช้ใหม่: ${savedUser.username}`,
-      target_user_id: savedUser._id.toString(),
-      admin_username: adminUsername,
-      meta: { role: savedUser.role }
-    });
-
-    return this.formatUserResponse(savedUser);
+    return newUser.save();
   }
 
   /**
@@ -248,181 +219,192 @@ export class UsersService {
   /**
    * ✅ NEW: Assign หลายเครื่อง + เพิ่มเวลา per-device ในคำขอเดียว
    */
-  async assignDevices(
-    userId: string,
-    items: { device_id: string; assign_seconds?: number }[],
-    deviceService: any,
-    adminUsername: string = "admin"
-  ) {
-    const user: any = await this.findById(userId);
-    if (!user) throw new NotFoundException("User not found");
+ async assignDevices(
+  userId: string,
+  items: { device_id: string; assign_seconds?: number }[],
+  deviceService: any
+) {
+  const user: any = await this.findById(userId);
+  if (!user) throw new NotFoundException("User not found");
 
-    if (!Array.isArray(items)) {
-      throw new BadRequestException("items must be an array");
+  if (!Array.isArray(items)) {
+    throw new BadRequestException("items must be an array");
+  }
+
+  // 🔴 device เดิมของ user
+  const oldDevices = Array.isArray(user.devices) ? user.devices : [];
+
+  // 🔴 validate device exists + availability
+  for (const item of items) {
+    if (!item.device_id) {
+      throw new BadRequestException("device_id is required");
     }
 
-    // 🔴 device เดิมของ user
-    const oldDevices = Array.isArray(user.devices) ? user.devices : [];
-
-    // 🔴 validate device exists + availability
-    for (const item of items) {
-      if (!item.device_id) {
-        throw new BadRequestException("device_id is required");
-      }
-
-      const device = await deviceService.findOne(item.device_id);
-      if (!device) {
-        throw new NotFoundException(`Device not found: ${item.device_id}`);
-      }
-
-      // ✔ อนุญาตถ้าเป็น device เดิมของ user
-      const alreadyAssignedToUser = oldDevices.some(
-        (d: any) => d.device_id === item.device_id
-      );
-
-      if (
-        device.status !== DeviceStatus.AVAILABLE &&
-        !alreadyAssignedToUser
-      ) {
-        throw new ConflictException(
-          `Device ${device.name || item.device_id} is not available`
-        );
-      }
-
-      // ✔ ห้ามซ้ำกับ user คนอื่น
-      const assignedUser = await this.userModel.findOne({
-        _id: { $ne: userId },
-        "devices.device_id": item.device_id,
-      });
-
-      if (assignedUser) {
-        throw new ConflictException(
-          `Device ${device.name || item.device_id} is already assigned`
-        );
-      }
+    const device = await deviceService.findOne(item.device_id);
+    if (!device) {
+      throw new NotFoundException(`Device not found: ${item.device_id}`);
     }
 
-    // 🔴 map device ใหม่
-    const newDeviceIds = new Set(items.map(i => i.device_id));
-
-    // 🔴 หา device ที่ถูกลบ
-    const removedDevices = oldDevices.filter(
-      (d: any) => !newDeviceIds.has(d.device_id)
+    // ✔ อนุญาตถ้าเป็น device เดิมของ user
+    const alreadyAssignedToUser = oldDevices.some(
+      (d: any) => d.device_id === item.device_id
     );
 
-    // 🔴 สร้าง device list ใหม่ (replace logic)
-    const updatedDevices = items.map(item => {
-      const seconds = Math.max(0, Number(item.assign_seconds ?? 0));
-
-      return {
-        device_id: item.device_id,
-        total_seconds: seconds,
-        remaining_seconds: seconds,
-        started_at: null,
-        status: UserStatus.PENDING,
-      };
-    });
-
-    // 🔴 replace devices ทั้งชุด
-    user.devices = updatedDevices;
-    await user.save();
-
-    await this.logService.createLog({
-      type: 'DEVICE_ASSIGNED',
-      level: 'SUCCESS',
-      message: `Assign อุปกรณ์ใหม่ ${items.length} เครื่อง ให้ผู้ใช้`,
-      target_user_id: userId,
-      admin_username: adminUsername,
-      meta: { devices: items }
-    });
-
-    // 🔴 log device removed
-    for (const d of removedDevices) {
-      await this.logService.createLog({
-        type: "DEVICE_DISCONNECTED",
-        level: "INFO",
-        message: "ลบการมอบหมายอุปกรณ์ออกจากผู้ใช้",
-        target_user_id: userId,
-        target_device_id: d.device_id,
-        meta: { reason: "unassigned" }
-      });
+    if (
+      device.status !== DeviceStatus.AVAILABLE &&
+      !alreadyAssignedToUser
+    ) {
+      throw new ConflictException(
+        `Device ${device.name || item.device_id} is not available`
+      );
     }
 
-    // 🔴 log device assigned/updated
-    for (const item of items) {
-      await this.logService.createLog({
-        type: "DEVICE_ASSIGNED",
-        level: "SUCCESS",
-        message: "มอบหมายอุปกรณ์ให้ผู้ใช้สำเร็จ",
-        target_user_id: userId,
-        target_device_id: item.device_id,
-        meta: { assign_seconds: item.assign_seconds }
-      });
+    // ✔ ห้ามซ้ำกับ user คนอื่น
+    const assignedUser = await this.userModel.findOne({
+      _id: { $ne: userId },
+      "devices.device_id": item.device_id,
+    });
+
+    if (assignedUser) {
+      throw new ConflictException(
+        `Device ${device.name || item.device_id} is already assigned`
+      );
     }
+  }
+
+  // 🔴 map device ใหม่
+  const newDeviceIds = new Set(items.map(i => i.device_id));
+
+  // 🔴 หา device ที่ถูกลบ
+  const removedDevices = oldDevices.filter(
+    (d: any) => !newDeviceIds.has(d.device_id)
+  );
+
+  // 🔴 สร้าง device list ใหม่ (replace logic)
+  const updatedDevices = items.map(item => {
+    const seconds = Math.max(0, Number(item.assign_seconds ?? 0));
 
     return {
-      message: "Assigned devices successfully",
-      userId,
-      devices: user.devices,
+      device_id: item.device_id,
+      total_seconds: seconds,
+      remaining_seconds: seconds,
+      started_at: null,
+      status: UserStatus.PENDING,
     };
+  });
+
+  // 🔴 replace devices ทั้งชุด
+  user.devices = updatedDevices;
+
+  // 🔴 อัปเดต device_history (จำนวนครั้งที่ user ใช้เครื่องนี้) เพื่อให้ตัวเลข "ใช้ X ครั้ง" ขึ้นตาม
+  const history = Array.isArray(user.device_history) ? user.device_history : [];
+  const now = new Date();
+  for (const item of items) {
+    const devId = String(item.device_id).trim();
+    if (!devId) continue;
+    const existing = history.find((h: any) => String(h.device_id) === devId);
+    if (existing) {
+      existing.use_count = (existing.use_count ?? 0) + 1;
+      existing.last_used_at = now;
+    } else {
+      history.push({
+        device_id: devId,
+        last_used_at: now,
+        use_count: 1,
+      });
+    }
   }
+  user.device_history = history;
+
+  await user.save();
+
+  // 🔴 log device removed
+  for (const d of removedDevices) {
+    await this.logService.createLog({
+      type: "DEVICE_DISCONNECTED",
+      level: "INFO",
+      message: "ลบการมอบหมายอุปกรณ์ออกจากผู้ใช้",
+      target_user_id: userId,
+      target_device_id: d.device_id,
+      meta: { reason: "unassigned" }
+    });
+  }
+
+  // 🔴 log device assigned/updated
+  for (const item of items) {
+    await this.logService.createLog({
+      type: "DEVICE_ASSIGNED",
+      level: "SUCCESS",
+      message: "มอบหมายอุปกรณ์ให้ผู้ใช้สำเร็จ",
+      target_user_id: userId,
+      target_device_id: item.device_id,
+      meta: { assign_seconds: item.assign_seconds }
+    });
+  }
+
+  return {
+    message: "Assigned devices successfully",
+    userId,
+    devices: user.devices,
+  };
+}
 
   /**
    * ✅ NEW: เพิ่มเวลาให้ user ที่กำลังใช้งานทั้งหมด (INUSE) ทีเดียว
    * - custom seconds ได้
+   * - note หมายเหตุ (ส่งไปใน notification ให้ user)
    */
-  async bulkAddTimeToInuseUsers(addSeconds: number, adminUsername: string = "admin") {
-    const seconds = Number(addSeconds) || 0;
+  async bulkAddTimeToInuseUsers(addSeconds: number, note?: string) {
+  const seconds = Number(addSeconds) || 0;
 
-    if (seconds <= 0) {
-      throw new BadRequestException("add_seconds must be > 0");
-    }
-
-    // ⭐ หา user ที่กำลังใช้งาน
-    const users = await this.userModel
-      .find({ status: UserStatus.INUSE })
-      .exec();
-
-    const updatedUsers: any[] = [];
-
-    for (const u of users) {
-      let updated = false;
-
-      const devices = Array.isArray(u.devices) ? u.devices : [];
-
-      // ⭐ เพิ่มเวลาให้ทุก device ที่มี remaining
-      for (const d of devices) {
-        if (d.status === UserStatus.INUSE || (d.remaining_seconds ?? 0) > 0) {
-          d.total_seconds = Number(d.total_seconds ?? 0) + seconds;
-          d.remaining_seconds = Number(d.remaining_seconds ?? 0) + seconds;
-          updated = true;
-        }
-      }
-
-      // ⭐ sync session (สำคัญมาก)
-      await this.sessionsService.addTimeToActiveSessions(
-        u._id.toString(),
-        seconds
-      );
-
-      if (updated) {
-        await u.save();
-        updatedUsers.push(u);
-      }
-    }
-
-    // ⭐ log ระบบ
-    await this.logService.createLog({
-      type: "TIME_ADDED",
-      level: "INFO",
-      message: `เติมเวลาแบบกลุ่ม (Bulk) จำนวน ${seconds} วินาที ให้ผู้ใช้ที่ INUSE`,
-      admin_username: adminUsername,
-      meta: { count: updatedUsers.length, added_seconds: seconds },
-    });
-
-    // ⭐ RETURN ARRAY → Controller ใช้ loop ได้
-    return updatedUsers;
+  if (seconds <= 0) {
+    throw new BadRequestException("add_seconds must be > 0");
   }
+
+  // ⭐ หา user ที่กำลังใช้งาน
+  const users = await this.userModel
+    .find({ status: UserStatus.INUSE })
+    .exec();
+
+  const updatedUsers: any[] = [];
+
+  for (const u of users) {
+    let updated = false;
+
+    const devices = Array.isArray(u.devices) ? u.devices : [];
+
+    // ⭐ เพิ่มเวลาให้ทุก device ที่มี remaining
+    for (const d of devices) {
+      if ((d.remaining_seconds ?? 0) > 0) {
+        d.total_seconds = Number(d.total_seconds ?? 0) + seconds;
+        d.remaining_seconds = Number(d.remaining_seconds ?? 0) + seconds;
+        updated = true;
+      }
+    }
+
+    // ⭐ sync session (สำคัญมาก)
+    await this.sessionsService.addTimeToActiveSessions(
+      u._id.toString(),
+      seconds
+    );
+
+    if (updated) {
+      await u.save();
+      updatedUsers.push({ user: u, note });
+    }
+  }
+
+  // ⭐ log ระบบ
+  await this.logService.createLog({
+    type: "TIME_ADDED",
+    level: "INFO",
+    message: `เติมเวลาให้ผู้ใช้ที่กำลังใช้งานทั้งหมด (+${seconds}s)${note ? ` หมายเหตุ: ${note}` : ""}`,
+    meta: { count: updatedUsers.length, added_seconds: seconds, note: note || null },
+  });
+
+  // ⭐ RETURN ARRAY → Controller ใช้ส่ง notification พร้อม note
+  return updatedUsers;
+}
 
   // users.service.ts
 
@@ -438,7 +420,7 @@ export class UsersService {
         }
         return {
           ...d,
-          device_id: !!d.device_id ? d.device_id.toString() : null,
+          device_id: d.device_id.toString(),
           remaining_seconds: currentRem,
         };
       });
@@ -461,12 +443,6 @@ export class UsersService {
 
   async findById(userId: string): Promise<User | null> {
     return this.userModel.findById(userId).exec();
-  }
-
-  async findByIdFormatted(userId: string) {
-    const user = await this.userModel.findById(userId).exec();
-    if (!user) throw new NotFoundException("User not found");
-    return this.formatUserResponse(user);
   }
 
   async update(userId: string, updateUserDto: any): Promise<User | null> {

@@ -6,6 +6,7 @@ import { DevicesService } from "@/services/devices.service";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
+import { normalizeDeviceStatus } from "@/lib/device-status";
 
 type Device = {
   id: string;
@@ -36,7 +37,7 @@ export function UserMoveSessionDialog({
         .map((d) => ({
           id: String(d._id || d.id),
           name: d.name,
-          status: d.status,
+          status: normalizeDeviceStatus(d.status),
         }))
         .filter((d) => d.status === "AVAILABLE");
 

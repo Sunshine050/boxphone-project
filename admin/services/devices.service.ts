@@ -17,6 +17,13 @@ export const DevicesService = {
       body: payload,
     }),
 
+  /** Mark device: แจ้งซ่อม (UNDER_REPAIR) / ชำรุด (DAMAGED) / คืนสถานะ (AVAILABLE) */
+  markStatus: (id: string, status: "UNDER_REPAIR" | "DAMAGED" | "AVAILABLE"): Promise<any> =>
+    apiFetch<any>(`/devices/${id}/mark-status`, {
+      method: "PATCH",
+      body: { status },
+    }),
+
   delete: (id: string): Promise<any> =>
     apiFetch<any>(`/devices/${id}`, {
       method: "DELETE",

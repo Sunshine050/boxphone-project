@@ -27,9 +27,22 @@ export class NotificationService {
     return created;
   }
 
-  async getMyNotifications(userId: string) {
-    return this.model.find({ user_id: userId }).sort({ createdAt: -1 }).limit(20);
+  /** แจ้งให้ user รีเฟรช session (real-time เมื่อ admin pause/resume/cancel หรือหมดเวลา) */
+  notifySessionUpdate(userId: string) {
+    this.gateway.sendSessionUpdate(userId);
   }
+
+  async getMyNotifications(userId: string, page: number = 1, limit: number = 10) {
+    const skip = (Math.max(1, page) - 1) * Math.min(50, Math.max(1, limit));
+    const take = Math.min(50, Math.max(1, limit));
+    const [items, total, totalUnread] = await Promise.all([
+      this.model.find({ user_id: userId }).sort({ createdAt: -1 }).skip(skip).limit(take).lean(),
+      this.model.countDocuments({ user_id: userId }),
+      this.model.countDocuments({ user_id: userId, is_read: false }),
+    ]);
+    return { items, total, page: Math.max(1, page), limit: take, totalUnread };
+  }
+
   async markAsRead(notificationId: string, userId: string) {
     return this.model.findOneAndUpdate(
       { _id: notificationId, user_id: userId },
@@ -44,5 +57,18 @@ export class NotificationService {
       { $set: { is_read: true } }
     );
     return { success: true };
+  }
+
+  async deleteNotification(notificationId: string, userId: string) {
+    const deleted = await this.model.findOneAndDelete({
+      _id: notificationId,
+      user_id: userId,
+    });
+    return !!deleted;
+  }
+
+  async clearAll(userId: string) {
+    const result = await this.model.deleteMany({ user_id: userId });
+    return { deleted: result.deletedCount };
   }
 }

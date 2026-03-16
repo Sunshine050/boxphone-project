@@ -3,19 +3,22 @@
 import { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
-import { Eye, Power, RefreshCw } from "lucide-react";
+import { RefreshCw, UserPlus } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { DevicesService } from "@/services/devices.service";
+import { getToken } from "@/lib/cookies";
+import type { OverviewStatus } from "@/lib/device-status";
 
 /* ================= TYPES ================= */
 
-export type DeviceStatus = "in-use" | "available" | "error" | "maintenance";
+export type DeviceStatus = OverviewStatus;
 
 export type StatusFilter = DeviceStatus | "all";
 
 export interface OverviewDevice {
   id: string;
   name: string;
+  serial_number?: string;
   status: DeviceStatus;
   user?: string;
 }
@@ -25,15 +28,25 @@ interface OverviewPhoneGridProps {
   userMap?: Record<string, string>;
   statusFilter: StatusFilter;
   devices: OverviewDevice[];
+  /** เมื่อส่งมา จะแสดงปุ่มมอบหมาย — เครื่องที่ไม่พร้อมใช้งานจะกดไม่ได้ และแสดงสถานะชัดเจน */
+  onAssign?: (device: OverviewDevice) => void;
 }
 
 /* ================= COMPONENT ================= */
+
+const STATUS_LABELS: Record<DeviceStatus, string> = {
+  "in-use": "กำลังใช้งาน",
+  available: "พร้อมใช้งาน",
+  error: "ออฟไลน์/ผิดพลาด",
+  maintenance: "แจ้งซ่อม/ชำรุด",
+};
 
 export function OverviewPhoneGrid({
   query,
   statusFilter,
   userMap = {},
   devices,
+  onAssign,
 }: OverviewPhoneGridProps) {
   const filteredDevices = devices.filter((d) => {
     const userName = d.user ? (userMap[d.user] || "").toLowerCase() : "";
@@ -55,62 +68,91 @@ export function OverviewPhoneGrid({
         </div>
       )}
 
-      {filteredDevices.map((d, index) => (
-        <motion.div
-          key={d.id}
-          initial={{ opacity: 0, y: 24 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: index * 0.06 }}
-          whileHover={{ y: -4 }}
-          className="
-            rounded-2xl
-            border border-border/70
-            bg-card
-            overflow-hidden
-            shadow-sm
-            transition-all
-            hover:shadow-lg
-          "
-        >
-          {/* ================= PHONE SCREEN ================= */}
-          <div
-            className="
-              relative
-              aspect-[9/16]
-              bg-gradient-to-b from-neutral-900 to-black
-              flex items-center justify-center
-              text-muted-foreground text-xs
-              ring-1 ring-inset ring-white/10
+      {filteredDevices.map((d, index) => {
+        const canAssign = d.status === "available";
+        const showAssign = !!onAssign;
+
+        return (
+          <motion.div
+            key={d.id}
+            initial={{ opacity: 0, y: 24 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: index * 0.06 }}
+            whileHover={canAssign || !showAssign ? { y: -4 } : undefined}
+            className={`
+              rounded-2xl
+              border border-border/70
+              bg-card
               overflow-hidden
-            "
+              shadow-sm
+              transition-all
+              ${showAssign && !canAssign ? "opacity-80" : ""}
+              ${canAssign && showAssign ? "hover:shadow-lg" : showAssign ? "cursor-not-allowed" : "hover:shadow-lg"}
+            `}
           >
-            {/* ✅ STATUS BADGE (อยู่บนจอโทรศัพท์) */}
-            <div className="absolute top-2 right-2 z-10">
-              <StatusBadge status={d.status} />
+            {/* ================= PHONE SCREEN ================= */}
+            <div
+              className="
+                relative
+                aspect-[9/16]
+                bg-gradient-to-b from-neutral-900 to-black
+                flex items-center justify-center
+                text-muted-foreground text-xs
+                ring-1 ring-inset ring-white/10
+                overflow-hidden
+              "
+            >
+              <div className="absolute top-2 right-2 z-10">
+                <StatusBadge status={d.status} />
+              </div>
+              <DeviceScreenshot deviceId={d.id} status={d.status} />
             </div>
 
-            {/* ✅ ภาพหน้าจอจากเสี่ยวเหว๋ย */}
-            <DeviceScreenshot deviceId={d.id} status={d.status} />
-          </div>
+            {/* ================= INFO + STATUS ================= */}
+            <div className="p-4 space-y-2">
+              <p className="text-sm font-semibold truncate">{d.name}</p>
 
-          {/* ================= INFO ================= */}
-          <div className="p-4 space-y-2">
-            <p className="text-sm font-semibold truncate">{d.name}</p>
+              {/* แจ้ง status ชัดเจน (โดยเฉพาะเมื่อมีปุ่มมอบหมาย) */}
+              {showAssign && (
+                <p
+                  className={`text-xs ${canAssign ? "text-green-600 dark:text-green-400" : "text-muted-foreground"}`}
+                  title={canAssign ? "พร้อมมอบหมาย" : `ไม่พร้อมมอบหมาย - ${STATUS_LABELS[d.status]}`}
+                >
+                  สถานะ: {STATUS_LABELS[d.status]}
+                  {!canAssign && (
+                    <span className="block text-[10px] mt-0.5 text-amber-600 dark:text-amber-400">
+                      ไม่สามารถมอบหมายได้
+                    </span>
+                  )}
+                </p>
+              )}
 
-            {d.user ? (
-              <p className="text-xs text-foreground font-medium truncate flex items-center gap-1">
-                <span className="text-muted-foreground font-normal">ผู้ใช้:</span>
-                {userMap[d.user] || `ID: ${d.user.slice(-4)}`}
-              </p>
-            ) : (
-              <p className="text-xs text-muted-foreground italic">
-                ไม่มีผู้ใช้งาน
-              </p>
-            )}
+              {d.user ? (
+                <p className="text-xs text-foreground font-medium truncate flex items-center gap-1">
+                  <span className="text-muted-foreground font-normal">ผู้ใช้:</span>
+                  {userMap[d.user] || `ID: ${d.user.slice(-4)}`}
+                </p>
+              ) : !showAssign ? (
+                <p className="text-xs text-muted-foreground italic">ไม่มีผู้ใช้งาน</p>
+              ) : null}
 
-          </div>
-        </motion.div>
-      ))}
+              {showAssign && (
+                <Button
+                  size="sm"
+                  variant={canAssign ? "default" : "secondary"}
+                  className="w-full mt-2"
+                  disabled={!canAssign}
+                  onClick={() => canAssign && onAssign(d)}
+                  title={canAssign ? "มอบหมายเครื่องนี้" : `เฉพาะเครื่องที่พร้อมใช้งาน (สถานะ: ${STATUS_LABELS[d.status]})`}
+                >
+                  <UserPlus className="w-3.5 h-3.5 mr-1.5" />
+                  {canAssign ? "มอบหมาย" : "ไม่พร้อมมอบหมาย"}
+                </Button>
+              )}
+            </div>
+          </motion.div>
+        );
+      })}
     </div>
   );
 }
@@ -155,10 +197,7 @@ function DeviceScreenshot({ deviceId, status }: { deviceId: string; status: Devi
 
     try {
       const url = DevicesService.getScreenshotUrl(deviceId);
-      const token =
-        typeof window !== "undefined"
-          ? localStorage.getItem("access_token")
-          : null;
+      const token = typeof window !== "undefined" ? getToken() : null;
 
       const response = await fetch(url, {
         method: "GET",
@@ -271,13 +310,12 @@ function StatusBadge({ status }: { status: DeviceStatus }) {
       className: "border-2 border-green-500/60 bg-green-500/10 text-green-500",
     },
     error: {
-      label: "ผิดพลาด",
-      className:
-        "border-2 border-yellow-500/60 bg-yellow-500/10 text-yellow-400",
+      label: "ออฟไลน์/ผิดพลาด",
+      className: "border-2 border-yellow-500/60 bg-yellow-500/10 text-yellow-500",
     },
     maintenance: {
-      label: "ซ่อมบำรุง",
-      className: "border-2 border-border bg-muted text-muted-foreground",
+      label: "แจ้งซ่อม/ชำรุด",
+      className: "border-2 border-amber-500/60 bg-amber-500/10 text-amber-500",
     },
   };
 
@@ -291,10 +329,10 @@ function StatusBadge({ status }: { status: DeviceStatus }) {
         text-[11px]
         font-medium
         backdrop-blur
-        ${s.className}
+        ${s?.className ?? "bg-muted text-muted-foreground"}
       `}
     >
-      {s.label}
+      {s?.label ?? status}
     </Badge>
   );
 }

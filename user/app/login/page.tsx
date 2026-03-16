@@ -5,17 +5,25 @@ import { motion } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AuthService } from "@/services/auth.service";
+import { getSafeLoginErrorMessage, sanitizeLoginInput } from "@/lib/login-error";
 import Image from "next/image";
 
 export default function LoginPage() {
   const router = useRouter();
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
   const handleLogin = async (username: string, password: string) => {
+    setError("");
+    setLoading(true);
+    const { username: u, password: p } = sanitizeLoginInput(username, password);
     try {
-      await AuthService.login(username, password);
+      await AuthService.login(u, p);
       router.push("/dashboard");
     } catch (err: any) {
-      alert(err.message || "Login failed");
+      setError(getSafeLoginErrorMessage(err));
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -111,7 +119,7 @@ export default function LoginPage() {
             transition={{ duration: 0.7, ease: "easeOut" }}
             className="flex-1 flex items-center justify-center px-4 py-6"
           >
-            <LoginForm onSubmit={handleLogin} />
+            <LoginForm onSubmit={handleLogin} error={error} loading={loading} />
           </motion.div>
         </div>
 
@@ -122,7 +130,7 @@ export default function LoginPage() {
           transition={{ duration: 0.7, ease: "easeOut" }}
           className="hidden lg:flex h-full items-center justify-center px-4 relative z-10"
         >
-          <LoginForm onSubmit={handleLogin} />
+          <LoginForm onSubmit={handleLogin} error={error} loading={loading} />
         </motion.div>
       </div>
     </div>

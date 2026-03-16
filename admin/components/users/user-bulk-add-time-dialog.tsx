@@ -30,6 +30,7 @@ export function UserBulkAddTimeDialog({
 }) {
   const [hours, setHours] = useState("0");
   const [minutes, setMinutes] = useState("30");
+  const [note, setNote] = useState("");
   const [loading, setLoading] = useState(false);
 
   const addSeconds = useMemo(() => toSeconds(hours, minutes), [hours, minutes]);
@@ -42,9 +43,10 @@ export function UserBulkAddTimeDialog({
 
     setLoading(true);
     try {
-      await UsersService.bulkAddTimeToInuse(addSeconds);
+      await UsersService.bulkAddTimeToInuse(addSeconds, note.trim() || undefined);
       onSuccess?.();
       onClose();
+      setNote("");
     } catch (err: any) {
       alert(err.message || "Bulk add time ไม่สำเร็จ");
     } finally {
@@ -58,7 +60,7 @@ export function UserBulkAddTimeDialog({
         <DialogHeader>
           <DialogTitle>เพิ่มเวลาให้ผู้ใช้ที่กำลังใช้งานทั้งหมด</DialogTitle>
           <p className="text-sm text-muted-foreground">
-            ระบบจะเพิ่มเวลาให้ user ที่สถานะเป็น <b>INUSE</b> ทั้งหมด
+            ระบบจะเพิ่มเวลาให้ user ที่สถานะเป็น <b>INUSE</b> ทั้งหมด และแจ้ง notification พร้อมหมายเหตุ (ถ้ามี)
           </p>
         </DialogHeader>
 
@@ -75,6 +77,17 @@ export function UserBulkAddTimeDialog({
               onChange={(e) => setMinutes(e.target.value)}
             />
           </div>
+        </div>
+
+        <div className="space-y-1">
+          <div className="text-xs text-muted-foreground">หมายเหตุ (ส่งไปในแจ้งเตือนให้ user)</div>
+          <Input
+            placeholder="เช่น เติมเวลาโปรโมชั่น"
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            maxLength={500}
+            className="placeholder:text-muted-foreground/70"
+          />
         </div>
 
         <div className="text-xs text-muted-foreground">

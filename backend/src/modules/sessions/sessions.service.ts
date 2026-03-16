@@ -180,6 +180,8 @@ export class SessionsService {
       { new: true }
     );
 
+    const userId = (updatedSession.user_id as any)?.toString?.() ?? session.user_id?.toString();
+    if (userId) this.notificationService.notifySessionUpdate(userId);
     return updatedSession;
   }
 
@@ -235,6 +237,8 @@ export class SessionsService {
       { new: true }
     );
 
+    const userIdResume = (updatedSession.user_id as any)?.toString?.() ?? session.user_id?.toString();
+    if (userIdResume) this.notificationService.notifySessionUpdate(userIdResume);
     return updatedSession;
   }
 
@@ -346,6 +350,8 @@ export class SessionsService {
       }
     );
 
+    const moveUserId = (updatedSession.user_id as any)?.toString?.();
+    if (moveUserId) this.notificationService.notifySessionUpdate(moveUserId);
     return updatedSession;
   }
 
@@ -426,7 +432,6 @@ export class SessionsService {
 
     let actualRemaining = session.remaining_seconds ?? 0;
 
-    // 🔹 คำนวณเวลาที่เหลือจริง
     if (session.status === SessionStatus.ACTIVE) {
       const now = Date.now();
       const ref = (session.resume_time || session.start_time)?.getTime?.() ?? now;
@@ -434,17 +439,11 @@ export class SessionsService {
       actualRemaining = Math.max(0, actualRemaining - elapsed);
     }
 
-    // 🔹 ถ้ายังไม่หมดเวลา → คืนค่า
     if (actualRemaining > 0) return actualRemaining;
-
-    // =========================================================
-    // 🎯 TIMEOUT CLEANUP
-    // =========================================================
 
     const userId = session.user_id?.toString();
     const deviceId = session.device_id?.toString();
 
-    // 🔹 log
     await this.logService.createLog({
       type: "DEVICE_DISCONNECTED",
       level: "WARNING",
@@ -454,7 +453,6 @@ export class SessionsService {
       meta: { reason: "timeout" },
     });
 
-    // 🔹 คืนสถานะ device
     if (deviceId) {
       await this.deviceModel.findByIdAndUpdate(deviceId, {
         status: DeviceStatus.AVAILABLE,
@@ -462,16 +460,23 @@ export class SessionsService {
       });
     }
 
-    // 🔹 ลบ session ก่อน
     await this.sessionModel.findByIdAndDelete(sessionId);
+    if (userId) this.notificationService.notifySessionUpdate(userId);
 
-    // 🔥 เช็คว่ายังมี ACTIVE session อื่นไหม
     const stillActive = await this.sessionModel.exists({
       user_id: userId,
       status: SessionStatus.ACTIVE,
     });
 
-    // 🔹 ถ้าไม่มี session อื่นแล้ว → ค่อย set user เป็น PENDING
+    // Always remove the expired device from the user's devices array,
+    // regardless of whether other sessions are still active.
+    if (userId && deviceId) {
+      await this.userModel.updateOne(
+        { _id: userId },
+        { $pull: { devices: { device_id: deviceId } } }
+      );
+    }
+
     if (!stillActive && userId) {
       await this.userModel.updateOne(
         { _id: userId },
@@ -521,6 +526,8 @@ export class SessionsService {
 
     // 🔹 ลบ session ก่อน
     await this.sessionModel.findByIdAndDelete(sessionId);
+    const userIdStr = (userId as any)?.toString?.();
+    if (userIdStr) this.notificationService.notifySessionUpdate(userIdStr);
 
     // 🔥 ดึง device ออกจาก user.devices เสมอ
     await this.userModel.updateOne(
