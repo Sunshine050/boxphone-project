@@ -20,6 +20,10 @@ import { Device, DeviceDocument, DeviceStatus } from "../devices/device.schema";
 import { Cron, CronExpression } from "@nestjs/schedule";
 import { LogService } from "../log/log.service";
 import { NotificationService } from "../notification/notification.service";
+import { exec } from "child_process";
+import { promisify } from "util";
+
+const execAsync = promisify(exec);
 
 @Injectable()
 export class SessionsService {
@@ -39,6 +43,8 @@ export class SessionsService {
     private readonly logService: LogService,
     private readonly notificationService: NotificationService,
   ) { }
+
+  private readonly logger = new Logger(SessionsService.name);
 
   /**
    * 🎯 ระบบตรวจสอบอัตโนมัติ (เฝ้าบ้าน)
@@ -383,20 +389,20 @@ export class SessionsService {
     const now = new Date();
 
     // ใช้ map เพื่อสร้างอาเรย์ใหม่ที่มีการคำนวณเวลาแล้ว
-    return sessions.map(session => {
-      const sessionObj = session.toObject(); // แปลงเป็น Plain Object เพื่อแก้ไขค่าได้
-
-      const startTime = session.resume_time || session.start_time;
-      const elapsedSeconds = Math.floor((now.getTime() - startTime.getTime()) / 1000);
-
-      // 🎯 คำนวณเวลาที่เหลือจริงจาก "เวลาปัจจุบันของ Server"
-      const actualRemaining = Math.max(0, session.remaining_seconds - elapsedSeconds);
-
-      // ส่งค่าที่คำนวณแล้วกลับไปให้ Frontend
-      sessionObj.remaining_seconds = actualRemaining;
-
-      return sessionObj;
-    });
+    const result: any[] = [];
+    for (const session of sessions as any[]) {
+      const plain: any = session.toObject();
+      const startTime: Date =
+        session.resume_time || session.start_time || now;
+      const elapsedSeconds = Math.floor(
+        (now.getTime() - startTime.getTime()) / 1000
+      );
+      const baseRemaining: number = session.remaining_seconds ?? 0;
+      const actualRemaining = Math.max(0, baseRemaining - elapsedSeconds);
+      plain.remaining_seconds = actualRemaining;
+      result.push(plain);
+    }
+    return result;
   }
 
   /**
@@ -444,6 +450,17 @@ export class SessionsService {
     const userId = session.user_id?.toString();
     const deviceId = session.device_id?.toString();
 
+    // เวลาหมด: สั่งให้เครื่องกลับหน้า Home (รีเซ็ตหน้าจอจากเกม/แอปที่ลูกค้าเปิดอยู่)
+    if (deviceId) {
+      try {
+        await this.resetDeviceScreen(deviceId);
+      } catch (e: any) {
+        this.logger.warn(
+          `[AUTO_RESET] Failed to reset device screen for device ${deviceId}: ${e?.message || e}`
+        );
+      }
+    }
+
     await this.logService.createLog({
       type: "DEVICE_DISCONNECTED",
       level: "WARNING",
@@ -490,6 +507,41 @@ export class SessionsService {
     }
 
     return 0;
+  }
+
+  /**
+   * สั่ง ADB ให้เครื่องกลับหน้า Home เมื่อเวลาหมด
+   * - ใช้ serial_number จาก device.schema
+   * - ถ้าไม่พบ serial หรือ ADB มีปัญหา จะ log warning แต่ไม่ throw ต่อ
+   */
+  private async resetDeviceScreen(deviceId: string): Promise<void> {
+    const device = await this.deviceModel.findById(deviceId).exec();
+    if (!device) {
+      this.logger.warn(`[AUTO_RESET] Device not found for id=${deviceId}`);
+      return;
+    }
+    const serial = (device as any).serial_number;
+    if (!serial) {
+      this.logger.warn(
+        `[AUTO_RESET] Device ${deviceId} has no serial_number – skip ADB reset`
+      );
+      return;
+    }
+    const adbPath = this.configService.get<string>("ADB_PATH") || "adb";
+    const cmd = `${adbPath} -s ${serial} shell input keyevent KEYCODE_HOME`;
+    this.logger.debug(
+      `[AUTO_RESET] Running ADB reset for serial=${serial}: ${cmd}`
+    );
+    try {
+      await execAsync(cmd, { timeout: 8000 });
+      this.logger.log(
+        `[AUTO_RESET] Device ${serial} reset to Home screen after timeout`
+      );
+    } catch (e: any) {
+      this.logger.warn(
+        `[AUTO_RESET] ADB command failed for serial=${serial}: ${e?.message || e}`
+      );
+    }
   }
 
   /**
