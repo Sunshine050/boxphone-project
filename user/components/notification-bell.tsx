@@ -24,6 +24,7 @@ import {
   NotificationService,
   type Notification,
 } from "@/services/notification.service"
+import { apiFetch } from "@/lib/api"
 
 const PAGE_SIZE = 10
 
@@ -57,35 +58,35 @@ export function NotificationBell() {
 
   useEffect(() => {
     setMounted(true)
-
-    const userStr = localStorage.getItem("user")
-    if (!userStr) return
-    let userId: string
-    try {
-      const parsed = typeof userStr === "string" ? JSON.parse(userStr) : userStr
-      userId = parsed?.id ?? parsed?._id ?? ""
-    } catch {
-      userId = ""
-    }
-    if (!userId) return
+    let cancelled = false
 
     loadNotis(1)
 
-    if (!socketRef.current) {
-      socketRef.current = getNotificationSocket(userId)
-    }
+    apiFetch<{ user: { id: string } }>("/auth/me")
+      .then((res) => {
+        if (cancelled || !res.user?.id) return
+        const userId = res.user.id
 
-    const socket = socketRef.current
+        if (!socketRef.current) {
+          socketRef.current = getNotificationSocket(userId)
+        }
 
-    const handler = () => {
-      playNotificationSound()
-      loadNotis(page)
-    }
+        const socket = socketRef.current
 
-    socket.on("new_notification", handler)
+        const handler = () => {
+          playNotificationSound()
+          loadNotis(page)
+        }
+
+        socket.on("new_notification", handler)
+      })
+      .catch(() => {})
 
     return () => {
-      socket.off("new_notification", handler)
+      cancelled = true
+      if (socketRef.current) {
+        socketRef.current.off("new_notification")
+      }
     }
   }, [loadNotis, page])
 

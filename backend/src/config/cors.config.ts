@@ -1,30 +1,27 @@
-import { CorsOptions } from "@nestjs/common/interfaces/external/cors-options.interface";
-import { ConfigService } from "@nestjs/config";
-export function getCorsConfig(configService: ConfigService): CorsOptions {
-  const methods =
-    configService.get<string>("CORS_METHODS") ||
-    "GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS";
-  const credentials = configService.get<boolean>("CORS_CREDENTIALS") !== false;
+import { CorsOptions } from '@nestjs/common/interfaces/external/cors-options.interface';
+import { ConfigService } from '@nestjs/config';
 
-  // CORS_ORIGINS = คั่นด้วย comma เช่น "http://localhost:3000,https://admin.example.com"
-  // ไม่ตั้ง = อนุญาตทุก origin (development)
-  const originsEnv = configService.get<string>("CORS_ORIGINS");
+export function getCorsConfig(configService: ConfigService): CorsOptions {
+  const originsEnv = configService.get<string>('CORS_ORIGINS');
+
   const origin = originsEnv
-    ? originsEnv.split(",").map((s) => s.trim()).filter(Boolean)
-    : true;
+    ? originsEnv
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean)
+    : true; // allow all in development when CORS_ORIGINS is not set
 
   return {
     origin,
-    methods: methods.split(",").map((m) => m.trim()) as any,
+    methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
     credentials: true,
     allowedHeaders: [
-      "Content-Type", 
-      "Authorization", 
-      "X-Requested-With",
-      "Accept",
-      "Origin",
-      "Access-Control-Request-Method",
-      "Access-Control-Request-Headers"
+      'Content-Type',
+      'Authorization',
+      'X-CSRF-Token',
+      'X-Requested-With',
+      'Accept',
+      'Origin',
     ],
     exposedHeaders: [],
     maxAge: 86400,

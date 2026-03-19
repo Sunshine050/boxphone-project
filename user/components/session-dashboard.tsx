@@ -83,9 +83,9 @@ export function SessionDashboard({
 
   /* ================= LOGOUT ================= */
 
-  const handleLogout = () => {
-    AuthService.logout()
-    router.push("/login")
+  const handleLogout = async () => {
+    await AuthService.logout()
+    window.location.replace("/login")
   }
 
   /* ================= RENDER ================= */

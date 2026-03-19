@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button";
 import { RefreshCw, UserPlus } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { DevicesService } from "@/services/devices.service";
-import { getToken } from "@/lib/cookies";
 import type { OverviewStatus } from "@/lib/device-status";
 
 /* ================= TYPES ================= */
@@ -197,13 +196,10 @@ function DeviceScreenshot({ deviceId, status }: { deviceId: string; status: Devi
 
     try {
       const url = DevicesService.getScreenshotUrl(deviceId);
-      const token = typeof window !== "undefined" ? getToken() : null;
 
       const response = await fetch(url, {
         method: "GET",
-        headers: {
-          ...(token && { Authorization: `Bearer ${token}` }),
-        },
+        credentials: "include",
         cache: "no-store",
       });
 

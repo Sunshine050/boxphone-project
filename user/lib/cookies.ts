@@ -1,38 +1,39 @@
 /**
- * เก็บ/อ่าน token จาก cookie (user) — ใช้ชื่อแยกจาก admin เพื่อไม่ให้ token ปนกัน
+ * Cookie helpers for user panel.
+ * access_token is now HttpOnly (set by backend) — JS cannot read it.
+ * Only the CSRF token is accessible from JS for the double-submit pattern.
  */
 
-const TOKEN_KEY = "user_access_token";
-const MAX_AGE_DAYS = 7;
-
-export function setToken(value: string): void {
-  if (typeof document === "undefined") return;
-  const expires = new Date();
-  expires.setDate(expires.getDate() + MAX_AGE_DAYS);
-  const secure = typeof location !== "undefined" && location.protocol === "https:";
-  let cookie = `${TOKEN_KEY}=${encodeURIComponent(value)}; path=/; expires=${expires.toUTCString()}; SameSite=Lax`;
-  if (secure) cookie += "; Secure";
-  document.cookie = cookie;
+export function getCsrfToken(): string | null {
+  if (typeof document === 'undefined') return null;
+  const match = document.cookie.match(/(^|\s)csrf_token=([^;]+)/);
+  return match ? decodeURIComponent(match[2].trim()) : null;
 }
 
-export function getToken(): string | null {
-  if (typeof document === "undefined") return null;
-  const match = document.cookie.match(new RegExp(`(^|\\s)${TOKEN_KEY}=([^;]+)`));
-  if (!match) return null;
-  try {
-    return decodeURIComponent(match[2].trim());
-  } catch {
-    return null;
-  }
+/** Check if the user likely has an active session (csrf_token exists alongside the HttpOnly access_token) */
+export function hasAuthCookie(): boolean {
+  if (typeof document === 'undefined') return false;
+  return document.cookie.includes('csrf_token=');
 }
 
-export function removeToken(): void {
-  if (typeof document === "undefined") return;
-  document.cookie = `${TOKEN_KEY}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
-}
-
-/** ลบ cookie ทั้ง user และ admin (ใช้ตอน logout เพื่อเคลียร์ทั้งหมด) */
+/** Clear client-readable cookies on logout (backend clears HttpOnly ones via /auth/logout) */
 export function clearAuthCookies(): void {
-  removeToken();
-  document.cookie = "admin_access_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+  if (typeof document === 'undefined') return;
+  document.cookie = 'csrf_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+}
+
+// ---- Legacy aliases (kept temporarily so existing imports don't break during migration) ----
+/** @deprecated Token is now HttpOnly. Use hasAuthCookie() to check session. */
+export function getToken(): string | null {
+  return null;
+}
+
+/** @deprecated Token is now set by backend as HttpOnly cookie. */
+export function setToken(_value: string): void {
+  // no-op
+}
+
+/** @deprecated Use clearAuthCookies() */
+export function removeToken(): void {
+  clearAuthCookies();
 }

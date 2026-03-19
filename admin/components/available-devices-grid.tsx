@@ -9,7 +9,6 @@ import { AssignUserDialog } from "./assign-user-dialog";
 import { AvailableDevice } from "@/app/admin/available/page";
 import { useState, useEffect, useRef } from "react";
 import { DevicesService } from "@/services/devices.service";
-import { getToken } from "@/lib/cookies";
 
 interface Props {
   loading: boolean;
@@ -142,13 +141,10 @@ function DeviceScreenshot({
 
     try {
       const url = DevicesService.getScreenshotUrlBySerial(serialNumber);
-      const token = typeof window !== "undefined" ? getToken() : null;
 
       const response = await fetch(url, {
         method: "GET",
-        headers: {
-          ...(token && { Authorization: `Bearer ${token}` }),
-        },
+        credentials: "include",
         cache: "no-store",
       });
 

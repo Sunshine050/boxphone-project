@@ -44,34 +44,39 @@ export default function DashboardPage() {
   useEffect(() => {
     loadSessions()
 
-    const userStr = localStorage.getItem("user")
-    if (!userStr) return
-    try {
-      const userData = JSON.parse(userStr)
-      const userId = userData?.id
-      if (!userId) return
+    let cancelled = false
+    let socket: ReturnType<typeof getNotificationSocket> | null = null
 
-      const socket = getNotificationSocket(userId)
+    apiFetch<{ user: { id: string } }>("/auth/me")
+      .then((res) => {
+        if (cancelled || !res.user?.id) return
+        const userId = res.user.id
 
-      socket.on("new_notification", (data: any) => {
-        playNotificationSound()
-        toast[data.type === "WARNING" || data.type === "DANGER" ? "error" : "success"](data.title ?? "แจ้งเตือน", {
-          description: data.message,
-          duration: 5000,
+        socket = getNotificationSocket(userId)
+
+        socket.on("new_notification", (data: any) => {
+          playNotificationSound()
+          toast[data.type === "WARNING" || data.type === "DANGER" ? "error" : "success"](data.title ?? "แจ้งเตือน", {
+            description: data.message,
+            duration: 5000,
+          })
+        })
+
+        socket.on("session_updated", () => {
+          loadSessions()
         })
       })
-
-      socket.on("session_updated", () => {
-        loadSessions()
+      .catch((e) => {
+        console.error("Socket init error:", e)
       })
 
-      return () => {
+    return () => {
+      cancelled = true
+      if (socket) {
         socket.off("new_notification")
         socket.off("session_updated")
         socket.disconnect()
       }
-    } catch (e) {
-      console.error("Socket error:", e)
     }
   }, [loadSessions])
 

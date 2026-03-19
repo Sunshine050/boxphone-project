@@ -19,7 +19,7 @@ export default function LoginPage() {
     const { username: u, password: p } = sanitizeLoginInput(username, password);
     try {
       await AuthService.login(u, p);
-      router.push("/dashboard");
+      router.replace("/dashboard");
     } catch (err: any) {
       setError(getSafeLoginErrorMessage(err));
     } finally {

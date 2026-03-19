@@ -25,15 +25,7 @@ export default function DevicesPage() {
   const [devices, setDevices] = useState<Device[]>([]);
   const [loading, setLoading] = useState(true);
 
-  /* =========================
-     AUTH GUARD
-  ========================= */
-  useEffect(() => {
-    const user = localStorage.getItem("user");
-    if (!user) {
-      router.push("/login");
-    }
-  }, [router]);
+  // Auth is now handled by middleware (HttpOnly cookie check)
 
   /* =========================
      FETCH + FILTER LOGIC

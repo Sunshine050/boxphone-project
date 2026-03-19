@@ -30,17 +30,21 @@ interface Session {
 /* ================================================
    HELPERS
 ================================================ */
-function getToken() {
-  return typeof window !== "undefined" ? localStorage.getItem("access_token") ?? "" : ""
+function getCsrfToken() {
+  if (typeof document === "undefined") return null
+  const m = document.cookie.match(/(^|\s)csrf_token=([^;]+)/)
+  return m ? decodeURIComponent(m[2].trim()) : null
 }
 
 async function sendInput(deviceId: string, type: string, payload: Record<string, any>) {
+  const csrf = getCsrfToken()
   return fetch(`${BASE_URL}/devices/${deviceId}/input`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${getToken()}`,
+      ...(csrf && { "X-CSRF-Token": csrf }),
     },
+    credentials: "include",
     body: JSON.stringify({ type, payload }),
   })
 }
@@ -193,10 +197,8 @@ export function AndroidControl() {
   /* ===================== SCREENSHOT POLLING ===================== */
   const refreshScreenshot = useCallback(() => {
     if (!session?.device_id?._id) return
-    const token = getToken()
-    if (!token) return
     fetch(`${BASE_URL}/devices/${session.device_id._id}/screenshot`, {
-      headers: { Authorization: `Bearer ${token}` },
+      credentials: "include",
       cache: "no-store",
     })
       .then(r => { if (!r.ok) throw new Error(); return r.blob() })

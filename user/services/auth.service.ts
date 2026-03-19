@@ -1,30 +1,33 @@
-import { apiFetch } from "@/lib/api";
-import { setToken, clearAuthCookies } from "@/lib/cookies";
+import { apiFetch } from '@/lib/api';
+import { clearAuthCookies } from '@/lib/cookies';
 
 export const AuthService = {
   async login(username: string, password: string) {
     const res = await apiFetch<{
-      access_token: string;
       user: { id: string; username: string; role: string };
-    }>("/auth/login", {
-      method: "POST",
+    }>('/auth/login', {
+      method: 'POST',
       body: { username, password },
-      auth: false, // ❗ login ไม่มี token
     });
-
-    setToken(res.access_token);
-    localStorage.setItem("user", JSON.stringify(res.user));
 
     return res.user;
   },
 
-  getUser() {
-    const raw = localStorage.getItem("user");
-    return raw ? JSON.parse(raw) : null;
+  async me() {
+    const res = await apiFetch<{
+      user: { id: string; username: string; role: string };
+    }>('/auth/me');
+    return res.user;
   },
 
-  logout() {
+  async logout() {
+    try {
+      await apiFetch<{ message: string }>('/auth/logout', {
+        method: 'POST',
+      });
+    } catch {
+      // even if backend call fails, clear client state
+    }
     clearAuthCookies();
-    localStorage.removeItem("user");
   },
 };

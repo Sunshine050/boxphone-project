@@ -14,6 +14,9 @@ export function getSafeLoginErrorMessage(err: unknown): string {
   ) {
     return "ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง";
   }
+  if (lower.includes("too many") || lower.includes("throttle") || lower.includes("try again in")) {
+    return "คุณลองเข้าสู่ระบบบ่อยเกินไป กรุณารอสักครู่แล้วลองใหม่";
+  }
   if (lower.includes("network") || lower.includes("fetch") || lower.includes("เชื่อมต่อ")) {
     return "ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้ กรุณาลองใหม่";
   }
