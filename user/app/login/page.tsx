@@ -84,7 +84,7 @@ export default function LoginPage() {
                 className="relative aspect-square overflow-hidden rounded-3xl border border-white/10 bg-white/5 backdrop-blur-md"
               >
                 <Image
-                  src="/poster-1.jpg"
+                  src="/promotions-boxphone.png"
                   alt="Poster 1"
                   fill
                   className="object-cover"

@@ -10,6 +10,7 @@ import { AdminLog, LogType } from "@/types/log";
 import { LogItem } from "@/components/logs/log-item";
 import { apiFetch } from "@/services/api";
 import useSWR from "swr";
+import { HelpButton } from "@/components/help/help-button";
 
 const PAGE_SIZE = 10;
 
@@ -59,8 +60,11 @@ export default function AdminLogsPage() {
       {/* HEADER */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold">Activity Logs</h1>
-          <p className="text-xs text-muted-foreground">
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-bold">Activity Logs</h1>
+            <HelpButton topic="logs" />
+          </div>
+          <p className="text-xs text-muted-foreground mt-0.5">
             บันทึกเหตุการณ์และการทำงานของระบบทั้งหมด
           </p>
         </div>

@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { DevicesService } from "@/services/devices.service";
 import { UsersService } from "@/services/users.service";
 import { normalizeDeviceStatus, toOverviewStatus, type OverviewStatus } from "@/lib/device-status";
+import { HelpButton } from "@/components/help/help-button";
 
 export type DeviceStatus = "all" | OverviewStatus;
 
@@ -85,8 +86,11 @@ export default function AdminOverviewPage() {
       {/* Header */}
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-semibold mb-1">ภาพรวมระบบ</h1>
-          <p className="text-sm text-muted-foreground">
+          <div className="flex items-center gap-2">
+            <h1 className="text-3xl font-semibold">ภาพรวมระบบ</h1>
+            <HelpButton topic="overview" />
+          </div>
+          <p className="text-sm text-muted-foreground mt-1">
             สถานะเครื่อง Android แบบเรียลไทม์
           </p>
         </div>

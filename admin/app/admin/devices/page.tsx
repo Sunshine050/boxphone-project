@@ -18,6 +18,7 @@ import {
 import { DevicesService } from "@/services/devices.service";
 import { UsersService } from "@/services/users.service";
 import { normalizeDeviceStatus } from "@/lib/device-status";
+import { HelpButton } from "@/components/help/help-button";
 
 export default function DeviceManagementPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -95,8 +96,11 @@ export default function DeviceManagementPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-semibold mb-2">จัดการอุปกรณ์</h1>
-          <p className="text-muted-foreground">ลงทะเบียนและจัดการอุปกรณ์จริง</p>
+          <div className="flex items-center gap-2">
+            <h1 className="text-3xl font-semibold">จัดการอุปกรณ์</h1>
+            <HelpButton topic="devices" />
+          </div>
+          <p className="text-muted-foreground mt-1">ลงทะเบียนและจัดการอุปกรณ์จริง</p>
         </div>
 
         {/* CREATE */}

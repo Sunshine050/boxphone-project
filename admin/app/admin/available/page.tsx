@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Smartphone, RefreshCw } from "lucide-react";
 import { normalizeDeviceStatus, type DeviceStatusUI } from "@/lib/device-status";
+import { HelpButton } from "@/components/help/help-button";
 
 import useSWR from "swr";
 
@@ -81,8 +82,11 @@ export default function AvailableDevicesPage() {
     >
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-semibold mb-2">อุปกรณ์ที่พร้อมใช้งาน</h1>
-          <p className="text-muted-foreground">
+          <div className="flex items-center gap-2">
+            <h1 className="text-3xl font-semibold">อุปกรณ์ที่พร้อมใช้งาน</h1>
+            <HelpButton topic="available" />
+          </div>
+          <p className="text-muted-foreground mt-1">
             จัดการอุปกรณ์ที่ว่าง ตรวจสอบสถานะ และมอบหมายให้ผู้ใช้งาน
           </p>
         </div>

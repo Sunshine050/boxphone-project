@@ -12,6 +12,7 @@ import {
   ChevronRight,
   LogOut,
   ScrollText,
+  CircleHelp,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useSidebar } from "@/components/layout/admin-sidebar-context";
@@ -19,6 +20,7 @@ import { useState } from "react";
 import { LogoutConfirmDialog } from "./logout-confirm-dialog";
 import { AuthService } from "@/services/auth.service";
 import { clearAuthCookies } from "@/lib/cookies";
+import { HelpSheet } from "@/components/help/help-sheet";
 
 /* ===== เมนูภาษาไทย ===== */
 
@@ -54,6 +56,7 @@ export function AdminSidebar() {
   const pathname = usePathname();
   const { collapsed, toggle } = useSidebar();
   const [logoutOpen, setLogoutOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
 
   return (
     <aside
@@ -149,8 +152,36 @@ export function AdminSidebar() {
           })}
         </nav>
 
-        {/* ================= Logout ================= */}
-        <div className="p-3 border-t-2 border-sidebar-border/100">
+        {/* ================= Help + Logout ================= */}
+        <div className="p-3 border-t-2 border-sidebar-border/100 space-y-1">
+          <button
+            onClick={() => setHelpOpen(true)}
+            className={cn(
+              "w-full flex items-center gap-3",
+              "px-3 py-2.5 rounded-xl",
+              "text-sm font-medium",
+              "text-muted-foreground",
+              "transition-all duration-200",
+              "hover:bg-accent hover:text-foreground",
+              "active:scale-[0.98]",
+              collapsed && "justify-center px-0"
+            )}
+          >
+            <CircleHelp className="h-5 w-5 shrink-0" />
+
+            <AnimatePresence>
+              {!collapsed && (
+                <motion.span
+                  initial={{ opacity: 0, x: -6 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -6 }}
+                >
+                  ช่วยเหลือ
+                </motion.span>
+              )}
+            </AnimatePresence>
+          </button>
+
           <button
             onClick={() => setLogoutOpen(true)}
             className={cn(
@@ -180,6 +211,7 @@ export function AdminSidebar() {
           </button>
         </div>
       </div>
+      <HelpSheet open={helpOpen} onOpenChange={setHelpOpen} topic="workflow" />
       <LogoutConfirmDialog
         open={logoutOpen}
         onClose={() => setLogoutOpen(false)}

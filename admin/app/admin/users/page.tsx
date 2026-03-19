@@ -17,6 +17,7 @@ import { DeviceMini } from "@/components/users/user-table";
 
 
 import useSWR from "swr";
+import { HelpButton } from "@/components/help/help-button";
 
 export default function UserManagementPage() {
   const { data: rawUsers, isLoading: isUsersLoading, mutate: mutateUsers } = useSWR('/api/users', () => UsersService.getAll(), { refreshInterval: 10000 });
@@ -139,7 +140,10 @@ export default function UserManagementPage() {
     <div className="p-8 space-y-6">
       {/* Header */}
       <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-semibold">การจัดการผู้ใช้</h1>
+        <div className="flex items-center gap-2">
+          <h1 className="text-3xl font-semibold">การจัดการผู้ใช้</h1>
+          <HelpButton topic="users" />
+        </div>
 
         <div className="flex items-center gap-2">
           {/* ✅ Bulk Add Time */}

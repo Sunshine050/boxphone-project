@@ -8,20 +8,8 @@ export const metadata: Metadata = {
   description: "Admin Box Phone",
   generator: "Admin Box Phone",
   icons: {
-    icon: [
-      {
-        url: "/icon-light-32x32.png",
-        media: "(prefers-color-scheme: light)",
-      },
-      {
-        url: "/icon-dark-32x32.png",
-        media: "(prefers-color-scheme: dark)",
-      },
-      {
-        url: "/icon.svg",
-        type: "image/svg+xml",
-      },
-    ],
+    icon: "/logo-boxphone.svg",
+    shortcut: "/logo-boxphone.svg",
     apple: "/apple-icon.png",
   },
 }
