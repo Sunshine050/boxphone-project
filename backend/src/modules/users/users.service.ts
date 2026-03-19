@@ -25,11 +25,12 @@ export class UsersService {
 
   // ✅ map duration → seconds
   private durationMap = {
-    "1h": 60 * 60,
     "1d": 60 * 60 * 24,
-    "1w": 60 * 60 * 24 * 7,
-    "1m": 60 * 60 * 24 * 30,
-    "1y": 60 * 60 * 24 * 365,
+    "7d": 60 * 60 * 24 * 7,
+    "30d": 60 * 60 * 24 * 30,
+    "90d": 60 * 60 * 24 * 90,
+    "180d": 60 * 60 * 24 * 180,
+    "365d": 60 * 60 * 24 * 365,
   } as const;
 
   private calcRemaining(user: any) {

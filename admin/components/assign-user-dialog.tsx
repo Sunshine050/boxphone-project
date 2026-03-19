@@ -27,14 +27,15 @@ import {
 } from "@/components/ui/dialog";
 import { UsersService } from "@/services/users.service";
 
-type PackageKey = "1h" | "1d" | "1w" | "1m" | "1y" | "custom";
+type PackageKey = "1d" | "7d" | "30d" | "90d" | "180d" | "365d" | "custom";
 
 const PACKAGE_SECONDS: Record<Exclude<PackageKey, "custom">, number> = {
-  "1h": 60 * 60,
   "1d": 60 * 60 * 24,
-  "1w": 60 * 60 * 24 * 7,
-  "1m": 60 * 60 * 24 * 30,
-  "1y": 60 * 60 * 24 * 365,
+  "7d": 60 * 60 * 24 * 7,
+  "30d": 60 * 60 * 24 * 30,
+  "90d": 60 * 60 * 24 * 90,
+  "180d": 60 * 60 * 24 * 180,
+  "365d": 60 * 60 * 24 * 365,
 };
 
 function toSecondsFromCustom(hours: string, minutes: string) {
@@ -75,7 +76,7 @@ export function AssignUserDialog({ open, device, onClose, onSuccess }: AssignUse
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
   const [userSearch, setUserSearch] = useState("");
 
-  const [packageKey, setPackageKey] = useState<PackageKey>("1h");
+  const [packageKey, setPackageKey] = useState<PackageKey>("1d");
   const [customHours, setCustomHours] = useState("0");
   const [customMinutes, setCustomMinutes] = useState("0");
 
@@ -250,7 +251,7 @@ export function AssignUserDialog({ open, device, onClose, onSuccess }: AssignUse
               เวลา (Package)
             </label>
             <div className="flex flex-wrap gap-2">
-              {(["1h", "1d", "1w", "1m", "1y", "custom"] as PackageKey[]).map((k) => (
+              {(["1d", "7d", "30d", "90d", "180d", "365d", "custom"] as PackageKey[]).map((k) => (
                 <Button
                   key={k}
                   type="button"
@@ -263,11 +264,12 @@ export function AssignUserDialog({ open, device, onClose, onSuccess }: AssignUse
                   }
                   onClick={() => setPackageKey(k)}
                 >
-                  {k === "1h" && "1 ชม."}
                   {k === "1d" && "1 วัน"}
-                  {k === "1w" && "1 สัปดาห์"}
-                  {k === "1m" && "1 เดือน"}
-                  {k === "1y" && "1 ปี"}
+                  {k === "7d" && "7 วัน"}
+                  {k === "30d" && "30 วัน"}
+                  {k === "90d" && "90 วัน"}
+                  {k === "180d" && "180 วัน"}
+                  {k === "365d" && "365 วัน"}
                   {k === "custom" && "ระบุเอง"}
                 </Button>
               ))}

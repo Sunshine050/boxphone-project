@@ -21,14 +21,15 @@ import { Plus, Trash2 } from "lucide-react";
 import { normalizeDeviceStatus } from "@/lib/device-status";
 
 /** ✅ Packages */
-type PackageKey = "1h" | "1d" | "1w" | "1m" | "1y" | "custom";
+type PackageKey = "1d" | "7d" | "30d" | "90d" | "180d" | "365d" | "custom";
 
 const PACKAGE_SECONDS: Record<Exclude<PackageKey, "custom">, number> = {
-  "1h": 60 * 60,
   "1d": 60 * 60 * 24,
-  "1w": 60 * 60 * 24 * 7,
-  "1m": 60 * 60 * 24 * 30,
-  "1y": 60 * 60 * 24 * 365,
+  "7d": 60 * 60 * 24 * 7,
+  "30d": 60 * 60 * 24 * 30,
+  "90d": 60 * 60 * 24 * 90,
+  "180d": 60 * 60 * 24 * 180,
+  "365d": 60 * 60 * 24 * 365,
 };
 
 function toSecondsFromCustom(hours: string, minutes: string) {
@@ -66,7 +67,7 @@ interface Props {
 function createEmptyRow(): Row {
   return {
     device_id: "",
-    packageKey: "1h",
+    packageKey: "1d",
     customHours: "0",
     customMinutes: "0",
   };
@@ -148,7 +149,7 @@ export function UserAssignDevicesTimeDialog({
       preloadRows = [
         {
           device_id: String(u.device_id),
-          packageKey: "1h",
+          packageKey: "1d",
           customHours: "0",
           customMinutes: "0",
         },
@@ -296,7 +297,7 @@ export function UserAssignDevicesTimeDialog({
                 <div className="space-y-3">
                   <div className="text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">เวลา (Package)</div>
                   <div className="flex flex-wrap gap-2">
-                    {(["1h", "1d", "1w", "1m", "1y", "custom"] as PackageKey[]).map((k) => (
+                    {(["1d", "7d", "30d", "90d", "180d", "365d", "custom"] as PackageKey[]).map((k) => (
                       <Button
                         key={k}
                         type="button"
@@ -307,11 +308,12 @@ export function UserAssignDevicesTimeDialog({
                           : 'bg-zinc-950 border-zinc-800 text-zinc-500 hover:border-zinc-600 hover:text-zinc-200'
                           }`}
                       >
-                        {k === "1h" && "1 ชม."}
                         {k === "1d" && "1 วัน"}
-                        {k === "1w" && "1 สัปดาห์"}
-                        {k === "1m" && "1 เดือน"}
-                        {k === "1y" && "1 ปี"}
+                        {k === "7d" && "7 วัน"}
+                        {k === "30d" && "30 วัน"}
+                        {k === "90d" && "90 วัน"}
+                        {k === "180d" && "180 วัน"}
+                        {k === "365d" && "365 วัน"}
                         {k === "custom" && "ระบุเอง"}
                       </Button>
                     ))}

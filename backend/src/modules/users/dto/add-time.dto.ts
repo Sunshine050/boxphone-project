@@ -1,8 +1,8 @@
 import { IsIn, IsISO8601, IsOptional } from "class-validator";
 
 export class AddTimeDto {
-  @IsIn(["1h", "1d", "1w", "1m", "1y"])
-  duration: "1h" | "1d" | "1w" | "1m" | "1y";
+  @IsIn(["1d", "7d", "30d", "90d", "180d", "365d"])
+  duration: "1d" | "7d" | "30d" | "90d" | "180d" | "365d";
 
   @IsOptional()
   @IsISO8601()
