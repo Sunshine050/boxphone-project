@@ -7,6 +7,7 @@
 
 ## โครงสร้างระบบ (Modular)
 
+- **[docs/CLIENT-DELIVERY-HANDBOOK.md](./docs/CLIENT-DELIVERY-HANDBOOK.md)** — **คู่มือส่งมอบลูกค้า** (ติดตั้ง, ใช้งาน, FAQ — อ่านง่าย)
 - **[docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md)** — โมดูล backend, API, การเชื่อมต่อ frontend / `shared/`
 - **[docs/DEPLOY.md](./docs/DEPLOY.md)** — env, CORS, cookie, Nginx — **เตรียม deploy production**
 - **`shared/`** — `getApiBaseUrl()` ใช้ร่วมกันระหว่าง `admin/` และ `user/` (import `@boxphon/shared/...`)

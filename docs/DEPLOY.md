@@ -2,6 +2,8 @@
 
 เอกสารนี้สรุป **สภาพแวดล้อม (env)** และ **การเรียก API** ให้พร้อม production (เช่น VPS Hetzner + Nginx + HTTPS)
 
+> สำหรับ **ส่งมอบลูกค้า / คู่มือติดตั้งแบบไม่เน้นเทคนิค** ให้อ่าน **[CLIENT-DELIVERY-HANDBOOK.md](./CLIENT-DELIVERY-HANDBOOK.md)**
+
 ## สถาปัตยกรรมที่แนะนำ
 
 | ชั้น | ตัวอย่าง |

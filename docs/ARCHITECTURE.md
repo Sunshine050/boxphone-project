@@ -1,6 +1,6 @@
 # BoxPhone — โครงสร้างระบบ (สำคัญ ห้ามลบ)
 
-เอกสารนี้สรุปการทำงานของโปรเจกต์หลังจัดโมดูลและลด duplication — อ่านคู่กับ `README.md`, **`docs/DEPLOY.md`** และ `docs/SCREENSHOT-SETUP.md`
+เอกสารนี้สรุปการทำงานของโปรเจกต์หลังจัดโมดูลและลด duplication — อ่านคู่กับ `README.md`, **`docs/CLIENT-DELIVERY-HANDBOOK.md`** (ส่งมอบลูกค้า), **`docs/DEPLOY.md`** และ `docs/SCREENSHOT-SETUP.md`
 
 ## โฟลเดอร์หลัก
 
