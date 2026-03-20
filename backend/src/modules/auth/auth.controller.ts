@@ -22,12 +22,26 @@ import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { LoginAttemptService } from './services/login-attempt.service';
 import { ConfigService } from '@nestjs/config';
 
-function getCookieOptions(isProduction: boolean) {
-  return {
+function getCookieOptions(isProduction: boolean, config: ConfigService) {
+  const domain = config.get<string>('COOKIE_DOMAIN')?.trim();
+  const base = {
     httpOnly: true,
     secure: isProduction,
     sameSite: 'lax' as const,
     path: '/',
+    ...(domain ? { domain } : {}),
+  };
+  return base;
+}
+
+function getCsrfCookieOptions(isProduction: boolean, config: ConfigService) {
+  const domain = config.get<string>('COOKIE_DOMAIN')?.trim();
+  return {
+    httpOnly: false,
+    secure: isProduction,
+    sameSite: 'lax' as const,
+    path: '/',
+    ...(domain ? { domain } : {}),
   };
 }
 
@@ -71,7 +85,7 @@ export class AuthController {
       this.loginAttemptService.recordSuccess(ip, loginDto.username);
 
       const isProduction = this.configService.get('NODE_ENV') === 'production';
-      const cookieOpts = getCookieOptions(isProduction);
+      const cookieOpts = getCookieOptions(isProduction, this.configService);
 
       const jwtExpiry = this.configService.get<string>('JWT_EXPIRATION') || '1d';
       const maxAgeMs = this.parseExpiryToMs(jwtExpiry);
@@ -104,15 +118,11 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   async logout(@Res({ passthrough: true }) res: Response) {
     const isProduction = this.configService.get('NODE_ENV') === 'production';
-    const cookieOpts = getCookieOptions(isProduction);
+    const cookieOpts = getCookieOptions(isProduction, this.configService);
+    const csrfOpts = getCsrfCookieOptions(isProduction, this.configService);
 
     res.clearCookie('access_token', cookieOpts);
-    res.clearCookie('csrf_token', {
-      httpOnly: false,
-      secure: isProduction,
-      sameSite: 'lax',
-      path: '/',
-    });
+    res.clearCookie('csrf_token', csrfOpts);
 
     return { message: 'Logged out' };
   }

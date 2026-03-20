@@ -1,6 +1,6 @@
 # BoxPhone — โครงสร้างระบบ (สำคัญ ห้ามลบ)
 
-เอกสารนี้สรุปการทำงานของโปรเจกต์หลังจัดโมดูลและลด duplication — อ่านคู่กับ `README.md` และ `docs/SCREENSHOT-SETUP.md`
+เอกสารนี้สรุปการทำงานของโปรเจกต์หลังจัดโมดูลและลด duplication — อ่านคู่กับ `README.md`, **`docs/DEPLOY.md`** และ `docs/SCREENSHOT-SETUP.md`
 
 ## โฟลเดอร์หลัก
 
@@ -33,6 +33,8 @@
 - **Base URL** มาจาก `shared/client/api-base-url.ts` — ลำดับ env: `NEXT_PUBLIC_API_BASE_URL` → `NEXT_PUBLIC_BACKEND_URL` → `NEXT_PUBLIC_API_URL`
 - Next.js ตั้ง `experimental.externalDir: true` เพื่อ import จาก `../shared`
 - `user/lib/socket-client.ts` ใช้ `getApiBaseUrl()` เดียวกับ REST client
+- **`npm run build` (admin/user)** เรียก `./scripts/next-build-filtered.cjs` → `shared/scripts/run-next-build-filter-baseline-warn.cjs` เพื่อกรองข้อความ `[baseline-browser-mapping] … two months old` (ไม่กระทบผล build)
+- **`npm run build:verbose`** — รัน `next build` ตรงๆ ถ้าต้องการ log เต็ม
 
 ## สิ่งที่ถูกลบ / รวมแล้ว (เทียบของเก่า)
 

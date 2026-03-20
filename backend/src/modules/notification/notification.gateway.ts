@@ -7,7 +7,6 @@ import {
 import { Server, Socket } from "socket.io";
 
 @WebSocketGateway({
-  cors: { origin: "*" },
   pingInterval: 25000,
   pingTimeout: 60000,
 })

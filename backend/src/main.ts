@@ -1,26 +1,42 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ConfigService } from '@nestjs/config';
-import { ValidationPipe, Logger } from '@nestjs/common';
+import { ValidationPipe } from '@nestjs/common';
 import * as cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 import { seedAdmin } from './seed/seed-admin';
 import { getValidationPipeConfig } from './config/app.config';
 import { getCorsConfig } from './config/cors.config';
+import { PrettyLogger } from './common/logger/pretty-logger';
+import { ConfigurableSocketIoAdapter } from './common/adapters/configurable-socket-io.adapter';
 
 async function bootstrap() {
-  const logger = new Logger('Bootstrap');
+  const logger = new PrettyLogger('Bootstrap');
 
-  logger.log('Starting application...');
+  /* ── เปิดเฉพาะ error / warn / log — ตัด debug & verbose ออกเพื่อลด noise ── */
+  const appLogger = new PrettyLogger();
+  appLogger.setLogLevels(['error', 'warn', 'log']);
 
   const app = await NestFactory.create(AppModule, {
-    logger: ['error', 'warn', 'log', 'debug', 'verbose'],
+    logger: appLogger,
   });
 
   const configService = app.get(ConfigService);
 
-  app.use(helmet());
+  app.use(
+    helmet({
+      // ให้เบราว์เซอร์เรียก API ข้ามโดเมน (user/admin คนละ subdomain) ได้เมื่อใช้ credentials
+      crossOriginResourcePolicy: { policy: 'cross-origin' },
+    }),
+  );
   app.use(cookieParser());
+
+  const trustProxy = configService.get<string>('TRUST_PROXY');
+  if (trustProxy === 'true' || trustProxy === '1') {
+    app.getHttpAdapter().getInstance().set('trust proxy', 1);
+  }
+
+  app.useWebSocketAdapter(new ConfigurableSocketIoAdapter(app, configService));
 
   // Limit JSON body to 1 MB
   const express = require('express');
@@ -37,11 +53,10 @@ async function bootstrap() {
   }
   await app.listen(port, '0.0.0.0');
 
-  logger.log(`Application is running on: ${await app.getUrl()}`);
-  logger.log('Logging enabled');
+  logger.separator();
+  logger.log(`Server ready → http://0.0.0.0:${port}`);
+  logger.separator();
 
-  logger.log('Seeding admin user...');
   await seedAdmin(app);
-  logger.log('Admin user seeded');
 }
 bootstrap();

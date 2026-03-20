@@ -3,7 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "build": "next build",
+    "build": "node ./scripts/next-build-filtered.cjs",
+    "build:verbose": "next build",
     "dev": "next dev",
     "lint": "eslint .",
     "start": "next start"

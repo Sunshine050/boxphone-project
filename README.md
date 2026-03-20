@@ -8,7 +8,14 @@
 ## โครงสร้างระบบ (Modular)
 
 - **[docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md)** — โมดูล backend, API, การเชื่อมต่อ frontend / `shared/`
+- **[docs/DEPLOY.md](./docs/DEPLOY.md)** — env, CORS, cookie, Nginx — **เตรียม deploy production**
 - **`shared/`** — `getApiBaseUrl()` ใช้ร่วมกันระหว่าง `admin/` และ `user/` (import `@boxphon/shared/...`)
+
+### ตัวอย่าง env (คัดลอกแล้วแก้)
+
+- `backend/.env.example` → `.env`
+- `admin/.env.example` → `.env.local`
+- `user/.env.example` → `.env.local`
 
 ## วิธีการรันโปรเจค (Getting Started)
 

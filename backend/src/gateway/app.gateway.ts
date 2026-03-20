@@ -15,9 +15,7 @@ import { DeviceStatus } from "../modules/devices/device.schema";
 import { SessionStatus } from "../modules/sessions/session.schema";
 
 @WebSocketGateway({
-  cors: {
-    origin: "*", // Allow all for dev
-  },
+  // CORS ของ Socket.IO ตั้งที่ ConfigurableSocketIoAdapter (main.ts) จาก CORS_ORIGINS
   maxHttpBufferSize: 1e8, // 100 MB for image streams just in case
 })
 export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect {
