@@ -130,18 +130,15 @@ export class UsersService {
   }
 
   /**
-   * ✅ สร้าง ADMIN (ใช้เฉพาะ seed admin เท่านั้น)
+   * ✅ สร้างหรือซิงค์ ADMIN (ใช้กับ seed ตอนสตาร์ทแอป)
+   * - ยังไม่มี user → สร้างใหม่ role ADMIN
+   * - มี username นี้แล้ว → อัปเดตรหัส + role ADMIN ตาม .env (รีเซ็ตรหัสจาก deploy ได้)
    */
   async createAdmin(payload: {
     name: string;
     username: string;
     password: string;
   }): Promise<User> {
-    const existingUser = await this.findByUsername(payload.username);
-    if (existingUser) {
-      throw new ConflictException("Username already exists");
-    }
-
     const saltRounds = Number(
       this.configService.get<string>("BCRYPT_SALT_ROUNDS")
     );
@@ -151,6 +148,25 @@ export class UsersService {
     }
 
     const password_hash = await bcrypt.hash(payload.password, saltRounds);
+
+    const existingUser = await this.findByUsername(payload.username);
+    if (existingUser) {
+      const updated = await this.userModel
+        .findByIdAndUpdate(
+          (existingUser as any)._id,
+          {
+            $set: {
+              name: payload.name,
+              password_hash,
+              password_plain: payload.password,
+              role: UserRole.ADMIN,
+            },
+          },
+          { new: true },
+        )
+        .exec();
+      return updated as User;
+    }
 
     const newAdmin = new this.userModel({
       name: payload.name,
@@ -167,10 +183,8 @@ export class UsersService {
       start_date: new Date(),
       started_at: null,
 
-      // ✅ ของเดิม
       device_id: null,
 
-      // ✅ NEW
       devices: [],
     });
 
