@@ -4,7 +4,7 @@ import type { NextRequest } from 'next/server';
 const PUBLIC_PATHS = ['/login', '/'];
 const STATIC_PREFIXES = ['/_next', '/favicon', '/api'];
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   if (STATIC_PREFIXES.some((p) => pathname.startsWith(p))) {
@@ -22,7 +22,7 @@ export function middleware(request: NextRequest) {
 
   if (hasSession && pathname === '/login') {
     const dashUrl = request.nextUrl.clone();
-    dashUrl.pathname = '/dashboard';
+    dashUrl.pathname = '/admin';
     return NextResponse.redirect(dashUrl);
   }
 

@@ -20,10 +20,7 @@ import { Device, DeviceDocument, DeviceStatus } from "../devices/device.schema";
 import { Cron, CronExpression } from "@nestjs/schedule";
 import { LogService } from "../log/log.service";
 import { NotificationService } from "../notification/notification.service";
-import { exec } from "child_process";
-import { promisify } from "util";
-
-const execAsync = promisify(exec);
+import { AdbScreenshotService } from "../devices/adb-screenshot.service";
 
 @Injectable()
 export class SessionsService {
@@ -42,6 +39,7 @@ export class SessionsService {
 
     private readonly logService: LogService,
     private readonly notificationService: NotificationService,
+    private readonly adbScreenshotService: AdbScreenshotService,
   ) { }
 
   private readonly logger = new Logger(SessionsService.name);
@@ -527,13 +525,14 @@ export class SessionsService {
       );
       return;
     }
-    const adbPath = this.configService.get<string>("ADB_PATH") || "adb";
-    const cmd = `${adbPath} -s ${serial} shell input keyevent KEYCODE_HOME`;
     this.logger.debug(
-      `[AUTO_RESET] Running ADB reset for serial=${serial}: ${cmd}`
+      `[AUTO_RESET] ADB keyevent HOME for serial=${serial}`
     );
     try {
-      await execAsync(cmd, { timeout: 8000 });
+      await this.adbScreenshotService.sendInput(serial, {
+        type: "key",
+        payload: { keycode: "KEYCODE_HOME" },
+      });
       this.logger.log(
         `[AUTO_RESET] Device ${serial} reset to Home screen after timeout`
       );
@@ -642,7 +641,7 @@ export class SessionsService {
     const user = await this.userModel.findById(userId).exec();
     if (!user || !user.devices) return [];
 
-    // ป้องกัน CastError จาก mock_device_id_* หรือ id ที่ไม่ใช่ ObjectId
+    // ป้องกัน CastError จาก device_id ที่ไม่ใช่ ObjectId (ข้อมูลเก่า/ผิดรูปแบบ)
     const mongoose = await import("mongoose");
 
     for (const d of user.devices as any[]) {

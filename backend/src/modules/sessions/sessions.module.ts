@@ -7,9 +7,11 @@ import { SessionMoveLog, SessionMoveLogSchema } from "./session-move-log.schema"
 import { User, UserSchema } from "../users/user.schema";
 import { Device, DeviceSchema } from "../devices/device.schema";
 import { ScheduleModule } from "@nestjs/schedule";
+import { DevicesModule } from "../devices/devices.module";
 
 @Module({
   imports: [
+    DevicesModule,
     ScheduleModule.forRoot(),
     MongooseModule.forFeature([
       { name: Session.name, schema: SessionSchema },

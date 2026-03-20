@@ -2,6 +2,11 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { execFile, exec } from 'child_process';
 import { promisify } from 'util';
+import {
+    DEFAULT_SCREENSHOT_CACHE_TTL_MS,
+    DEFAULT_SCREENSHOT_MAX_CONCURRENT,
+    PLACEHOLDER_PNG,
+} from './constants/screenshot.constants';
 
 const execFileAsync = promisify(execFile);
 const execAsync = promisify(exec);
@@ -12,13 +17,8 @@ export interface AdbInputCommand {
     payload: Record<string, any>;
 }
 
-export const PLACEHOLDER_PNG = Buffer.from(
-    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=',
-    'base64'
-);
-
-const SCREENSHOT_CACHE_TTL_MS = 8000;
-const SCREENSHOT_MAX_CONCURRENT = 2;
+/** Re-export สำหรับ module อื่นที่ต้องการเทียบ placeholder */
+export { PLACEHOLDER_PNG };
 
 @Injectable()
 export class AdbScreenshotService {
@@ -30,7 +30,7 @@ export class AdbScreenshotService {
     constructor(private readonly configService: ConfigService) { }
 
     private async acquireScreenshotSlot(): Promise<void> {
-        const max = this.configService.get<number>('SCREENSHOT_MAX_CONCURRENT') ?? SCREENSHOT_MAX_CONCURRENT;
+        const max = this.configService.get<number>('SCREENSHOT_MAX_CONCURRENT') ?? DEFAULT_SCREENSHOT_MAX_CONCURRENT;
         if (this.screenshotRunning < max) {
             this.screenshotRunning++;
             return;
@@ -44,7 +44,7 @@ export class AdbScreenshotService {
     }
 
     private releaseScreenshotSlot(): void {
-        const max = this.configService.get<number>('SCREENSHOT_MAX_CONCURRENT') ?? SCREENSHOT_MAX_CONCURRENT;
+        const max = this.configService.get<number>('SCREENSHOT_MAX_CONCURRENT') ?? DEFAULT_SCREENSHOT_MAX_CONCURRENT;
         this.screenshotRunning--;
         if (this.screenshotQueue.length > 0 && this.screenshotRunning < max) {
             const next = this.screenshotQueue.shift()!;
@@ -56,7 +56,7 @@ export class AdbScreenshotService {
      * ดึงหน้าจอผ่าน ADB พร้อมแคชภาพแบบ TTL และจำกัด concurrent
      */
     async fetchScreenshotForSerial(serial: string): Promise<Buffer> {
-        const ttlMs = this.configService.get<number>('SCREENSHOT_CACHE_TTL_MS') ?? SCREENSHOT_CACHE_TTL_MS;
+        const ttlMs = this.configService.get<number>('SCREENSHOT_CACHE_TTL_MS') ?? DEFAULT_SCREENSHOT_CACHE_TTL_MS;
         const cached = this.screenshotCache.get(serial);
         if (cached && Date.now() - cached.at < ttlMs) {
             this.logger.debug(`[SCREENSHOT] Cache hit for ${serial}`);
@@ -155,7 +155,7 @@ export class AdbScreenshotService {
         }
 
         this.logger.debug(`[INPUT] adb ${args.join(' ')}`);
-        const opts = { timeout: 5000 };
+        const opts = { timeout: 8000 };
         const { stderr } = await execFileAsync(adbPath, args, opts as any);
         if (stderr) this.logger.warn(`[INPUT] stderr: ${stderr}`);
     }

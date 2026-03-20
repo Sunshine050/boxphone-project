@@ -1,19 +1,7 @@
 import { io, Socket } from "socket.io-client";
+import { getApiBaseUrl } from "@boxphon/shared/client/api-base-url";
 
-function getBackendUrl(): string {
-  const url =
-    process.env.NEXT_PUBLIC_API_URL ||
-    process.env.NEXT_PUBLIC_API_BASE_URL ||
-    process.env.NEXT_PUBLIC_BACKEND_URL;
-
-  if (!url) {
-    throw new Error("Backend URL not configured");
-  }
-
-  return url.replace(/\/+$/, "");
-}
-
-const BACKEND_URL = getBackendUrl();
+const BACKEND_URL = getApiBaseUrl();
 
 let notificationSocket: Socket | null = null;
 

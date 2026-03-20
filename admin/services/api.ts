@@ -1,13 +1,7 @@
 import { getCsrfToken } from '@/lib/cookies';
+import { getApiBaseUrl } from '@boxphon/shared/client/api-base-url';
 
-export const BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL || process.env.NEXT_PUBLIC_BACKEND_URL || '';
-
-if (!BASE_URL) {
-  throw new Error(
-    'NEXT_PUBLIC_API_BASE_URL or NEXT_PUBLIC_BACKEND_URL must be set (e.g. in .env.local)',
-  );
-}
+export const BASE_URL = getApiBaseUrl();
 
 type HttpMethod = 'GET' | 'POST' | 'PATCH' | 'DELETE';
 

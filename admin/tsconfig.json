@@ -25,6 +25,9 @@
     "paths": {
       "@/*": [
         "./*"
+      ],
+      "@boxphon/shared/*": [
+        "../shared/*"
       ]
     }
   },

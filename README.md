@@ -5,6 +5,11 @@
 2. **Docker Desktop**: ต้องติดตั้งและ **เปิดโปรแกรมทิ้งไว้** เสมอ
 3. **Android Studio**: สำหรับรัน Mobile Agent
 
+## โครงสร้างระบบ (Modular)
+
+- **[docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md)** — โมดูล backend, API, การเชื่อมต่อ frontend / `shared/`
+- **`shared/`** — `getApiBaseUrl()` ใช้ร่วมกันระหว่าง `admin/` และ `user/` (import `@boxphon/shared/...`)
+
 ## วิธีการรันโปรเจค (Getting Started)
 
 ### 1. Backend (Server & Database)
