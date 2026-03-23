@@ -153,6 +153,7 @@
 
 | เอกสาร | เนื้อหา |
 |--------|---------|
+| **`docs/MEETING-DEPLOY-AND-PRICING-GUIDE.md`** | **เตรียมประชุมลูกค้า** — deploy, โดเมน, แพ็กเกจราคา, ถ้าลูกค้าว่าแพง |
 | **เอกสารนี้** | ส่งมอบลูกค้า — ติดตั้ง + ใช้งาน + FAQ |
 | `docs/DEPLOY.md` | Environment, CORS, Nginx, build |
 | `docs/SCREENSHOT-SETUP.md` | ADB, ภาพหน้าจอ, deploy checklist |
