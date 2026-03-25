@@ -14,11 +14,19 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
     canActivate(context: ExecutionContext) {
         const request = context.switchToHttp().getRequest();
         const authHeader = request.headers?.authorization;
-        
-        if (!authHeader) {
-            this.logger.warn(`[AUTH] ❌ No Authorization header - Method: ${request.method}, Path: ${request.url}`);
+        const cookieToken = request.cookies?.access_token;
+
+        // Browser ใช้ cookie; API clients มักใช้ Bearer — ไม่มีทั้งคู่ค่อยถือว่า “ไม่ส่ง credential”
+        if (!authHeader && !cookieToken) {
+            this.logger.warn(
+                `[AUTH] ❌ No JWT (no Authorization header or access_token cookie) - Method: ${request.method}, Path: ${request.url}`,
+            );
+        } else if (!authHeader && cookieToken) {
+            this.logger.debug(
+                `[AUTH] Cookie JWT - Method: ${request.method}, Path: ${request.url}`,
+            );
         } else {
-            this.logger.debug(`[AUTH] Checking token - Method: ${request.method}, Path: ${request.url}`);
+            this.logger.debug(`[AUTH] Bearer token - Method: ${request.method}, Path: ${request.url}`);
         }
 
         return super.canActivate(context);
