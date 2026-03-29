@@ -29,7 +29,7 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background">
+    <div className="flex min-h-svh w-full flex-col items-center justify-center bg-background px-4 sm:px-6">
       <LoginForm onSubmit={handleLogin} isLoading={isLoading} error={error} />
     </div>
   );

@@ -12,13 +12,15 @@ import { useToast } from "@/hooks/use-toast";
 
 import {
   Dialog,
+  DialogClose,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
 
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, X } from "lucide-react";
 import { normalizeDeviceStatus } from "@/lib/device-status";
 
 /** ✅ Packages */
@@ -229,8 +231,22 @@ export function UserAssignDevicesTimeDialog({
   return (
     <Dialog open={open} onOpenChange={onClose}>
       {/* 🎯 เปลี่ยนสีพื้นหลังเป็นโทน Black/Zinc ตามธีมเว็บ */}
-      <DialogContent className="max-w-3xl w-[95vw] sm:w-full max-h-[85vh] p-0 flex flex-col overflow-hidden bg-[#0c0c0e] text-zinc-100 border-zinc-800 shadow-2xl">
-        <div className="px-6 pt-6 border-b border-zinc-900 pb-4">
+      <DialogContent
+        showCloseButton={false}
+        className="max-w-3xl w-[95vw] sm:w-full !grid !grid-rows-[auto_minmax(0,1fr)_auto] !gap-0 !p-0 min-h-0 overflow-hidden overflow-x-hidden bg-[#0c0c0e] text-zinc-100 border-zinc-800 shadow-2xl
+          left-1/2 -translate-x-1/2 top-4 translate-y-0
+          max-2xl:h-[calc(100vh-1.5rem)] max-2xl:max-h-[calc(100vh-1.5rem)]
+          supports-[height:100dvh]:max-2xl:h-[calc(100dvh-1.5rem)] supports-[height:100dvh]:max-2xl:max-h-[calc(100dvh-1.5rem)]
+          2xl:top-1/2 2xl:-translate-y-1/2 2xl:h-auto 2xl:max-h-[85vh] 2xl:max-h-[85dvh]"
+      >
+        <div className="relative min-h-0 shrink-0 px-6 pt-6 border-b border-zinc-900 pb-4 pr-14">
+          <DialogClose className="absolute right-4 top-4 z-10 rounded-xs p-2 text-zinc-400 opacity-80 transition-opacity hover:bg-zinc-800 hover:opacity-100 focus:ring-2 focus:ring-zinc-600 focus:outline-hidden">
+            <X className="h-4 w-4" />
+            <span className="sr-only">ปิด</span>
+          </DialogClose>
+          <DialogDescription className="sr-only">
+            กำหนดอุปกรณ์และระยะเวลาใช้งานสำหรับผู้ใช้ {user?.username ?? ""}
+          </DialogDescription>
           <DialogHeader>
             <DialogTitle className="text-xl font-bold tracking-tight text-zinc-100">กำหนด Device + เวลา (Package)</DialogTitle>
             <p className="text-sm text-zinc-500">
@@ -239,7 +255,7 @@ export function UserAssignDevicesTimeDialog({
           </DialogHeader>
         </div>
 
-        <div className="px-6 py-4 overflow-y-auto max-h-[calc(85vh-140px)] space-y-4 bg-[#0c0c0e]">
+        <div className="min-h-0 min-w-0 overflow-y-scroll overflow-x-hidden overscroll-y-contain touch-pan-y px-6 py-4 space-y-4 bg-[#0c0c0e] [-webkit-overflow-scrolling:touch]">
           {rows.map((r, idx) => {
             const disabledSet = new Set(selectedDeviceIds.filter((id) => id !== r.device_id));
             const assignSeconds = getAssignSeconds(r);
@@ -253,8 +269,8 @@ export function UserAssignDevicesTimeDialog({
                     size="icon"
                     variant="ghost"
                     onClick={() => removeRow(idx)}
-                    disabled={false}
-                    className="h-8 w-8 text-zinc-500 hover:text-red-400 hover:bg-red-400/10"
+                    disabled={rows.length === 1}
+                    className="h-8 w-8 text-zinc-500 hover:text-red-400 hover:bg-red-400/10 disabled:opacity-30 disabled:pointer-events-none"
                   >
                     <Trash2 size={16} />
                   </Button>
@@ -366,7 +382,7 @@ export function UserAssignDevicesTimeDialog({
         </div>
 
         {/* Footer: ใช้สี Blue สำหรับ Action หลัก */}
-        <div className="flex-shrink-0 px-6 py-6 border-t border-zinc-900 bg-[#0c0c0e]">
+        <div className="min-h-0 shrink-0 px-6 py-6 border-t border-zinc-900 bg-[#0c0c0e]">
           <DialogFooter className="flex flex-row gap-3">
             <Button
               variant="ghost"
