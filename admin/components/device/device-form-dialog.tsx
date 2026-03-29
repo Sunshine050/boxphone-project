@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Device } from "./device-management-table";
 import { DevicesService } from "@/services/devices.service";
+import { useToast } from "@/hooks/use-toast";
 
 interface DeviceFormDialogProps {
   open: boolean;
@@ -28,6 +29,7 @@ export function DeviceFormDialog({
   onClose,
   onSuccess,
 }: DeviceFormDialogProps) {
+  const { toast } = useToast();
   const isEdit = mode === "edit";
 
   const [name, setName] = useState("");
@@ -42,8 +44,14 @@ export function DeviceFormDialog({
   }, [open, isEdit, device]);
 
   const handleSubmit = async () => {
-    if (!name.trim()) return alert("กรุณากรอกชื่ออุปกรณ์");
-    if (!serial.trim()) return alert("กรุณากรอก serial number");
+    if (!name.trim()) {
+      toast({ variant: "destructive", title: "กรุณากรอกชื่ออุปกรณ์" });
+      return;
+    }
+    if (!serial.trim()) {
+      toast({ variant: "destructive", title: "กรุณากรอก Serial Number" });
+      return;
+    }
 
     setLoading(true);
     try {
@@ -53,17 +61,23 @@ export function DeviceFormDialog({
           name,
           serial_number: serial,
         });
+        toast({ title: "แก้ไขอุปกรณ์สำเร็จ", description: name });
       } else {
         await DevicesService.create({
           name,
           serial_number: serial,
         });
+        toast({ title: "เพิ่มอุปกรณ์สำเร็จ", description: `${name} (${serial})` });
       }
 
       onSuccess?.();
       onClose();
     } catch (err: any) {
-      alert(err.message || "บันทึกไม่สำเร็จ");
+      toast({
+        variant: "destructive",
+        title: isEdit ? "แก้ไขไม่สำเร็จ" : "เพิ่มอุปกรณ์ไม่สำเร็จ",
+        description: err?.message || "เกิดข้อผิดพลาด",
+      });
     } finally {
       setLoading(false);
     }
@@ -81,11 +95,13 @@ export function DeviceFormDialog({
             placeholder="ชื่ออุปกรณ์"
             value={name}
             onChange={(e) => setName(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
           />
           <Input
             placeholder="Serial Number"
             value={serial}
             onChange={(e) => setSerial(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
           />
 
           {isEdit && (

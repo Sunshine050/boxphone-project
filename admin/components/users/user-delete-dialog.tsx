@@ -10,6 +10,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { UsersService } from "@/services/users.service";
 import { User } from "@/types/user";
+import { useToast } from "@/hooks/use-toast";
 
 export function UserDeleteDialog({
   user,
@@ -22,22 +23,24 @@ export function UserDeleteDialog({
   onClose: () => void;
   onDeleted: () => void;
 }) {
+  const { toast } = useToast();
+
   const handleDelete = async () => {
     if (!user) return;
 
     try {
       await UsersService.delete(user.id);
-      onDeleted(); // 🔁 ให้ parent รีเฟรช list
+      toast({ title: "ลบผู้ใช้แล้ว", description: `${user.name} (@${user.username})` });
+      onDeleted();
       onClose();
-    } catch (error) {
-      console.error("Delete user failed:", error);
-      alert("ไม่สามารถลบผู้ใช้ได้");
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "ลบผู้ใช้ไม่สำเร็จ", description: err?.message || "เกิดข้อผิดพลาด" });
     }
   };
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent>
+      <DialogContent className="w-[calc(100vw-2rem)] max-w-sm rounded-xl sm:rounded-lg">
         <DialogHeader>
           <DialogTitle>ลบผู้ใช้</DialogTitle>
         </DialogHeader>

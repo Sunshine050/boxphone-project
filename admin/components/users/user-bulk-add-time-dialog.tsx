@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { UsersService } from "@/services/users.service";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useToast } from "@/hooks/use-toast";
 
 import {
   Dialog,
@@ -28,6 +29,7 @@ export function UserBulkAddTimeDialog({
   onClose: () => void;
   onSuccess?: () => void;
 }) {
+  const { toast } = useToast();
   const [hours, setHours] = useState("0");
   const [minutes, setMinutes] = useState("30");
   const [note, setNote] = useState("");
@@ -37,18 +39,23 @@ export function UserBulkAddTimeDialog({
 
   const handleSubmit = async () => {
     if (addSeconds <= 0) {
-      alert("กรุณากรอกเวลาที่เพิ่มให้มากกว่า 0");
+      toast({ variant: "destructive", title: "กรุณากรอกเวลาที่เพิ่มให้มากกว่า 0" });
       return;
     }
 
     setLoading(true);
     try {
-      await UsersService.bulkAddTimeToInuse(addSeconds, note.trim() || undefined);
+      const result = await UsersService.bulkAddTimeToInuse(addSeconds, note.trim() || undefined);
+      const count = (result as any)?.count ?? 0;
+      toast({
+        title: "เพิ่มเวลาสำเร็จ",
+        description: `เพิ่ม ${Math.floor(addSeconds / 60)} นาที ให้ผู้ใช้ที่กำลังใช้งาน ${count} คน${note.trim() ? ` (${note.trim()})` : ""}`,
+      });
       onSuccess?.();
       onClose();
       setNote("");
     } catch (err: any) {
-      alert(err.message || "Bulk add time ไม่สำเร็จ");
+      toast({ variant: "destructive", title: "เพิ่มเวลาไม่สำเร็จ", description: err?.message || "เกิดข้อผิดพลาด" });
     } finally {
       setLoading(false);
     }
@@ -56,7 +63,7 @@ export function UserBulkAddTimeDialog({
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="w-[calc(100vw-2rem)] max-w-lg rounded-xl sm:rounded-lg">
         <DialogHeader>
           <DialogTitle>เพิ่มเวลาให้ผู้ใช้ที่กำลังใช้งานทั้งหมด</DialogTitle>
           <p className="text-sm text-muted-foreground">

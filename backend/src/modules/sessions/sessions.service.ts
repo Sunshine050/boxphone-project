@@ -219,7 +219,10 @@ export class SessionsService {
         throw new NotFoundException("Device not found");
       }
 
-      if (device.status !== DeviceStatus.AVAILABLE) {
+      const canResume =
+        device.status === DeviceStatus.AVAILABLE ||
+        device.status === DeviceStatus.QUARANTINE;
+      if (!canResume) {
         throw new ConflictException(
           "Device is not available to resume session"
         );
@@ -310,8 +313,10 @@ export class SessionsService {
 
     if (oldDeviceId) {
       await this.deviceModel.findByIdAndUpdate(oldDeviceId, {
-        status: DeviceStatus.AVAILABLE,
+        status: DeviceStatus.QUARANTINE,
         current_user_id: null,
+        previous_user_id: session.user_id?.toString() ?? null,
+        last_user_disconnected_at: new Date(),
       });
     }
 
@@ -470,8 +475,10 @@ export class SessionsService {
 
     if (deviceId) {
       await this.deviceModel.findByIdAndUpdate(deviceId, {
-        status: DeviceStatus.AVAILABLE,
+        status: DeviceStatus.QUARANTINE,
         current_user_id: null,
+        previous_user_id: userId ?? null,
+        last_user_disconnected_at: new Date(),
       });
     }
 
@@ -570,8 +577,10 @@ export class SessionsService {
     // 🔹 คืนสถานะเครื่อง
     if (deviceId) {
       await this.deviceModel.findByIdAndUpdate(deviceId, {
-        status: DeviceStatus.AVAILABLE,
+        status: DeviceStatus.QUARANTINE,
         current_user_id: null,
+        previous_user_id: userId?.toString() ?? null,
+        last_user_disconnected_at: new Date(),
       });
     }
 
@@ -698,17 +707,42 @@ export class SessionsService {
   }
 
 
-  async addTimeToActiveSessions(userId: string, addSeconds: number) {
-    if (!addSeconds || addSeconds <= 0) return;
+  async reduceTimeFromSession(sessionId: string, seconds: number): Promise<Session> {
+    if (!seconds || seconds <= 0) {
+      throw new BadRequestException("seconds must be greater than 0");
+    }
+
+    const session = await this.sessionModel.findOne({
+      _id: sessionId,
+      status: { $in: [SessionStatus.ACTIVE, SessionStatus.PAUSED] },
+    });
+
+    if (!session) {
+      throw new NotFoundException("Active or paused session not found");
+    }
+
+    session.remaining_seconds = Math.max(0, (session.remaining_seconds ?? 0) - seconds);
+    await session.save();
+
+    const userId = session.user_id?.toString();
+    if (userId) this.notificationService.notifySessionUpdate(userId);
+
+    return session;
+  }
+
+  async addTimeToActiveSessions(userId: string, addSeconds: number): Promise<number> {
+    if (!addSeconds || addSeconds <= 0) return 0;
 
     const sessions = await this.sessionModel.find({
       user_id: userId,
-      status: SessionStatus.ACTIVE,
+      status: { $in: [SessionStatus.ACTIVE, SessionStatus.PAUSED] },
     });
 
     for (const s of sessions) {
       s.remaining_seconds = (s.remaining_seconds ?? 0) + addSeconds;
       await s.save();
     }
+
+    return sessions.length;
   }
 }

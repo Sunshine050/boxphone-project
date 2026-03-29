@@ -78,12 +78,12 @@ export default function AvailableDevicesPage() {
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5 }}
-      className="p-8 space-y-8"
+      className="p-4 sm:p-6 md:p-8 space-y-6 md:space-y-8"
     >
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-3xl font-semibold">อุปกรณ์ที่พร้อมใช้งาน</h1>
+            <h1 className="text-xl sm:text-3xl font-semibold">อุปกรณ์ที่พร้อมใช้งาน</h1>
             <HelpButton topic="available" />
           </div>
           <p className="text-muted-foreground mt-1">

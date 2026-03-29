@@ -23,11 +23,11 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 import { motion } from "framer-motion";
-import { MoreHorizontal, Pencil, Trash2, Eye, Wrench, AlertTriangle } from "lucide-react";
+import { MoreHorizontal, Pencil, Trash2, Eye, Wrench, AlertTriangle, CheckCircle } from "lucide-react";
 
 /* ================= TYPES (match backend) ================= */
 
-export type DeviceStatus = "AVAILABLE" | "BUSY" | "OFFLINE" | "UNDER_REPAIR" | "DAMAGED";
+export type DeviceStatus = "AVAILABLE" | "BUSY" | "OFFLINE" | "UNDER_REPAIR" | "DAMAGED" | "QUARANTINE";
 
 export interface Device {
   id: string;
@@ -35,6 +35,8 @@ export interface Device {
   serial_number: string;
   status: DeviceStatus;
   current_user_id?: string | null;
+  previous_user_id?: string | null;
+  last_user_disconnected_at?: string | null;
 }
 
 /* ================= PROPS ================= */
@@ -45,7 +47,7 @@ interface Props {
   userMap: Record<string, string>;
   onEdit: (device: Device) => void;
   onDelete: (device: Device) => void;
-  onMarkStatus?: (device: Device, status: "UNDER_REPAIR" | "DAMAGED" | "AVAILABLE") => void;
+  onMarkStatus?: (device: Device, status: "UNDER_REPAIR" | "DAMAGED" | "AVAILABLE" | "QUARANTINE") => void;
 }
 
 const statusConfig: Record<
@@ -72,6 +74,10 @@ const statusConfig: Record<
     label: "ชำรุด",
     className: "bg-red-500/10 text-red-700",
   },
+  QUARANTINE: {
+    label: "รอล้างข้อมูล",
+    className: "bg-orange-500/10 text-orange-600",
+  },
   UNKNOWN: {
     label: "ไม่ทราบ",
     className: "bg-muted text-muted-foreground",
@@ -96,7 +102,8 @@ export function DeviceManagementTable({
           <CardTitle>อุปกรณ์ทั้งหมด</CardTitle>
         </CardHeader>
 
-        <CardContent>
+        <CardContent className="p-0 sm:p-6">
+          <div className="overflow-x-auto">
           <Table>
             {/* ===== TABLE HEADER ===== */}
             <TableHeader>
@@ -143,9 +150,15 @@ export function DeviceManagementTable({
                 <TableCell className="text-center text-sm">
                     {d.current_user_id ? (
                       <span className="font-medium">
-                        {/* ค้นชื่อจาก Map ถ้าหาไม่เจอให้แสดง ID (4 ตัวท้าย) */}
                         {userMap[d.current_user_id] || `User: ${d.current_user_id.slice(-4)}`}
                       </span>
+                    ) : d.previous_user_id ? (
+                      <div className="flex flex-col items-center gap-0.5">
+                        <span className="text-muted-foreground text-xs">ผู้ใช้ล่าสุด:</span>
+                        <span className="font-medium text-amber-600">
+                          {userMap[d.previous_user_id] || `User: ${d.previous_user_id.slice(-4)}`}
+                        </span>
+                      </div>
                     ) : (
                       <span className="text-muted-foreground">-</span>
                     )}
@@ -204,12 +217,13 @@ export function DeviceManagementTable({
                                 <AlertTriangle className="mr-2 h-4 w-4" />
                                 ชำรุด
                               </DropdownMenuItem>
-                              {(d.status === "UNDER_REPAIR" || d.status === "DAMAGED") && (
+                              {(d.status === "UNDER_REPAIR" || d.status === "DAMAGED" || d.status === "QUARANTINE") && (
                                 <DropdownMenuItem
                                   onClick={() => onMarkStatus(d, "AVAILABLE")}
                                   className="cursor-pointer text-green-600"
                                 >
-                                  คืนสถานะเป็นว่าง
+                                  <CheckCircle className="mr-2 h-4 w-4" />
+                                  พร้อมใช้งาน
                                 </DropdownMenuItem>
                               )}
                               <DropdownMenuSeparator />
@@ -230,6 +244,7 @@ export function DeviceManagementTable({
               ))}
             </TableBody>
           </Table>
+          </div>
         </CardContent>
       </Card>
     </motion.div>

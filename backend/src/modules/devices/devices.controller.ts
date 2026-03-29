@@ -87,7 +87,7 @@ export class DevicesController {
     }
 
     /**
-     * Mark device: แจ้งซ่อม (UNDER_REPAIR) หรือ ชำรุด (DAMAGED)
+     * Mark device: แจ้งซ่อม (UNDER_REPAIR), ชำรุด (DAMAGED), รอล้างข้อมูล (QUARANTINE), พร้อมใช้งาน (AVAILABLE)
      * PATCH /devices/:id/mark-status
      */
     @Patch(':id/mark-status')
@@ -95,12 +95,12 @@ export class DevicesController {
     @Roles(UserRole.ADMIN)
     async markStatus(
         @Param('id') id: string,
-        @Body() body: { status: 'UNDER_REPAIR' | 'DAMAGED' | 'AVAILABLE' },
+        @Body() body: { status: 'UNDER_REPAIR' | 'DAMAGED' | 'AVAILABLE' | 'QUARANTINE' },
         @CurrentUser() currentUser: any,
     ) {
         const status = body?.status;
-        if (!status || !['UNDER_REPAIR', 'DAMAGED', 'AVAILABLE'].includes(status)) {
-            throw new BadRequestException('status must be one of: UNDER_REPAIR, DAMAGED, AVAILABLE');
+        if (!status || !['UNDER_REPAIR', 'DAMAGED', 'AVAILABLE', 'QUARANTINE'].includes(status)) {
+            throw new BadRequestException('status must be one of: UNDER_REPAIR, DAMAGED, AVAILABLE, QUARANTINE');
         }
         this.logger.log(`[MARK_STATUS] Admin: ${currentUser?.username || 'unknown'} set device ${id} → ${status}`);
         const device = await this.devicesService.update(id, { status });

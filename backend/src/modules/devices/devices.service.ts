@@ -142,7 +142,8 @@ export class DevicesService {
                     const currentStatus = (device as any).status;
                     const keepManualStatus =
                         currentStatus === DeviceStatus.UNDER_REPAIR ||
-                        currentStatus === DeviceStatus.DAMAGED;
+                        currentStatus === DeviceStatus.DAMAGED ||
+                        currentStatus === DeviceStatus.QUARANTINE;
                     if (deviceId) {
                         const updatePayload: Record<string, unknown> = {
                             name,

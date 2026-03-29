@@ -8,6 +8,7 @@ import { DevicesService } from "@/services/devices.service";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { useToast } from "@/hooks/use-toast";
 
 import {
   Dialog,
@@ -47,7 +48,7 @@ type DeviceItem = {
   id: string;
   name: string;
   serial_number: string;
-  status: "AVAILABLE" | "BUSY" | "OFFLINE";
+  status: "AVAILABLE" | "BUSY" | "OFFLINE" | "UNDER_REPAIR" | "DAMAGED" | "QUARANTINE";
 };
 
 type Row = {
@@ -79,6 +80,7 @@ export function UserAssignDevicesTimeDialog({
   onClose,
   onSuccess,
 }: Props) {
+  const { toast } = useToast();
   const [rows, setRows] = useState<Row[]>([createEmptyRow()]);
   const [loading, setLoading] = useState(false);
 
@@ -211,10 +213,14 @@ export function UserAssignDevicesTimeDialog({
     setLoading(true);
     try {
       await UsersService.assignDevices(user.id, validItems);
+      toast({
+        title: "กำหนดเครื่องและเวลาสำเร็จ",
+        description: `${user.name} — ${validItems.length} เครื่อง`,
+      });
       onSuccess?.();
       onClose();
     } catch (err: any) {
-      alert(err.message || "Assign device + time ไม่สำเร็จ");
+      toast({ variant: "destructive", title: "กำหนดเครื่องไม่สำเร็จ", description: err?.message || "เกิดข้อผิดพลาด" });
     } finally {
       setLoading(false);
     }
@@ -277,7 +283,7 @@ export function UserAssignDevicesTimeDialog({
                       <option value="" className="bg-zinc-950 text-zinc-500">-- เลือกเครื่องจากรายการ --</option>
                       {devices.map((d) => {
                         const isDisabled = disabledSet.has(d.id);
-                        const statusIndicator = d.status === "AVAILABLE" ? "🟢" : d.status === "BUSY" ? "🟡" : "🔴";
+                        const statusIndicator = d.status === "AVAILABLE" ? "🟢" : d.status === "BUSY" ? "🟡" : d.status === "QUARANTINE" ? "🟠" : "🔴";
                         const count = historyMap[d.id] || 0;
                         const label =
                           `${d.name} • SN: ${d.serial_number} • ${d.status}` +
@@ -360,7 +366,7 @@ export function UserAssignDevicesTimeDialog({
         </div>
 
         {/* Footer: ใช้สี Blue สำหรับ Action หลัก */}
-        <div className="px-6 py-6 border-t border-zinc-900 bg-[#0c0c0e]">
+        <div className="flex-shrink-0 px-6 py-6 border-t border-zinc-900 bg-[#0c0c0e]">
           <DialogFooter className="flex flex-row gap-3">
             <Button
               variant="ghost"

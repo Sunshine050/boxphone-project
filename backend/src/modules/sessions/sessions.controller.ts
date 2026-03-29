@@ -19,6 +19,7 @@ import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import { UserRole } from "../users/user.schema";
 import { CreateSessionDto } from "./dto/create-session.dto";
 import { MoveSessionDto } from "./dto/move-session.dto";
+import { ReduceTimeDto } from "./dto/reduce-time.dto";
 import { LogService } from "../log/log.service";
 import { NotificationService } from "../notification/notification.service";
 
@@ -200,8 +201,10 @@ export class SessionsController {
         await this.sessionsService["deviceModel"].findByIdAndUpdate(
           session.device_id,
           {
-            status: "AVAILABLE",
+            status: "QUARANTINE",
             current_user_id: null,
+            previous_user_id: (session as any).user_id?.toString() ?? null,
+            last_user_disconnected_at: new Date(),
           }
         );
       }
@@ -342,6 +345,49 @@ export class SessionsController {
       );
       throw error;
     }
+  }
+
+
+  @Post(":id/reduce-time")
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @HttpCode(HttpStatus.OK)
+  async reduceTime(
+    @Param("id") id: string,
+    @Body() dto: ReduceTimeDto,
+    @CurrentUser() currentUser: any
+  ) {
+    this.logger.log(
+      `[REDUCE_TIME] Admin: ${currentUser?.username || "unknown"} reducing ${dto.seconds}s from Session ID: ${id}`
+    );
+
+    const session = await this.sessionsService.reduceTimeFromSession(id, dto.seconds);
+
+    await this.notificationService.createAndSend(
+      (session as any).user_id?.toString(),
+      "TIME_REDUCED",
+      `ผู้ดูแลลดเวลาของคุณ ${Math.floor(dto.seconds / 60)} นาที ${dto.seconds % 60} วินาที`,
+      "WARNING"
+    );
+
+    await this.logService.createLog({
+      type: "SESSION_ENDED",
+      level: "WARNING",
+      message: `ลดเวลา Session (-${dto.seconds}s)`,
+      target_user_id: (session as any).user_id?.toString(),
+      target_device_id: (session as any).device_id?.toString(),
+      admin_username: currentUser?.username || "admin",
+      meta: { reduced_seconds: dto.seconds, remaining_seconds: session.remaining_seconds },
+    });
+
+    return {
+      message: "Time reduced successfully",
+      session: {
+        id: (session as any)._id.toString(),
+        remaining_seconds: session.remaining_seconds,
+        status: session.status,
+      },
+    };
   }
 
 

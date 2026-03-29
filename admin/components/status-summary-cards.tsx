@@ -70,7 +70,7 @@ export function StatusSummaryCards() {
       inUse: devices.filter((d) => d.status === "BUSY").length,
       available: devices.filter((d) => d.status === "AVAILABLE").length,
       error: devices.filter((d) => d.status === "OFFLINE").length,
-      maintenance: devices.filter((d) => d.status === "UNDER_REPAIR" || d.status === "DAMAGED").length,
+      maintenance: devices.filter((d) => d.status === "UNDER_REPAIR" || d.status === "DAMAGED" || d.status === "QUARANTINE").length,
     };
   }, [devices]);
 

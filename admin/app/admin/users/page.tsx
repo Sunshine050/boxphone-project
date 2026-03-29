@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { UsersTable } from "@/components/users/user-table";
 import { UsersService } from "@/services/users.service";
 import { User, UserAction } from "@/types/user";
@@ -15,11 +15,12 @@ import { UserBulkAddTimeDialog } from "@/components/users/user-bulk-add-time-dia
 import { DevicesService } from "@/services/devices.service";
 import { DeviceMini } from "@/components/users/user-table";
 
-
 import useSWR from "swr";
 import { HelpButton } from "@/components/help/help-button";
+import { useToast } from "@/hooks/use-toast";
 
 export default function UserManagementPage() {
+  const { toast } = useToast();
   const { data: rawUsers, isLoading: isUsersLoading, mutate: mutateUsers } = useSWR('/api/users', () => UsersService.getAll(), { refreshInterval: 10000 });
   const { data: rawDevices, isLoading: isDevicesLoading, mutate: mutateDevices } = useSWR('/api/devices', () => DevicesService.getAll(), { refreshInterval: 10000 });
   const { data: meData } = useSWR('/api/users/me', () => UsersService.getMe());
@@ -48,6 +49,9 @@ export default function UserManagementPage() {
       serial_number: d.serial_number || "-",
     }));
   }, [rawDevices]);
+
+  // sessions refresh key — incremented when bulk time ops complete
+  const [sessionsRefreshKey, setSessionsRefreshKey] = useState(0);
 
   // ✅ Search
   const [searchInput, setSearchInput] = useState("");
@@ -111,7 +115,7 @@ export default function UserManagementPage() {
 
       case "delete": {
         if (me?.id && user.id === me.id) {
-          alert("Admin ไม่สามารถลบตัวเองได้");
+          toast({ variant: "destructive", title: "ไม่สามารถลบตัวเองได้", description: "Admin ไม่สามารถลบบัญชีตัวเองได้" });
           return;
         }
         setDeleteUser(user);
@@ -120,8 +124,13 @@ export default function UserManagementPage() {
       }
 
       case "disconnect":
-        await UsersService.disconnectDevice(user.id);
-        await fetchUsers();
+        try {
+          await UsersService.disconnectDevice(user.id);
+          await fetchUsers();
+          toast({ title: "ตัดการเชื่อมต่อแล้ว", description: `${user.name}` });
+        } catch (e: any) {
+          toast({ variant: "destructive", title: "ตัดการเชื่อมต่อไม่สำเร็จ", description: e?.message || "เกิดข้อผิดพลาด" });
+        }
         break;
 
       case "assign":
@@ -137,15 +146,15 @@ export default function UserManagementPage() {
   }
 
   return (
-    <div className="p-8 space-y-6">
+    <div className="p-4 sm:p-6 md:p-8 space-y-6">
       {/* Header */}
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
         <div className="flex items-center gap-2">
-          <h1 className="text-3xl font-semibold">การจัดการผู้ใช้</h1>
+          <h1 className="text-xl sm:text-3xl font-semibold">การจัดการผู้ใช้</h1>
           <HelpButton topic="users" />
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {/* ✅ Bulk Add Time */}
           <Button
             variant="outline"
@@ -153,7 +162,8 @@ export default function UserManagementPage() {
             onClick={() => setBulkOpen(true)}
           >
             <Clock className="w-4 h-4" />
-            เพิ่มเวลาให้คนที่กำลังใช้งาน
+            <span className="hidden sm:inline">เพิ่มเวลาให้คนที่กำลังใช้งาน</span>
+            <span className="sm:hidden">เพิ่มเวลา</span>
           </Button>
 
           {/* Create User */}
@@ -203,6 +213,7 @@ export default function UserManagementPage() {
         currentUserId={me?.id || null}
         onAction={handleAction}
         deviceMap={deviceMap}
+        externalRefreshKey={sessionsRefreshKey}
       />
 
       {/* ✅ Create User Dialog */}
@@ -220,14 +231,20 @@ export default function UserManagementPage() {
           setAssignOpen(false);
           setAssignUser(null);
         }}
-        onSuccess={fetchUsers}
+        onSuccess={() => {
+          fetchUsers();
+          setSessionsRefreshKey((k) => k + 1);
+        }}
       />
 
       {/* ✅ NEW: Bulk Add Time Dialog */}
       <UserBulkAddTimeDialog
         open={bulkOpen}
         onClose={() => setBulkOpen(false)}
-        onSuccess={fetchUsers}
+        onSuccess={() => {
+          fetchUsers();
+          setSessionsRefreshKey((k) => k + 1);
+        }}
       />
 
       {/* ✅ Delete Dialog */}

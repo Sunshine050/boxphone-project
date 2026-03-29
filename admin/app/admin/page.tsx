@@ -81,13 +81,13 @@ export default function AdminOverviewPage() {
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5 }}
-      className="p-8 space-y-8"
+      className="p-4 sm:p-6 md:p-8 space-y-6 md:space-y-8"
     >
       {/* Header */}
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-3xl font-semibold">ภาพรวมระบบ</h1>
+            <h1 className="text-xl sm:text-3xl font-semibold">ภาพรวมระบบ</h1>
             <HelpButton topic="overview" />
           </div>
           <p className="text-sm text-muted-foreground mt-1">
@@ -95,7 +95,7 @@ export default function AdminOverviewPage() {
           </p>
         </div>
 
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           {/* ✅ Sync from Xiaowei button */}
           <Button
             variant="default"

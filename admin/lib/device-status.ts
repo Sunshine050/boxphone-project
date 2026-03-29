@@ -9,7 +9,8 @@ export type DeviceStatusUI =
   | "BUSY"
   | "OFFLINE"
   | "UNDER_REPAIR"
-  | "DAMAGED";
+  | "DAMAGED"
+  | "QUARANTINE";
 
 /**
  * แปลงค่าสถานะจาก API ให้ตรงกับที่ใช้ใน UI
@@ -22,7 +23,8 @@ export function normalizeDeviceStatus(status: unknown): DeviceStatusUI {
   if (raw === "OFFLINE") return "OFFLINE";
   if (raw === "UNDER_REPAIR") return "UNDER_REPAIR";
   if (raw === "DAMAGED") return "DAMAGED";
-  return "AVAILABLE";
+  if (raw === "QUARANTINE") return "QUARANTINE";
+  return "OFFLINE";
 }
 
 /** สถานะสำหรับหน้า Overview (ภาพรวม): in-use | available | error | maintenance */
@@ -34,6 +36,6 @@ export type OverviewStatus = "in-use" | "available" | "error" | "maintenance";
 export function toOverviewStatus(ui: DeviceStatusUI): OverviewStatus {
   if (ui === "AVAILABLE") return "available";
   if (ui === "BUSY") return "in-use";
-  if (ui === "UNDER_REPAIR" || ui === "DAMAGED") return "maintenance";
-  return "error"; // OFFLINE และอื่นๆ
+  if (ui === "UNDER_REPAIR" || ui === "DAMAGED" || ui === "QUARANTINE") return "maintenance";
+  return "error"; // OFFLINE
 }

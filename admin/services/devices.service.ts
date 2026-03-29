@@ -17,8 +17,8 @@ export const DevicesService = {
       body: payload,
     }),
 
-  /** Mark device: แจ้งซ่อม (UNDER_REPAIR) / ชำรุด (DAMAGED) / คืนสถานะ (AVAILABLE) */
-  markStatus: (id: string, status: "UNDER_REPAIR" | "DAMAGED" | "AVAILABLE"): Promise<any> =>
+  /** Mark device: แจ้งซ่อม (UNDER_REPAIR) / ชำรุด (DAMAGED) / รอล้างข้อมูล (QUARANTINE) / คืนสถานะ (AVAILABLE) */
+  markStatus: (id: string, status: "UNDER_REPAIR" | "DAMAGED" | "AVAILABLE" | "QUARANTINE"): Promise<any> =>
     apiFetch<any>(`/devices/${id}/mark-status`, {
       method: "PATCH",
       body: { status },

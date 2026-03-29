@@ -45,13 +45,21 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect {
       if (socketId === client.id) {
         this.devices.delete(deviceId);
 
-        // Update device status
-        await this.devicesService.updateStatus(deviceId, DeviceStatus.OFFLINE);
+        // Find device first so we can preserve QUARANTINE status
+        let deviceForDisconnect: any = null;
+        try {
+          deviceForDisconnect = await this.devicesService.findBySerialNumber(deviceId);
+        } catch (_) {}
+
+        // Keep QUARANTINE status — admin must clear it manually after wiping data
+        if ((deviceForDisconnect as any)?.status !== DeviceStatus.QUARANTINE) {
+          await this.devicesService.updateStatus(deviceId, DeviceStatus.OFFLINE);
+        }
 
         // Find and pause active session for this device
         try {
           // deviceId จาก devices map คือ serial_number
-          const device = await this.devicesService.findBySerialNumber(deviceId);
+          const device = deviceForDisconnect ?? await this.devicesService.findBySerialNumber(deviceId);
 
           if (device) {
             const session = await this.sessionsService.getActiveSessionByDevice(

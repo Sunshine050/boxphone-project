@@ -12,6 +12,7 @@ import {
   Pause,
   Play,
   Square,
+  Minus,
 } from "lucide-react";
 import { motion } from "framer-motion";
 import {
@@ -24,8 +25,10 @@ import {
 
 import { SessionsService } from "@/services/sessions.service";
 import { UserMoveSessionDialog } from "./user-move-session-dialog";
+import { UserReduceTimeDialog } from "./user-reduce-time-dialog";
 import { User, UserAction } from "@/types/user";
 import { escapeHtml } from "@/lib/sanitize";
+import { useToast } from "@/hooks/use-toast";
 
 /* ================= STATUS UI ================= */
 
@@ -79,10 +82,13 @@ export function UserRow({
   deviceMap?: Record<string, any>;
   sessionsRefreshKey?: number;
 }) {
+  const { toast } = useToast();
   const [showPass, setShowPass] = useState(false);
   const [moveOpen, setMoveOpen] = useState(false);
+  const [reduceSession, setReduceSession] = useState<any | null>(null);
   const [sessions, setSessions] = useState<any[]>([]);
   const [now, setNow] = useState(() => Date.now());
+  const [loadingAction, setLoadingAction] = useState<Record<string, boolean>>({});
 
   /* ================= LOAD SESSIONS ================= */
 
@@ -228,10 +234,19 @@ export function UserRow({
                           size="icon"
                           variant="ghost"
                           className="h-7 w-7 text-muted-foreground hover:text-amber-600"
+                          disabled={!!loadingAction[`pause-${s._id}`]}
                           onClick={async () => {
-                            await SessionsService.pause(s._id);
-                            await loadSessions();
-                            onAction("refresh");
+                            setLoadingAction((p) => ({ ...p, [`pause-${s._id}`]: true }));
+                            try {
+                              await SessionsService.pause(s._id);
+                              await loadSessions();
+                              onAction("refresh");
+                              toast({ title: "หยุด session แล้ว", description: `${getDeviceLabel(s)}` });
+                            } catch (e: any) {
+                              toast({ variant: "destructive", title: "หยุดไม่สำเร็จ", description: e?.message || "เกิดข้อผิดพลาด" });
+                            } finally {
+                              setLoadingAction((p) => ({ ...p, [`pause-${s._id}`]: false }));
+                            }
                           }}
                           title="Pause"
                         >
@@ -243,10 +258,19 @@ export function UserRow({
                           size="icon"
                           variant="ghost"
                           className="h-7 w-7 text-muted-foreground hover:text-emerald-600"
+                          disabled={!!loadingAction[`resume-${s._id}`]}
                           onClick={async () => {
-                            await SessionsService.resume(s._id);
-                            await loadSessions();
-                            onAction("refresh");
+                            setLoadingAction((p) => ({ ...p, [`resume-${s._id}`]: true }));
+                            try {
+                              await SessionsService.resume(s._id);
+                              await loadSessions();
+                              onAction("refresh");
+                              toast({ title: "เล่นต่อแล้ว", description: `${getDeviceLabel(s)}` });
+                            } catch (e: any) {
+                              toast({ variant: "destructive", title: "เล่นต่อไม่สำเร็จ", description: e?.message || "เกิดข้อผิดพลาด" });
+                            } finally {
+                              setLoadingAction((p) => ({ ...p, [`resume-${s._id}`]: false }));
+                            }
                           }}
                           title="Resume"
                         >
@@ -256,12 +280,30 @@ export function UserRow({
                       <Button
                         size="icon"
                         variant="ghost"
+                        className="h-7 w-7 text-muted-foreground hover:text-orange-500"
+                        onClick={() => setReduceSession(s)}
+                        title="ลดเวลา"
+                      >
+                        <Minus size={12} />
+                      </Button>
+                      <Button
+                        size="icon"
+                        variant="ghost"
                         className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                        disabled={!!loadingAction[`cancel-${s._id}`]}
                         onClick={async () => {
-                          if (!confirm("ยกเลิก session นี้?")) return;
-                          await SessionsService.cancel(s._id);
-                          await loadSessions();
-                          onAction("refresh");
+                          if (!confirm(`ยกเลิก session เครื่อง ${getDeviceLabel(s)}?`)) return;
+                          setLoadingAction((p) => ({ ...p, [`cancel-${s._id}`]: true }));
+                          try {
+                            await SessionsService.cancel(s._id);
+                            await loadSessions();
+                            onAction("refresh");
+                            toast({ title: "ยกเลิก session แล้ว", description: `${getDeviceLabel(s)}` });
+                          } catch (e: any) {
+                            toast({ variant: "destructive", title: "ยกเลิกไม่สำเร็จ", description: e?.message || "เกิดข้อผิดพลาด" });
+                          } finally {
+                            setLoadingAction((p) => ({ ...p, [`cancel-${s._id}`]: false }));
+                          }
                         }}
                         title="Cancel"
                       >
@@ -338,6 +380,18 @@ export function UserRow({
         onSuccess={() => {
           loadSessions();
           onAction("refresh");
+        }}
+      />
+
+      <UserReduceTimeDialog
+        open={!!reduceSession}
+        sessionId={reduceSession?._id}
+        deviceLabel={getDeviceLabel(reduceSession)}
+        onClose={() => setReduceSession(null)}
+        onSuccess={() => {
+          loadSessions();
+          onAction("refresh");
+          setReduceSession(null);
         }}
       />
 

@@ -56,4 +56,11 @@ export const SessionsService = {
     apiFetch(`/sessions/${id}/cancel`, {
       method: "POST",
     }),
+
+  // POST /sessions/:id/reduce-time - Reduce session time (Admin only)
+  reduceTime: (id: string, seconds: number) =>
+    apiFetch(`/sessions/${id}/reduce-time`, {
+      method: "POST",
+      body: { seconds },
+    }),
 };

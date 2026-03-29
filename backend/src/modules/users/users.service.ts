@@ -228,6 +228,8 @@ export class UsersService {
       .findByIdAndUpdate(userId, update, { new: true })
       .exec();
 
+    await this.sessionsService.addTimeToActiveSessions(userId, secondsToAdd);
+
     return updated;
   }
 
@@ -559,7 +561,9 @@ export class UsersService {
 
     await deviceService.update(oldDeviceId.toString(), {
       current_user_id: null,
-      status: DeviceStatus.AVAILABLE,
+      status: DeviceStatus.QUARANTINE,
+      previous_user_id: userId,
+      last_user_disconnected_at: new Date(),
     });
 
     return updatedUser as any;

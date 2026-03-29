@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
-import { Notification } from './notification.schema';
+import { Notification, NOTIFICATION_TTL_DAYS } from './notification.schema';
 import { NotificationGateway } from './notification.gateway';
 
 @Injectable()
@@ -12,8 +12,9 @@ export class NotificationService {
   ) { }
 
   async createAndSend(userId: string, title: string, message: string, type: string = 'INFO') {
-    // 1. บันทึกลง Database
-    const created = await this.model.create({ user_id: userId, title, message, type });
+    const expiresAt = new Date(Date.now() + NOTIFICATION_TTL_DAYS * 24 * 60 * 60 * 1000);
+    // 1. บันทึกลง Database พร้อม TTL (MongoDB จะลบอัตโนมัติหลัง NOTIFICATION_TTL_DAYS วัน)
+    const created = await this.model.create({ user_id: userId, title, message, type, expires_at: expiresAt });
 
     // 2. ยิง Real-time ไปที่หน้าจอ
     this.gateway.sendToUser(userId, {
