@@ -233,13 +233,15 @@ export function UserAssignDevicesTimeDialog({
       {/* 🎯 เปลี่ยนสีพื้นหลังเป็นโทน Black/Zinc ตามธีมเว็บ */}
       <DialogContent
         showCloseButton={false}
-        className="max-w-3xl w-[95vw] sm:w-full !grid !grid-rows-[auto_minmax(0,1fr)_auto] !gap-0 !p-0 min-h-0 overflow-hidden overflow-x-hidden bg-[#0c0c0e] text-zinc-100 border-zinc-800 shadow-2xl
-          left-1/2 -translate-x-1/2 top-4 translate-y-0
-          max-2xl:h-[calc(100vh-1.5rem)] max-2xl:max-h-[calc(100vh-1.5rem)]
-          supports-[height:100dvh]:max-2xl:h-[calc(100dvh-1.5rem)] supports-[height:100dvh]:max-2xl:max-h-[calc(100dvh-1.5rem)]
-          2xl:top-1/2 2xl:-translate-y-1/2 2xl:h-auto 2xl:max-h-[85vh] 2xl:max-h-[85dvh]"
+        className="max-w-3xl w-[min(95vw,calc(100vw_-_1rem))] sm:w-full !gap-0 !p-0 min-h-0
+          !grid grid-rows-[auto_minmax(0,1fr)_auto]
+          overflow-hidden overflow-x-hidden
+          max-h-[calc(100dvh_-_1rem)] h-auto
+          bg-[#0c0c0e] text-zinc-100 border-zinc-800 shadow-2xl
+          left-1/2 !translate-x-[-50%] !translate-y-0 top-[max(0.5rem,env(safe-area-inset-top,0px))]
+          2xl:top-1/2 2xl:!translate-y-[-50%]"
       >
-        <div className="relative min-h-0 shrink-0 px-6 pt-6 border-b border-zinc-900 pb-4 pr-14">
+        <div className="relative z-20 shrink-0 px-6 pt-6 pb-4 pr-14 border-b border-zinc-900 bg-[#0c0c0e]">
           <DialogClose className="absolute right-4 top-4 z-10 rounded-xs p-2 text-zinc-400 opacity-80 transition-opacity hover:bg-zinc-800 hover:opacity-100 focus:ring-2 focus:ring-zinc-600 focus:outline-hidden">
             <X className="h-4 w-4" />
             <span className="sr-only">ปิด</span>
@@ -255,7 +257,10 @@ export function UserAssignDevicesTimeDialog({
           </DialogHeader>
         </div>
 
-        <div className="min-h-0 min-w-0 overflow-y-scroll overflow-x-hidden overscroll-y-contain touch-pan-y px-6 py-4 space-y-4 bg-[#0c0c0e] [-webkit-overflow-scrolling:touch]">
+        {/* เลื่อนเฉพาะรายการ + ปุ่มเพิ่มเครื่อง — ปุ่มยืนยันคงอยู่ด้านล่าง */}
+        <div
+          className="min-h-0 min-w-0 overflow-y-auto overflow-x-hidden overscroll-y-contain overscroll-x-none touch-pan-y px-6 pt-4 pb-4 space-y-4 [-webkit-overflow-scrolling:touch]"
+        >
           {rows.map((r, idx) => {
             const disabledSet = new Set(selectedDeviceIds.filter((id) => id !== r.device_id));
             const assignSeconds = getAssignSeconds(r);
@@ -381,20 +386,19 @@ export function UserAssignDevicesTimeDialog({
           </Button>
         </div>
 
-        {/* Footer: ใช้สี Blue สำหรับ Action หลัก */}
-        <div className="min-h-0 shrink-0 px-6 py-6 border-t border-zinc-900 bg-[#0c0c0e]">
-          <DialogFooter className="flex flex-row gap-3">
+        <div className="relative z-10 shrink-0 border-t border-zinc-900 bg-[#0c0c0e] px-6 pt-4 pb-[max(1rem,env(safe-area-inset-bottom,0px))] shadow-[0_-12px_32px_rgba(0,0,0,0.45)]">
+          <DialogFooter className="flex flex-row gap-3 sm:gap-3">
             <Button
               variant="ghost"
               onClick={onClose}
-              className="flex-1 text-zinc-500 hover:text-zinc-200 hover:bg-zinc-900 h-11"
+              className="flex-1 text-zinc-500 hover:text-zinc-200 hover:bg-zinc-900 h-11 min-h-[44px]"
             >
               ยกเลิก
             </Button>
             <Button
               onClick={handleSubmit}
               disabled={!canSubmit || loading}
-              className="flex-[2] bg-blue-600 hover:bg-blue-500 text-white font-bold h-11 shadow-lg shadow-blue-900/20 transition-all active:scale-95"
+              className="flex-[2] bg-blue-600 hover:bg-blue-500 text-white font-bold h-11 min-h-[44px] shadow-lg shadow-blue-900/20 transition-all active:scale-95"
             >
               {loading ? "กำลังบันทึกข้อมูล..." : "ยืนยันและเปิดใช้งาน"}
             </Button>

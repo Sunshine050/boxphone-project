@@ -61,7 +61,7 @@ export function LoginForm({ onSubmit, isLoading, error }: LoginFormProps) {
       animate="show"
       className="w-full max-w-md"
     >
-      <Card className="border-border/70 shadow-lg">
+      <Card className="border border-blue-500/30 shadow-2xl bg-card ring-1 ring-blue-400/20">
         <CardHeader className="space-y-2 text-center">
           <motion.div variants={item} className="flex justify-center mb-4">
             <div className="p-4 rounded-2xl bg-primary/10 ring-1 ring-primary/20">
@@ -86,7 +86,7 @@ export function LoginForm({ onSubmit, isLoading, error }: LoginFormProps) {
           <motion.form onSubmit={handleSubmit} className="space-y-4">
             {/* Email */}
             <motion.div variants={item} className="space-y-2">
-              <Label htmlFor="username">ชื่อผู้ใช้ (Username)</Label>
+              <Label htmlFor="username">Username</Label>
               <Input
                 id="username"
                 name="username"
@@ -98,7 +98,7 @@ export function LoginForm({ onSubmit, isLoading, error }: LoginFormProps) {
 
             {/* Password */}
             <motion.div variants={item} className="space-y-2">
-              <Label htmlFor="password">รหัสผ่าน</Label>
+              <Label htmlFor="password">Password</Label>
 
               <div className="relative">
                 <Input
@@ -147,13 +147,6 @@ export function LoginForm({ onSubmit, isLoading, error }: LoginFormProps) {
                   "เข้าสู่ระบบ"
                 )}
               </Button>
-            </motion.div>
-
-            <motion.div
-              variants={item}
-              className="text-xs text-muted-foreground text-center pt-2"
-            >
-              Demo: admin / admin123456
             </motion.div>
           </motion.form>
         </CardContent>
