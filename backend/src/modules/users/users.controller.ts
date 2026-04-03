@@ -92,9 +92,6 @@ export class UsersController {
           // ✅ เวลาแทน credits
           total_seconds: (user as any).total_seconds,
           remaining_seconds: (user as any).remaining_seconds,
-
-          // ✅ password สำหรับแสดงในหน้า admin
-          password_plain: (user as any).password_plain,
         },
       };
     } catch (error) {
@@ -243,7 +240,6 @@ export class UsersController {
       // ✅ เวลา
       total_seconds: user.total_seconds,
       remaining_seconds: user.remaining_seconds,
-      password_plain: user.password_plain,
 
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,

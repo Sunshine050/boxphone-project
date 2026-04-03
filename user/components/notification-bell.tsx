@@ -62,13 +62,20 @@ export function NotificationBell() {
 
     loadNotis(1)
 
-    apiFetch<{ user: { id: string } }>("/auth/me")
+    apiFetch<{ user: { id: string; username: string; role: string } }>("/auth/me")
       .then((res) => {
         if (cancelled || !res.user?.id) return
-        const userId = res.user.id
+
+        // ใช้ JWT จาก cookie โดยดึงจาก /auth/me ไม่ได้โดยตรง
+        // ส่วนนี้สมมติว่ามีตัวช่วยอ่าน cookie access_token ถ้าไม่มี ให้คุณเปลี่ยนมาใช้วิธีที่โปรเจกต์ใช้ดึง token อยู่แล้ว
+        const tokenMatch = document.cookie
+          .split("; ")
+          .find((row) => row.startsWith("access_token="))
+        const token = tokenMatch?.split("=")[1]
+        if (!token) return
 
         if (!socketRef.current) {
-          socketRef.current = getNotificationSocket(userId)
+          socketRef.current = getNotificationSocket(token)
         }
 
         const socket = socketRef.current

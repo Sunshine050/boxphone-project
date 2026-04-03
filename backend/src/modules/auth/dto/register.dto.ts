@@ -1,5 +1,4 @@
-import { IsString, IsNotEmpty, MinLength, IsEnum } from 'class-validator';
-import { UserRole } from '../../users/user.schema';
+import { IsString, IsNotEmpty, MinLength } from 'class-validator';
 
 /**
  * DTO สำหรับการสร้าง User ใหม่
@@ -14,7 +13,4 @@ export class RegisterDto {
     @IsNotEmpty()
     @MinLength(6)
     password: string;
-
-    @IsEnum(UserRole)
-    role: UserRole;
 }

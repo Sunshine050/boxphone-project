@@ -63,9 +63,6 @@ export class User {
   @Prop({ required: true })
   password_hash: string;
 
-  @Prop({ default: "" })
-  password_plain: string;
-
   @Prop({ type: String, enum: UserRole, default: UserRole.USER })
   role: UserRole;
 

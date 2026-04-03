@@ -5,7 +5,11 @@ const BACKEND_URL = getApiBaseUrl();
 
 let notificationSocket: Socket | null = null;
 
-export const getNotificationSocket = (userId: string) => {
+/**
+ * สร้าง/คืนค่า notification socket โดยส่ง JWT เข้าไปใน handshake
+ * token ต้องเป็น access_token ที่ได้จาก /auth/login
+ */
+export const getNotificationSocket = (token: string) => {
   if (notificationSocket?.connected) {
     return notificationSocket;
   }
@@ -17,7 +21,9 @@ export const getNotificationSocket = (userId: string) => {
     reconnectionDelay: 2000,
     forceNew: false,
     autoConnect: true,
-    query: { userId },
+    auth: {
+      token,
+    },
   });
 
   notificationSocket.on("disconnect", () => {

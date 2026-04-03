@@ -32,7 +32,8 @@ export class ConfigurableSocketIoAdapter extends IoAdapter {
         origin = list.length === 1 ? list[0] : list;
       }
     } else {
-      origin = list.length ? (list.length === 1 ? list[0] : list) : true;
+      // Avoid permissive wildcard fallback; explicitly list origins in all envs.
+      origin = list.length ? (list.length === 1 ? list[0] : list) : false;
     }
 
     return super.createIOServer(port, {

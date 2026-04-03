@@ -21,6 +21,8 @@ export class LogController {
   constructor(private readonly logService: LogService) {}
 
   @Get()
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN)
   async findAll(@Query('type') type?: string) {
     return this.logService.findAll(type);
   }

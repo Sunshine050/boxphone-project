@@ -23,8 +23,11 @@ export class DevicesController {
     ) { }
 
     @Get()
-    async findAll(): Promise<Device[]> {
-        return this.devicesService.findAll();
+    async findAll(@CurrentUser() currentUser: any): Promise<Device[]> {
+        if (currentUser?.role === UserRole.ADMIN) {
+            return this.devicesService.findAll();
+        }
+        return this.devicesService.findAllForUser(currentUser?.id);
     }
 
     /**
@@ -51,11 +54,17 @@ export class DevicesController {
      * GET /devices/screenshot?serial=xxx
      */
     @Get('screenshot')
-    async getScreenshotBySerial(@Query('serial') serial: string, @Res() res: Response) {
+    async getScreenshotBySerial(
+        @Query('serial') serial: string,
+        @CurrentUser() currentUser: any,
+        @Res() res: Response,
+    ) {
         try {
             if (!serial) {
                 return res.status(400).json({ message: 'Serial number is required' });
             }
+            const device = await this.devicesService.findBySerialNumber(serial);
+            await this.devicesService.assertUserCanAccessDevice(currentUser, device);
             this.logger.log(`[SCREENSHOT] Request for serial: ${serial}`);
             const screenshot = await this.adbScreenshotService.fetchScreenshotForSerial(serial);
             const isPng = isPngImageBuffer(screenshot);
@@ -74,8 +83,10 @@ export class DevicesController {
     }
 
     @Get(':id')
-    async findOne(@Param('id') id: string): Promise<Device> {
-        return this.devicesService.findOne(id);
+    async findOne(@Param('id') id: string, @CurrentUser() currentUser: any): Promise<Device> {
+        const device = await this.devicesService.findOne(id);
+        await this.devicesService.assertUserCanAccessDevice(currentUser, device);
+        return device as Device;
     }
 
    
@@ -138,9 +149,10 @@ export class DevicesController {
      * GET /devices/:id/preview
      */
     @Get(':id/preview')
-    async getPreview(@Param('id') id: string) {
+    async getPreview(@Param('id') id: string, @CurrentUser() currentUser: any) {
         try {
             const device = await this.devicesService.findOne(id);
+            await this.devicesService.assertUserCanAccessDevice(currentUser, device);
             if (!device) {
                 return { image: null, message: 'Device not found' };
             }
@@ -176,11 +188,16 @@ export class DevicesController {
      * GET /devices/:id/screenshot
      */
     @Get(':id/screenshot')
-    async getScreenshot(@Param('id') id: string, @Res() res: Response) {
+    async getScreenshot(
+        @Param('id') id: string,
+        @CurrentUser() currentUser: any,
+        @Res() res: Response,
+    ) {
         try {
             this.logger.debug(`[SCREENSHOT] Request for device ID: ${id}`);
             
             const device = await this.devicesService.findOne(id);
+            await this.devicesService.assertUserCanAccessDevice(currentUser, device);
             if (!device) {
                 this.logger.warn(`[SCREENSHOT] Device not found: ${id}`);
                 return res.status(404).json({ message: 'Device not found' });

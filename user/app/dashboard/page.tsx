@@ -47,12 +47,16 @@ export default function DashboardPage() {
     let cancelled = false
     let socket: ReturnType<typeof getNotificationSocket> | null = null
 
-    apiFetch<{ user: { id: string } }>("/auth/me")
+    apiFetch<{ user: { id: string; username: string; role: string } }>("/auth/me")
       .then((res) => {
         if (cancelled || !res.user?.id) return
-        const userId = res.user.id
+        const tokenMatch = document.cookie
+          .split("; ")
+          .find((row) => row.startsWith("access_token="))
+        const token = tokenMatch?.split("=")[1]
+        if (!token) return
 
-        socket = getNotificationSocket(userId)
+        socket = getNotificationSocket(token)
 
         socket.on("new_notification", (data: any) => {
           playNotificationSound()

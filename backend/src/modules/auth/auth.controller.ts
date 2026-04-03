@@ -21,6 +21,9 @@ import { RegisterDto } from './dto/register.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { LoginAttemptService } from './services/login-attempt.service';
 import { ConfigService } from '@nestjs/config';
+import { Roles } from '../../common/decorators/roles.decorator';
+import { RolesGuard } from './guards/roles.guard';
+import { UserRole } from '../users/user.schema';
 
 function getCookieOptions(isProduction: boolean, config: ConfigService) {
   const domain = config.get<string>('COOKIE_DOMAIN')?.trim();
@@ -141,6 +144,8 @@ export class AuthController {
   }
 
   @Post('register')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
   async register(@Body(ValidationPipe) registerDto: RegisterDto) {
     return this.authService.register(registerDto);
   }

@@ -16,12 +16,22 @@ import { LoginAttemptService } from './services/login-attempt.service';
     PassportModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
-      useFactory: async (configService: ConfigService) => ({
-        secret: configService.get<string>('JWT_SECRET'),
-        signOptions: {
-          expiresIn: configService.get<string>('JWT_EXPIRATION') || '1d',
-        },
-      }),
+      useFactory: async (configService: ConfigService) => {
+        const secret = configService.get<string>('JWT_SECRET')?.trim() || '';
+        if (!secret) {
+          throw new Error('JWT_SECRET is not configured');
+        }
+        if (secret.length < 32 || secret.startsWith('change-me')) {
+          throw new Error('JWT_SECRET is too weak (must be at least 32 chars and not default-like)');
+        }
+
+        return {
+          secret,
+          signOptions: {
+            expiresIn: configService.get<string>('JWT_EXPIRATION') || '1d',
+          },
+        };
+      },
       inject: [ConfigService],
     }),
     ThrottlerModule.forRoot([
@@ -41,6 +51,6 @@ import { LoginAttemptService } from './services/login-attempt.service';
       useClass: ThrottlerGuard,
     },
   ],
-  exports: [AuthService],
+  exports: [AuthService, JwtModule],
 })
 export class AuthModule {}

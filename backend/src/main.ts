@@ -10,6 +10,22 @@ import { getCorsConfig } from './config/cors.config';
 import { PrettyLogger } from './common/logger/pretty-logger';
 import { ConfigurableSocketIoAdapter } from './common/adapters/configurable-socket-io.adapter';
 
+function assertStrongSecurityConfig(configService: ConfigService): void {
+  const jwtSecret = configService.get<string>('JWT_SECRET')?.trim() || '';
+  if (!jwtSecret || jwtSecret.length < 32 || jwtSecret.startsWith('change-me')) {
+    throw new Error('Unsafe JWT_SECRET configuration');
+  }
+
+  const nodeEnv = configService.get<string>('NODE_ENV');
+  if (nodeEnv === 'production') {
+    const adminUser = configService.get<string>('ADMIN_USERNAME')?.trim().toLowerCase() || '';
+    const adminPass = configService.get<string>('ADMIN_PASSWORD')?.trim() || '';
+    if (adminUser === 'admin' || adminPass.length < 12 || adminPass.includes('change-me')) {
+      throw new Error('Unsafe ADMIN credentials for production');
+    }
+  }
+}
+
 async function bootstrap() {
   const logger = new PrettyLogger('Bootstrap');
 
@@ -22,6 +38,7 @@ async function bootstrap() {
   });
 
   const configService = app.get(ConfigService);
+  assertStrongSecurityConfig(configService);
 
   app.use(
     helmet({
@@ -57,6 +74,13 @@ async function bootstrap() {
   logger.log(`Server ready → http://0.0.0.0:${port}`);
   logger.separator();
 
-  await seedAdmin(app);
+  const allowSeedInProd =
+    (configService.get<string>('ALLOW_ADMIN_SEED_IN_PRODUCTION') || '').toLowerCase() === 'true';
+  const isProd = configService.get<string>('NODE_ENV') === 'production';
+  if (!isProd || allowSeedInProd) {
+    await seedAdmin(app);
+  } else {
+    logger.warn('Skipping admin seed in production (set ALLOW_ADMIN_SEED_IN_PRODUCTION=true to override)');
+  }
 }
 bootstrap();

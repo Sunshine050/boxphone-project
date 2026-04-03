@@ -15,9 +15,10 @@ const { execSync, exec } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 
-// Configuration — ต้องตั้ง BACKEND_URL หรือ API_BASE_URL ใน env
+// Configuration — ต้องตั้ง BACKEND_URL หรือ API_BASE_URL + DEVICE_SOCKET_SECRET ใน env
 const BACKEND_URL = process.env.BACKEND_URL || process.env.API_BASE_URL || '';
 const DEVICE_ID = process.env.DEVICE_ID || `usb_device_${Date.now()}`;
+const DEVICE_SOCKET_SECRET = process.env.DEVICE_SOCKET_SECRET || '';
 const STREAM_FPS = parseInt(process.env.STREAM_FPS || '5'); // Frames per second
 const TEMP_DIR = path.join(__dirname, '..', 'temp');
 const TEMP_SCREEN_FILE = path.join(TEMP_DIR, 'screen.png');
@@ -29,6 +30,10 @@ if (!fs.existsSync(TEMP_DIR)) {
 
 if (!BACKEND_URL) {
   console.error('❌ Set BACKEND_URL or API_BASE_URL in env');
+  process.exit(1);
+}
+if (!DEVICE_SOCKET_SECRET) {
+  console.error('❌ Set DEVICE_SOCKET_SECRET in env to match backend .env');
   process.exit(1);
 }
 console.log('🚀 Starting USB Bridge Service for BoxPhone...');
@@ -101,6 +106,10 @@ const socket = io(BACKEND_URL, {
   timeout: 30000, // 30 seconds timeout
   forceNew: true,
   autoConnect: true,
+  auth: {
+    deviceSecret: DEVICE_SOCKET_SECRET,
+    deviceId: DEVICE_ID,
+  },
   // Add path if needed (default is /socket.io/)
   // path: '/socket.io/'
 });

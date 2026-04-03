@@ -3,17 +3,27 @@ const { execSync } = require('child_process');
 const fs = require('fs');
 
 const BACKEND_URL = process.env.BACKEND_URL || process.env.API_BASE_URL || '';
-const DEVICE_ID = 'android_device_1';
+const DEVICE_ID = process.env.DEVICE_ID || 'android_device_1';
+const DEVICE_SOCKET_SECRET = process.env.DEVICE_SOCKET_SECRET || '';
 
 if (!BACKEND_URL) {
   console.error('❌ Set BACKEND_URL or API_BASE_URL in env');
   process.exit(1);
 }
+if (!DEVICE_SOCKET_SECRET) {
+  console.error('❌ Set DEVICE_SOCKET_SECRET in env to match backend .env');
+  process.exit(1);
+}
 console.log('🚀 Starting Emulator Streamer...');
 console.log(`🔗 Connecting to ${BACKEND_URL}`);
+console.log(`📱 Device ID: ${DEVICE_ID}`);
 
 const socket = io(BACKEND_URL, {
-    transports: ['websocket']
+  transports: ['websocket'],
+  auth: {
+    deviceSecret: DEVICE_SOCKET_SECRET,
+    deviceId: DEVICE_ID,
+  },
 });
 
 socket.on('connect', () => {

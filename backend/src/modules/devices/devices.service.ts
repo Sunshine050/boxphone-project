@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { ForbiddenException, Injectable, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { ConfigService } from '@nestjs/config';
@@ -7,6 +7,7 @@ import { promisify } from 'util';
 import { Device, DeviceDocument, DeviceStatus } from './device.schema';
 import { XiaoweiService } from './xiaowei.service';
 import { XiaoweiWebSocketService } from './xiaowei-websocket.service';
+import { User, UserDocument, UserRole } from '../users/user.schema';
 
 const execAsync = promisify(exec);
 
@@ -16,6 +17,7 @@ export class DevicesService {
 
     constructor(
         @InjectModel(Device.name) private deviceModel: Model<DeviceDocument>,
+        @InjectModel(User.name) private userModel: Model<UserDocument>,
         private readonly configService: ConfigService,
         private readonly xiaoweiService: XiaoweiService,
         private readonly xiaoweiWsService: XiaoweiWebSocketService,
@@ -23,6 +25,22 @@ export class DevicesService {
 
     async findAll(): Promise<Device[]> {
         return this.deviceModel.find().sort({ last_connected_at: -1 }).exec();
+    }
+
+    async findAllForUser(userId: string): Promise<Device[]> {
+        const user = await this.userModel.findById(userId).exec();
+        if (!user) return [];
+
+        const assignedIds = (Array.isArray((user as any).devices) ? (user as any).devices : [])
+            .map((d: any) => String(d.device_id))
+            .filter(Boolean);
+        const legacyDeviceId = String((user as any).device_id || '');
+        if (legacyDeviceId) {
+            assignedIds.push(legacyDeviceId);
+        }
+
+        if (assignedIds.length === 0) return [];
+        return this.deviceModel.find({ _id: { $in: assignedIds } }).sort({ last_connected_at: -1 }).exec();
     }
 
     async register(deviceId: string, info: any): Promise<Device> {
@@ -54,6 +72,34 @@ export class DevicesService {
 
     async findBySerialNumber(serialNumber: string): Promise<Device | null> {
         return this.deviceModel.findOne({ serial_number: serialNumber }).exec();
+    }
+
+    async assertUserCanAccessDevice(
+        requester: { id?: string; role?: UserRole },
+        device: Device | null,
+    ): Promise<void> {
+        if (!requester?.id) {
+            throw new ForbiddenException('User not authenticated');
+        }
+        if (requester.role === UserRole.ADMIN) return;
+        if (!device) {
+            throw new ForbiddenException('Device not found');
+        }
+
+        const user = await this.userModel.findById(requester.id).exec();
+        if (!user) {
+            throw new ForbiddenException('User not found');
+        }
+
+        const deviceId = (device as any)._id?.toString();
+        const hasAssignedDevice = Array.isArray((user as any).devices)
+            && (user as any).devices.some((d: any) => String(d.device_id) === String(deviceId));
+        const hasLegacyDevice = String((user as any).device_id || '') === String(deviceId);
+        const isCurrentUser = String((device as any).current_user_id || '') === String(requester.id);
+
+        if (!hasAssignedDevice && !hasLegacyDevice && !isCurrentUser) {
+            throw new ForbiddenException('Device access denied');
+        }
     }
 
     async update(id: string, updateDeviceDto: any): Promise<Device | null> {

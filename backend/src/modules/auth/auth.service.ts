@@ -5,6 +5,7 @@ import { UsersService } from '../users/users.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import * as bcrypt from 'bcrypt';
+import { UserRole } from '../users/user.schema';
 
 
 @Injectable()
@@ -99,7 +100,7 @@ export class AuthService {
         const user = await this.usersService.create({
             username: registerDto.username,
             password_hash,
-            role: registerDto.role,
+            role: UserRole.USER,
         });
 
         return {

@@ -3,6 +3,8 @@ import {
   ConflictException,
   NotFoundException,
   BadRequestException,
+  Inject,
+  forwardRef,
 } from "@nestjs/common";
 import { InjectModel } from "@nestjs/mongoose";
 import { Model } from "mongoose";
@@ -20,6 +22,7 @@ export class UsersService {
     @InjectModel(User.name) private userModel: Model<UserDocument>,
     private readonly configService: ConfigService,
     private readonly logService: LogService,
+    @Inject(forwardRef(() => SessionsService))
     private readonly sessionsService: SessionsService,
   ) { }
 
@@ -56,14 +59,12 @@ export class UsersService {
     name?: string;
     username: string;
     password_hash: string;
-    password_plain?: string;
     role?: UserRole;
   }): Promise<User> {
     const createdUser = new this.userModel({
       name: payload.name ?? payload.username,
       username: payload.username,
       password_hash: payload.password_hash,
-      password_plain: payload.password_plain ?? "",
 
       role: payload.role ?? UserRole.USER,
       status: UserStatus.PENDING,
@@ -108,7 +109,6 @@ export class UsersService {
       name: createUserDto.name,
       username: createUserDto.username,
       password_hash,
-      password_plain: createUserDto.password,
 
       role: UserRole.USER,
 
@@ -158,7 +158,6 @@ export class UsersService {
             $set: {
               name: payload.name,
               password_hash,
-              password_plain: payload.password,
               role: UserRole.ADMIN,
             },
           },
@@ -172,7 +171,6 @@ export class UsersService {
       name: payload.name,
       username: payload.username,
       password_hash,
-      password_plain: payload.password,
 
       role: UserRole.ADMIN,
 
@@ -449,7 +447,6 @@ export class UsersService {
         status: u.status,
         devices: updatedDevices,
         device_history: u.device_history || [],
-        password_plain: u.password_plain,
       };
     });
   }
@@ -476,8 +473,6 @@ export class UsersService {
         updateUserDto.password,
         saltRounds
       );
-
-      updateUserDto.password_plain = updateUserDto.password;
 
       delete updateUserDto.password;
     }
