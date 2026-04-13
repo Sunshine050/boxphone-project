@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useLayoutEffect, useMemo } from "react";
 import { motion } from "framer-motion";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -19,6 +19,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 import { AdminLog, LogType } from "@/types/log";
 import { LogItem } from "@/components/logs/log-item";
+import { LogTimeFilterPanel } from "@/components/logs/log-time-filter-panel";
 import { apiFetch } from "@/services/api";
 import { UsersService } from "@/services/users.service";
 import useSWR from "swr";
@@ -36,7 +37,7 @@ import {
 import { toast } from "@/hooks/use-toast";
 import {
   logMatchesSearchQuery,
-  logMatchesDateRange,
+  logMatchesDateTimeRange,
   downloadLogsCsv,
 } from "@/lib/logs-helpers";
 
@@ -44,8 +45,20 @@ const PAGE_SIZE = 10;
 
 export default function AdminLogsPage() {
   const isMobile = useIsMobile();
+  /** จอ ≤1023px (มือถือ + iPad): Sheet ด้านล่าง — จอกว่าใช้ Dialog */
+  const [narrowForTimePanel, setNarrowForTimePanel] = useState(false);
+
+  useLayoutEffect(() => {
+    const mq = window.matchMedia("(max-width: 1023px)");
+    const apply = () => setNarrowForTimePanel(mq.matches);
+    apply();
+    mq.addEventListener("change", apply);
+    return () => mq.removeEventListener("change", apply);
+  }, []);
   const [query, setQuery] = useState("");
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
+  const [timeStart, setTimeStart] = useState("");
+  const [timeEnd, setTimeEnd] = useState("");
   const [datePickerOpen, setDatePickerOpen] = useState(false);
   const [typeFilter, setTypeFilter] = useState<LogType | "all">("all");
   const [page, setPage] = useState(1);
@@ -75,11 +88,11 @@ export default function AdminLogsPage() {
       const matchType = typeFilter === "all" || l.type === typeFilter;
       return (
         matchType &&
-        logMatchesDateRange(l, dateRange) &&
+        logMatchesDateTimeRange(l, dateRange, timeStart, timeEnd) &&
         logMatchesSearchQuery(l, query)
       );
     });
-  }, [logs, query, typeFilter, dateRange]);
+  }, [logs, query, typeFilter, dateRange, timeStart, timeEnd]);
 
   const totalPages = Math.ceil(filteredLogs.length / PAGE_SIZE);
 
@@ -90,7 +103,9 @@ export default function AdminLogsPage() {
 
   useEffect(() => {
     setPage(1);
-  }, [query, typeFilter, dateRange]);
+  }, [query, typeFilter, dateRange, timeStart, timeEnd]);
+
+  const hasDateSelected = Boolean(dateRange?.from);
 
   const handleArchiveAndClear = async () => {
     setClearing(true);
@@ -223,7 +238,7 @@ export default function AdminLogsPage() {
       {/* FILTER BAR */}
       <Card className="gap-0 overflow-hidden border-border/80 py-0 shadow-md">
         <CardContent className="p-0">
-          <div className="grid gap-5 p-4 sm:p-5 lg:grid-cols-2 lg:gap-8">
+          <div className="grid grid-cols-1 gap-4 p-4 sm:p-5 md:grid-cols-2 md:items-start md:gap-5 lg:gap-6 xl:grid-cols-3">
             <div className="flex min-w-0 flex-col gap-2">
               <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                 ช่วงวันที่
@@ -277,7 +292,11 @@ export default function AdminLogsPage() {
                     variant="outline"
                     size="icon"
                     className="h-10 w-10 shrink-0 rounded-xl border-border/70 bg-muted/25 shadow-sm hover:bg-destructive/10 hover:text-destructive"
-                    onClick={() => setDateRange(undefined)}
+                    onClick={() => {
+                      setDateRange(undefined);
+                      setTimeStart("");
+                      setTimeEnd("");
+                    }}
                     aria-label="ล้างช่วงวันที่"
                   >
                     <X className="h-4 w-4" />
@@ -287,6 +306,34 @@ export default function AdminLogsPage() {
             </div>
 
             <div className="flex min-w-0 flex-col gap-2">
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  ช่วงเวลา
+                </span>
+                <span className="text-[10px] text-muted-foreground/90">
+                  แตะเพื่อเปิดหน้าต่าง
+                </span>
+              </div>
+              <LogTimeFilterPanel
+                hasDate={hasDateSelected}
+                timeStart={timeStart}
+                timeEnd={timeEnd}
+                useSheetLayout={narrowForTimePanel}
+                onApply={(start, end) => {
+                  setTimeStart(start);
+                  setTimeEnd(end);
+                }}
+                onRequestDateFirst={() =>
+                  toast({
+                    title: "เลือกวันที่ก่อน",
+                    description:
+                      "เลือกช่วงวันที่ในปฏิทิน แล้วจึงกรองตามเวลาได้",
+                  })
+                }
+              />
+            </div>
+
+            <div className="flex min-w-0 flex-col gap-2 md:col-span-2 xl:col-span-1">
               <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                 ค้นหา
               </span>
@@ -333,6 +380,7 @@ export default function AdminLogsPage() {
                 <option value="DEVICE_DISCONNECTED">ตัดการเชื่อมต่อ</option>
                 <option value="SESSION_STARTED">เริ่มใช้งาน</option>
                 <option value="SESSION_ENDED">สิ้นสุดการใช้งาน</option>
+                <option value="DEVICE_STATUS_CHANGED">เปลี่ยนสถานะเครื่อง</option>
               </select>
               <Button
                 type="button"

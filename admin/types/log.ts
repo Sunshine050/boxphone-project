@@ -10,7 +10,8 @@ export type LogType =
   | "DEVICE_ASSIGNED"
   | "DEVICE_DISCONNECTED"
   | "SESSION_STARTED"
-  | "SESSION_ENDED";
+  | "SESSION_ENDED"
+  | "DEVICE_STATUS_CHANGED";
 
 export interface AdminLog {
   _id: string;
@@ -33,6 +34,7 @@ export interface AdminLog {
   admin_username?: string;
   meta?: Record<string, any>;
 
-  createdAt: string;
-  updatedAt: string;
+  /** ISO / numeric string from API; may be missing on legacy rows (use _id time). */
+  createdAt?: string;
+  updatedAt?: string;
 }

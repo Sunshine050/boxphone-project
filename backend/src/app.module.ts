@@ -8,6 +8,7 @@ import { AuthModule } from './modules/auth/auth.module';
 import { UsersModule } from './modules/users/users.module';
 import { SessionsModule } from './modules/sessions/sessions.module';
 import { NotificationModule } from './modules/notification/notification.module';
+import { LogModule } from './modules/log/log.module';
 
 @Module({
   imports: [
@@ -40,6 +41,7 @@ import { NotificationModule } from './modules/notification/notification.module';
       },
     }),
 
+    LogModule,
     AuthModule,
     UsersModule,
     DevicesModule,

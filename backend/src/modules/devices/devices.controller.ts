@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Logger, Res, Query, BadRequestException } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Logger, Res, Query, BadRequestException, NotFoundException } from '@nestjs/common';
 import { Response } from 'express';
 import { DevicesService } from './devices.service';
 import { Device } from './device.schema';
@@ -10,6 +10,7 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { XiaoweiWebSocketService } from './xiaowei-websocket.service';
 import { AdbScreenshotService } from './adb-screenshot.service';
 import { isPngImageBuffer } from './utils/screenshot-buffer.util';
+import { LogService } from '../log/log.service';
 
 @Controller('devices')
 @UseGuards(JwtAuthGuard)
@@ -20,6 +21,7 @@ export class DevicesController {
         private readonly devicesService: DevicesService,
         private readonly xiaoweiWsService: XiaoweiWebSocketService,
         private readonly adbScreenshotService: AdbScreenshotService,
+        private readonly logService: LogService,
     ) { }
 
     @Get()
@@ -102,8 +104,26 @@ export class DevicesController {
         if (!status || !['UNDER_REPAIR', 'DAMAGED', 'AVAILABLE', 'QUARANTINE'].includes(status)) {
             throw new BadRequestException('status must be one of: UNDER_REPAIR, DAMAGED, AVAILABLE, QUARANTINE');
         }
+        const existing = await this.devicesService.findOne(id);
+        if (!existing) {
+            throw new NotFoundException('Device not found');
+        }
+        const previousStatus = (existing as any).status as string;
         this.logger.log(`[MARK_STATUS] Admin: ${currentUser?.username || 'unknown'} set device ${id} → ${status}`);
         const device = await this.devicesService.update(id, { status });
+        if (!device) {
+            throw new NotFoundException('Device not found');
+        }
+        const deviceName = device.name || id;
+        const serial = device.serial_number || '';
+        await this.logService.createLog({
+            type: 'DEVICE_STATUS_CHANGED',
+            level: 'INFO',
+            message: `เปลี่ยนสถานะเครื่อง ${deviceName}${serial ? ` (${serial})` : ''}: ${previousStatus} → ${status}`,
+            target_device_id: id,
+            admin_username: currentUser?.username || 'admin',
+            meta: { from: previousStatus, to: status },
+        });
         return { message: 'Device status updated', device };
     }
 
