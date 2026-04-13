@@ -11,9 +11,11 @@ import {
   ShieldAlert,
   Play,
   Square,
+  Smartphone,
 } from "lucide-react";
 
 import { AdminLog, LogLevel, LogType } from "@/types/log";
+import { getLogTimeMs } from "@/lib/logs-helpers";
 
 interface LogItemProps {
   log: AdminLog;
@@ -22,6 +24,7 @@ interface LogItemProps {
 }
 
 export function LogItem({ log, idx, onSelect }: LogItemProps) {
+  const createdMs = getLogTimeMs(log);
 
   // ✅ LEVEL STYLE (เหมือนเดิม แต่ type-safe)
   const getLevelStyle = (level: LogLevel) => {
@@ -58,6 +61,7 @@ const resolvedLevel = resolveLevel(log);
 
       SESSION_STARTED: { label: "เริ่มใช้งาน", icon: <Play className="h-3.5 w-3.5" /> },
       SESSION_ENDED: { label: "สิ้นสุดการใช้งาน", icon: <Square className="h-3.5 w-3.5" /> },
+      DEVICE_STATUS_CHANGED: { label: "เปลี่ยนสถานะเครื่อง", icon: <Smartphone className="h-3.5 w-3.5" /> },
 
       DEVICE_AVAILABLE_ALERT: { label: "แจ้งเตือน", icon: <Bell className="h-3.5 w-3.5" /> },
       SYSTEM_WARNING: { label: "ระบบ", icon: <ShieldAlert className="h-3.5 w-3.5" /> },
@@ -109,7 +113,11 @@ const resolvedLevel = resolveLevel(log);
         </div>
 
         <div className="text-[11px] text-muted-foreground flex items-center gap-2">
-          <span>{new Date(log.createdAt).toLocaleString("th-TH")}</span>
+          <span>
+            {createdMs != null
+              ? new Date(createdMs).toLocaleString("th-TH")
+              : "—"}
+          </span>
           <span className="w-1 h-1 rounded-full bg-border" />
           <span>โดย: {log.admin_username || "System"}</span>
         </div>
