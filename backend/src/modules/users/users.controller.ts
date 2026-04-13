@@ -10,6 +10,7 @@ import {
   HttpCode,
   HttpStatus,
   NotFoundException,
+  ForbiddenException,
   Logger,
 } from "@nestjs/common";
 import { UsersService } from "./users.service";
@@ -37,8 +38,8 @@ export class UsersController {
     private readonly usersService: UsersService,
     private readonly devicesService: DevicesService,
     private readonly logService: LogService,
-    private readonly notificationService: NotificationService
-  ) { }
+    private readonly notificationService: NotificationService,
+  ) {}
 
   /**
    * ✅ สร้าง User ใหม่โดยแอดมิน
@@ -50,11 +51,12 @@ export class UsersController {
   @HttpCode(HttpStatus.CREATED)
   async create(
     @Body() createUserDto: CreateUserByAdminDto,
-    @CurrentUser() currentUser: any
+    @CurrentUser() currentUser: any,
   ) {
     this.logger.log(
-      `[CREATE_USER] Admin: ${currentUser?.username || "unknown"} creating user: ${createUserDto.username
-      }`
+      `[CREATE_USER] Admin: ${currentUser?.username || "unknown"} creating user: ${
+        createUserDto.username
+      }`,
     );
 
     try {
@@ -62,16 +64,16 @@ export class UsersController {
       const userId = (user as any)._id.toString();
 
       this.logger.log(
-        `[CREATE_USER] ✅ Success - User ID: ${userId}, Username: ${user.username}`
+        `[CREATE_USER] ✅ Success - User ID: ${userId}, Username: ${user.username}`,
       );
 
       await this.logService.createLog({
-        type: 'USER_CREATED',
-        level: 'SUCCESS',
+        type: "USER_CREATED",
+        level: "SUCCESS",
         message: `สร้างผู้ใช้ใหม่: ${user.username}`,
         target_user_id: userId,
-        admin_username: currentUser?.username || 'admin',
-        meta: { role: user.role }
+        admin_username: currentUser?.username || "admin",
+        meta: { role: user.role },
       });
 
       return {
@@ -96,7 +98,7 @@ export class UsersController {
       };
     } catch (error) {
       this.logger.error(
-        `[CREATE_USER] ❌ Failed - Username: ${createUserDto.username}, Error: ${error.message}`
+        `[CREATE_USER] ❌ Failed - Username: ${createUserDto.username}, Error: ${error.message}`,
       );
       throw error;
     }
@@ -120,14 +122,17 @@ export class UsersController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
   async addTime(@Param("id") id: string, @Body() dto: AddTimeDto) {
-
-    const result = await this.usersService.addTime(id, dto.duration, dto.start_time);
+    const result = await this.usersService.addTime(
+      id,
+      dto.duration,
+      dto.start_time,
+    );
 
     await this.notificationService.createAndSend(
       id,
       "TIME_ADDED",
       `ผู้ดูแลเพิ่มเวลาให้คุณ ${Math.floor(Number(dto.duration) / 60)} นาที`,
-      "SUCCESS"
+      "SUCCESS",
     );
 
     return result;
@@ -139,30 +144,39 @@ export class UsersController {
    */
   @Post(":id/assign-devices")
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.USER)
   @HttpCode(HttpStatus.OK)
   async assignDevices(
     @Param("id") userId: string,
     @Body() dto: AssignDevicesDto,
-    @CurrentUser() currentUser: any
+    @CurrentUser() currentUser: any,
   ) {
+    const isAdmin = currentUser?.role === UserRole.ADMIN;
+    const isSelfAction = currentUser?.id === userId;
+    if (!isAdmin && !isSelfAction) {
+      throw new ForbiddenException(
+        "You can only assign devices to your own account",
+      );
+    }
+
     this.logger.log(
-      `[ASSIGN_DEVICES] Admin: ${currentUser?.username || "unknown"} assigning ${dto?.items?.length || 0
-      } devices to userId=${userId}`
+      `[ASSIGN_DEVICES] User: ${currentUser?.username || "unknown"} assigning ${
+        dto?.items?.length || 0
+      } devices to userId=${userId}`,
     );
     await this.logService.createLog({
-      type: 'DEVICE_ASSIGNED',
-      level: 'SUCCESS',
+      type: "DEVICE_ASSIGNED",
+      level: "SUCCESS",
       message: `Assign อุปกรณ์ใหม่ ${dto.items.length} เครื่อง ให้ผู้ใช้`,
       target_user_id: userId,
-      admin_username: currentUser?.username || 'admin',
-      meta: { devices: dto.items }
+      admin_username: currentUser?.username || "admin",
+      meta: { devices: dto.items },
     });
 
     return this.usersService.assignDevices(
       userId,
       dto.items,
-      this.devicesService
+      this.devicesService,
     );
   }
 
@@ -176,16 +190,19 @@ export class UsersController {
   @HttpCode(HttpStatus.OK)
   async bulkAddTime(
     @Body() dto: BulkAddTimeDto,
-    @CurrentUser() currentUser: any
+    @CurrentUser() currentUser: any,
   ) {
     const seconds = Number(dto.add_seconds) || 0;
     const note = typeof dto.note === "string" ? dto.note.trim() : undefined;
 
     this.logger.log(
-      `[BULK_ADD_TIME] Admin: ${currentUser?.username || "unknown"} adding ${seconds}s${note ? `, note: ${note}` : ""}`
+      `[BULK_ADD_TIME] Admin: ${currentUser?.username || "unknown"} adding ${seconds}s${note ? `, note: ${note}` : ""}`,
     );
 
-    const result = await this.usersService.bulkAddTimeToInuseUsers(seconds, note);
+    const result = await this.usersService.bulkAddTimeToInuseUsers(
+      seconds,
+      note,
+    );
 
     const baseMessage = `ผู้ดูแลเพิ่มเวลาให้คุณ ${Math.floor(seconds / 60)} นาที`;
     const message = note ? `${baseMessage}\nหมายเหตุ: ${note}` : baseMessage;
@@ -196,7 +213,7 @@ export class UsersController {
         u._id.toString(),
         "TIME_ADDED",
         message,
-        "SUCCESS"
+        "SUCCESS",
       );
     }
 
@@ -267,23 +284,23 @@ export class UsersController {
   async connectDevice(
     @Param("id") userId: string,
     @Body() connectDeviceDto: ConnectDeviceDto,
-    @CurrentUser() currentUser: any
+    @CurrentUser() currentUser: any,
   ) {
     this.logger.log(
-      `[CONNECT_DEVICE] Admin: ${currentUser?.username || "unknown"} connecting User ID: ${userId} to Device ID: ${connectDeviceDto.device_id}`
+      `[CONNECT_DEVICE] Admin: ${currentUser?.username || "unknown"} connecting User ID: ${userId} to Device ID: ${connectDeviceDto.device_id}`,
     );
 
     try {
       const user: any = await this.usersService.connectDevice(
         userId,
         connectDeviceDto.device_id,
-        this.devicesService
+        this.devicesService,
       );
 
       const userIdStr = user._id.toString();
 
       this.logger.log(
-        `[CONNECT_DEVICE] ✅ Success - User ID: ${userIdStr}, Device ID: ${connectDeviceDto.device_id}, Status: ${user.status}`
+        `[CONNECT_DEVICE] ✅ Success - User ID: ${userIdStr}, Device ID: ${connectDeviceDto.device_id}, Status: ${user.status}`,
       );
 
       return {
@@ -297,7 +314,7 @@ export class UsersController {
       };
     } catch (error) {
       this.logger.error(
-        `[CONNECT_DEVICE] ❌ Failed - User ID: ${userId}, Device ID: ${connectDeviceDto.device_id}, Error: ${error.message}`
+        `[CONNECT_DEVICE] ❌ Failed - User ID: ${userId}, Device ID: ${connectDeviceDto.device_id}, Error: ${error.message}`,
       );
       throw error;
     }
@@ -313,7 +330,7 @@ export class UsersController {
   async disconnectDevice(@Param("id") userId: string) {
     const user: any = await this.usersService.disconnectDevice(
       userId,
-      this.devicesService
+      this.devicesService,
     );
 
     return {

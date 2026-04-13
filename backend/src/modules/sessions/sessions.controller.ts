@@ -31,8 +31,8 @@ export class SessionsController {
   constructor(
     private readonly sessionsService: SessionsService,
     private readonly logService: LogService,
-    private readonly notificationService: NotificationService
-  ) { }
+    private readonly notificationService: NotificationService,
+  ) {}
   /**
    * USER: ดึง session ของตัวเอง
    * GET /sessions/me
@@ -41,17 +41,10 @@ export class SessionsController {
   @UseGuards(JwtAuthGuard)
   async getMySessions(@CurrentUser() user: any) {
     const userId = user.userId || user.id;
-
-    // 1. ตรวจสอบ Session ที่ Active อยู่แล้ว (ป้องกันการสร้างซ้ำเมื่อ Refresh)
-    const activeSessions = await this.sessionsService.getActiveSessionsByUser(userId);
-    if (activeSessions.length > 0) {
-      return activeSessions;
-    }
-
-    // 2. ถ้าไม่มี Active Session ให้ลองตรวจสอบ Device ที่ถูก Assign ไว้และ Auto-Start
+    // ตรวจสอบ assigned devices ทุกครั้งเพื่อ auto-start เครื่องที่ยังเป็น PENDING
+    // (กรณีมี active อยู่แล้ว 1 เครื่อง จะได้ start เครื่องที่เหลือเพิ่มได้)
     return this.sessionsService.startAssignedSessionsByUser(userId);
   }
-
 
   /**
    * สร้าง Session ใหม่
@@ -64,26 +57,29 @@ export class SessionsController {
   @HttpCode(HttpStatus.CREATED)
   async create(
     @Body() createSessionDto: CreateSessionDto,
-    @CurrentUser() currentUser: any
+    @CurrentUser() currentUser: any,
   ) {
     this.logger.log(
-      `[CREATE_SESSION] Admin: ${currentUser?.username || "unknown"} creating session - User ID: ${createSessionDto.user_id}, Device ID: ${createSessionDto.device_id}, Package: ${createSessionDto.package}, Total Seconds: ${createSessionDto.total_seconds}`
+      `[CREATE_SESSION] Admin: ${currentUser?.username || "unknown"} creating session - User ID: ${createSessionDto.user_id}, Device ID: ${createSessionDto.device_id}, Package: ${createSessionDto.package}, Total Seconds: ${createSessionDto.total_seconds}`,
     );
     try {
       const session =
         await this.sessionsService.createSession(createSessionDto);
       const sessionId = (session as any)._id.toString();
       this.logger.log(
-        `[CREATE_SESSION] ✅ Success - Session ID: ${sessionId}, User ID: ${session.user_id}, Device ID: ${session.device_id}, Status: ${session.status}, Remaining: ${session.remaining_seconds}s`
+        `[CREATE_SESSION] ✅ Success - Session ID: ${sessionId}, User ID: ${session.user_id}, Device ID: ${session.device_id}, Status: ${session.status}, Remaining: ${session.remaining_seconds}s`,
       );
       await this.logService.createLog({
-        type: 'TIME_ADDED',
-        level: 'SUCCESS',
+        type: "TIME_ADDED",
+        level: "SUCCESS",
         message: `สร้าง Session ใหม่ (เครื่อง ${createSessionDto.device_id})`,
         target_user_id: createSessionDto.user_id,
         target_device_id: createSessionDto.device_id,
-        admin_username: currentUser?.username || 'admin',
-        meta: { package: createSessionDto.package, seconds: createSessionDto.total_seconds }
+        admin_username: currentUser?.username || "admin",
+        meta: {
+          package: createSessionDto.package,
+          seconds: createSessionDto.total_seconds,
+        },
       });
       return {
         message: "Session created successfully",
@@ -100,12 +96,11 @@ export class SessionsController {
       };
     } catch (error) {
       this.logger.error(
-        `[CREATE_SESSION] ❌ Failed - User ID: ${createSessionDto.user_id}, Device ID: ${createSessionDto.device_id}, Error: ${error.message}`
+        `[CREATE_SESSION] ❌ Failed - User ID: ${createSessionDto.user_id}, Device ID: ${createSessionDto.device_id}, Error: ${error.message}`,
       );
       throw error;
     }
   }
-
 
   @Get()
   @UseGuards(RolesGuard)
@@ -113,7 +108,6 @@ export class SessionsController {
   async findAll() {
     return this.sessionsService.findAll();
   }
-
 
   @Get(":id")
   @UseGuards(RolesGuard)
@@ -126,7 +120,6 @@ export class SessionsController {
     return session;
   }
 
-
   @Get("user/:userId")
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN)
@@ -138,7 +131,6 @@ export class SessionsController {
     return session;
   }
 
-
   @Get("device/:deviceId")
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN)
@@ -148,19 +140,18 @@ export class SessionsController {
     return session;
   }
 
-
   @Get(":id/remaining")
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN)
   async getRemainingTime(@Param("id") id: string) {
     this.logger.debug(
-      `[GET_REMAINING_TIME] Checking remaining time for Session ID: ${id}`
+      `[GET_REMAINING_TIME] Checking remaining time for Session ID: ${id}`,
     );
     try {
       const remaining = await this.sessionsService.getRemainingTime(id);
       const formatted = this.formatTime(remaining);
       this.logger.log(
-        `[GET_REMAINING_TIME] ✅ Session ID: ${id}, Remaining: ${remaining}s (${formatted})`
+        `[GET_REMAINING_TIME] ✅ Session ID: ${id}, Remaining: ${remaining}s (${formatted})`,
       );
       return {
         session_id: id,
@@ -171,12 +162,11 @@ export class SessionsController {
       };
     } catch (error) {
       this.logger.error(
-        `[GET_REMAINING_TIME] ❌ Failed - Session ID: ${id}, Error: ${error.message}`
+        `[GET_REMAINING_TIME] ❌ Failed - Session ID: ${id}, Error: ${error.message}`,
       );
       throw error;
     }
   }
-
 
   @Post(":id/pause")
   @UseGuards(RolesGuard)
@@ -185,12 +175,11 @@ export class SessionsController {
   async pause(
     @Param("id") id: string,
     @Body() body?: { reason?: string },
-    @CurrentUser() currentUser?: any
+    @CurrentUser() currentUser?: any,
   ) {
     this.logger.log(
-      `[PAUSE_SESSION] Admin: ${currentUser?.username || "unknown"} pausing Session ID: ${id}, Reason: ${body?.reason || "N/A"}`
+      `[PAUSE_SESSION] Admin: ${currentUser?.username || "unknown"} pausing Session ID: ${id}, Reason: ${body?.reason || "N/A"}`,
     );
-
 
     try {
       const session = await this.sessionsService.pauseSession(id, body?.reason);
@@ -205,12 +194,12 @@ export class SessionsController {
             current_user_id: null,
             previous_user_id: (session as any).user_id?.toString() ?? null,
             last_user_disconnected_at: new Date(),
-          }
+          },
         );
       }
 
       this.logger.log(
-        `[PAUSE_SESSION] ✅ Success - Session ID: ${sessionId}, Status: ${session.status}, Remaining: ${session.remaining_seconds}s (FROZEN)`
+        `[PAUSE_SESSION] ✅ Success - Session ID: ${sessionId}, Status: ${session.status}, Remaining: ${session.remaining_seconds}s (FROZEN)`,
       );
 
       await this.logService.createLog({
@@ -226,7 +215,7 @@ export class SessionsController {
         (session as any).user_id,
         "SESSION_PAUSED",
         `การใช้งานของคุณถูกหยุดชั่วคราวโดยผู้ดูแล`,
-        "WARNING"
+        "WARNING",
       );
 
       return {
@@ -240,12 +229,11 @@ export class SessionsController {
       };
     } catch (error) {
       this.logger.error(
-        `[PAUSE_SESSION] ❌ Failed - Session ID: ${id}, Error: ${error.message}`
+        `[PAUSE_SESSION] ❌ Failed - Session ID: ${id}, Error: ${error.message}`,
       );
       throw error;
     }
   }
-
 
   @Post(":id/resume")
   @UseGuards(RolesGuard)
@@ -253,19 +241,19 @@ export class SessionsController {
   @HttpCode(HttpStatus.OK)
   async resume(@Param("id") id: string, @CurrentUser() currentUser: any) {
     this.logger.log(
-      `[RESUME_SESSION] Admin: ${currentUser?.username || "unknown"} resuming Session ID: ${id}`
+      `[RESUME_SESSION] Admin: ${currentUser?.username || "unknown"} resuming Session ID: ${id}`,
     );
     try {
       const session = await this.sessionsService.resumeSession(id);
       const sessionId = (session as any)._id.toString();
       this.logger.log(
-        `[RESUME_SESSION] ✅ Success - Session ID: ${sessionId}, Status: ${session.status}, Remaining: ${session.remaining_seconds}s`
+        `[RESUME_SESSION] ✅ Success - Session ID: ${sessionId}, Status: ${session.status}, Remaining: ${session.remaining_seconds}s`,
       );
       await this.notificationService.createAndSend(
         (session as any).user_id,
         "SESSION_RESUMED",
         `การใช้งานของคุณถูกเริ่มต่อ`,
-        "SUCCESS"
+        "SUCCESS",
       );
       return {
         message: "Session resumed successfully",
@@ -278,12 +266,11 @@ export class SessionsController {
       };
     } catch (error) {
       this.logger.error(
-        `[RESUME_SESSION] ❌ Failed - Session ID: ${id}, Error: ${error.message}`
+        `[RESUME_SESSION] ❌ Failed - Session ID: ${id}, Error: ${error.message}`,
       );
       throw error;
     }
   }
-
 
   @Post(":id/move")
   @UseGuards(RolesGuard)
@@ -292,10 +279,10 @@ export class SessionsController {
   async move(
     @Param("id") id: string,
     @Body() moveSessionDto: MoveSessionDto,
-    @CurrentUser() currentUser: any
+    @CurrentUser() currentUser: any,
   ) {
     this.logger.log(
-      `[MOVE_SESSION] Admin: ${currentUser?.username || "unknown"} moving Session ID: ${id} to Device ID: ${moveSessionDto.to_device_id}, Reason: ${moveSessionDto.reason || "N/A"}`
+      `[MOVE_SESSION] Admin: ${currentUser?.username || "unknown"} moving Session ID: ${id} to Device ID: ${moveSessionDto.to_device_id}, Reason: ${moveSessionDto.reason || "N/A"}`,
     );
 
     try {
@@ -307,26 +294,26 @@ export class SessionsController {
       const session = await this.sessionsService.moveSession(
         id,
         moveSessionDto,
-        movedBy
+        movedBy,
       );
       const sessionId = (session as any)._id.toString();
       this.logger.log(
-        `[MOVE_SESSION] ✅ Success - Session ID: ${sessionId}, From Device: ${moveSessionDto.to_device_id}, To Device: ${session.device_id}, Remaining: ${session.remaining_seconds}s (UNCHANGED), Moved Count: ${session.moved_count}`
+        `[MOVE_SESSION] ✅ Success - Session ID: ${sessionId}, From Device: ${moveSessionDto.to_device_id}, To Device: ${session.device_id}, Remaining: ${session.remaining_seconds}s (UNCHANGED), Moved Count: ${session.moved_count}`,
       );
       await this.logService.createLog({
-        type: 'DEVICE_ASSIGNED',
-        level: 'WARNING',
+        type: "DEVICE_ASSIGNED",
+        level: "WARNING",
         message: `ย้ายผู้ใช้ไปเครื่องใหม่: ${moveSessionDto.to_device_id}`,
         target_user_id: (session as any).user_id,
         target_device_id: moveSessionDto.to_device_id,
-        admin_username: currentUser?.username || 'admin',
-        meta: { reason: moveSessionDto.reason }
+        admin_username: currentUser?.username || "admin",
+        meta: { reason: moveSessionDto.reason },
       });
       await this.notificationService.createAndSend(
         (session as any).user_id,
         "DEVICE_MOVED",
         `คุณถูกย้ายไปอุปกรณ์ใหม่`,
-        "INFO"
+        "INFO",
       );
       return {
         message: "Session moved successfully",
@@ -341,12 +328,11 @@ export class SessionsController {
       };
     } catch (error) {
       this.logger.error(
-        `[MOVE_SESSION] ❌ Failed - Session ID: ${id}, To Device: ${moveSessionDto.to_device_id}, Error: ${error.message}`
+        `[MOVE_SESSION] ❌ Failed - Session ID: ${id}, To Device: ${moveSessionDto.to_device_id}, Error: ${error.message}`,
       );
       throw error;
     }
   }
-
 
   @Post(":id/reduce-time")
   @UseGuards(RolesGuard)
@@ -355,19 +341,22 @@ export class SessionsController {
   async reduceTime(
     @Param("id") id: string,
     @Body() dto: ReduceTimeDto,
-    @CurrentUser() currentUser: any
+    @CurrentUser() currentUser: any,
   ) {
     this.logger.log(
-      `[REDUCE_TIME] Admin: ${currentUser?.username || "unknown"} reducing ${dto.seconds}s from Session ID: ${id}`
+      `[REDUCE_TIME] Admin: ${currentUser?.username || "unknown"} reducing ${dto.seconds}s from Session ID: ${id}`,
     );
 
-    const session = await this.sessionsService.reduceTimeFromSession(id, dto.seconds);
+    const session = await this.sessionsService.reduceTimeFromSession(
+      id,
+      dto.seconds,
+    );
 
     await this.notificationService.createAndSend(
       (session as any).user_id?.toString(),
       "TIME_REDUCED",
       `ผู้ดูแลลดเวลาของคุณ ${Math.floor(dto.seconds / 60)} นาที ${dto.seconds % 60} วินาที`,
-      "WARNING"
+      "WARNING",
     );
 
     await this.logService.createLog({
@@ -377,7 +366,10 @@ export class SessionsController {
       target_user_id: (session as any).user_id?.toString(),
       target_device_id: (session as any).device_id?.toString(),
       admin_username: currentUser?.username || "admin",
-      meta: { reduced_seconds: dto.seconds, remaining_seconds: session.remaining_seconds },
+      meta: {
+        reduced_seconds: dto.seconds,
+        remaining_seconds: session.remaining_seconds,
+      },
     });
 
     return {
@@ -390,7 +382,6 @@ export class SessionsController {
     };
   }
 
-
   @Post(":id/cancel")
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN)
@@ -402,7 +393,7 @@ export class SessionsController {
       session.user_id,
       "SESSION_CANCELLED",
       `การใช้งานของคุณถูกยกเลิกโดยผู้ดูแล`,
-      "DANGER"
+      "DANGER",
     );
 
     return {
@@ -414,14 +405,12 @@ export class SessionsController {
     };
   }
 
-
   @Get(":id/move-logs")
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN)
   async getMoveLogs(@Param("id") id: string) {
     return this.sessionsService.getMoveLogs(id);
   }
-
 
   private formatTime(seconds: number): string {
     const hours = Math.floor(seconds / 3600);
