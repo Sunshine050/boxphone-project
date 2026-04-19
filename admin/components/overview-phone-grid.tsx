@@ -115,7 +115,11 @@ export function OverviewPhoneGrid({
               {showAssign && (
                 <p
                   className={`text-xs ${canAssign ? "text-green-600 dark:text-green-400" : "text-muted-foreground"}`}
-                  title={canAssign ? "พร้อมมอบหมาย" : `ไม่พร้อมมอบหมาย - ${STATUS_LABELS[d.status]}`}
+                  title={
+                    canAssign
+                      ? "พร้อมมอบหมาย"
+                      : `ไม่พร้อมมอบหมาย - ${STATUS_LABELS[d.status]}`
+                  }
                 >
                   สถานะ: {STATUS_LABELS[d.status]}
                   {!canAssign && (
@@ -128,11 +132,15 @@ export function OverviewPhoneGrid({
 
               {d.user ? (
                 <p className="text-xs text-foreground font-medium truncate flex items-center gap-1">
-                  <span className="text-muted-foreground font-normal">ผู้ใช้:</span>
+                  <span className="text-muted-foreground font-normal">
+                    ผู้ใช้:
+                  </span>
                   {userMap[d.user] || `ID: ${d.user.slice(-4)}`}
                 </p>
               ) : !showAssign ? (
-                <p className="text-xs text-muted-foreground italic">ไม่มีผู้ใช้งาน</p>
+                <p className="text-xs text-muted-foreground italic">
+                  ไม่มีผู้ใช้งาน
+                </p>
               ) : null}
 
               {showAssign && (
@@ -142,7 +150,11 @@ export function OverviewPhoneGrid({
                   className="w-full mt-2"
                   disabled={!canAssign}
                   onClick={() => canAssign && onAssign(d)}
-                  title={canAssign ? "มอบหมายเครื่องนี้" : `เฉพาะเครื่องที่พร้อมใช้งาน (สถานะ: ${STATUS_LABELS[d.status]})`}
+                  title={
+                    canAssign
+                      ? "มอบหมายเครื่องนี้"
+                      : `เฉพาะเครื่องที่พร้อมใช้งาน (สถานะ: ${STATUS_LABELS[d.status]})`
+                  }
                 >
                   <UserPlus className="w-3.5 h-3.5 mr-1.5" />
                   {canAssign ? "มอบหมาย" : "ไม่พร้อมมอบหมาย"}
@@ -160,7 +172,13 @@ export function OverviewPhoneGrid({
 
 import { useScreenshotStore } from "@/stores/screenshot.store";
 
-function DeviceScreenshot({ deviceId, status }: { deviceId: string; status: DeviceStatus }) {
+function DeviceScreenshot({
+  deviceId,
+  status,
+}: {
+  deviceId: string;
+  status: DeviceStatus;
+}) {
   const imageUrl = useScreenshotStore((state) => state.images[deviceId]);
   const setImageUrl = useScreenshotStore((state) => state.setImage);
 
@@ -179,7 +197,7 @@ function DeviceScreenshot({ deviceId, status }: { deviceId: string; status: Devi
       (entries) => {
         entries.forEach((e) => setIsInView(e.isIntersecting));
       },
-      { rootMargin: "100px", threshold: 0.01 }
+      { rootMargin: "100px", threshold: 0.01 },
     );
     obs.observe(el);
     return () => obs.disconnect();
@@ -234,7 +252,7 @@ function DeviceScreenshot({ deviceId, status }: { deviceId: string; status: Devi
     fetchScreenshot();
     const refreshMs = Math.max(
       500,
-      Number(process.env.NEXT_PUBLIC_SCREENSHOT_REFRESH_MS) || 5000
+      Number(process.env.NEXT_PUBLIC_SCREENSHOT_REFRESH_MS) || 5000,
     );
     intervalRef.current = setInterval(fetchScreenshot, refreshMs);
     return () => {
@@ -246,7 +264,10 @@ function DeviceScreenshot({ deviceId, status }: { deviceId: string; status: Devi
   }, [deviceId, status, isInView]);
 
   return (
-    <div ref={containerRef} className="w-full h-full min-h-0 relative flex items-center justify-center">
+    <div
+      ref={containerRef}
+      className="w-full h-full min-h-0 relative flex items-center justify-center"
+    >
       {status === "maintenance" || status === "error" ? (
         <p className="text-xs text-muted-foreground">ไม่สามารถดึงหน้าจอได้</p>
       ) : !isInView ? (
@@ -307,7 +328,8 @@ function StatusBadge({ status }: { status: DeviceStatus }) {
     },
     error: {
       label: "ออฟไลน์/ผิดพลาด",
-      className: "border-2 border-yellow-500/60 bg-yellow-500/10 text-yellow-500",
+      className:
+        "border-2 border-yellow-500/60 bg-yellow-500/10 text-yellow-500",
     },
     maintenance: {
       label: "แจ้งซ่อม/ชำรุด",

@@ -7,7 +7,10 @@ import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { useEffect, useMemo, useState } from "react";
 import { DevicesService } from "@/services/devices.service";
-import { normalizeDeviceStatus, type DeviceStatusUI } from "@/lib/device-status";
+import {
+  normalizeDeviceStatus,
+  type DeviceStatusUI,
+} from "@/lib/device-status";
 
 /* ================= TYPES ================= */
 
@@ -70,13 +73,22 @@ export function StatusSummaryCards() {
       inUse: devices.filter((d) => d.status === "BUSY").length,
       available: devices.filter((d) => d.status === "AVAILABLE").length,
       error: devices.filter((d) => d.status === "OFFLINE").length,
-      maintenance: devices.filter((d) => d.status === "UNDER_REPAIR" || d.status === "DAMAGED" || d.status === "QUARANTINE").length,
+      maintenance: devices.filter(
+        (d) =>
+          d.status === "UNDER_REPAIR" ||
+          d.status === "DAMAGED" ||
+          d.status === "QUARANTINE",
+      ).length,
     };
   }, [devices]);
 
   const items: StatusItem[] = [
     { label: "กำลังใช้งาน", count: countByStatus.inUse, variant: "inUse" },
-    { label: "พร้อมใช้งาน", count: countByStatus.available, variant: "available" },
+    {
+      label: "พร้อมใช้งาน",
+      count: countByStatus.available,
+      variant: "available",
+    },
     { label: "เกิดข้อผิดพลาด", count: countByStatus.error, variant: "error" },
     {
       label: "อยู่ระหว่างซ่อมบำรุง",
@@ -140,7 +152,7 @@ export function StatusSummaryCards() {
             <div
               className={cn(
                 "absolute inset-0 bg-gradient-to-r to-transparent",
-                accentMap[item.variant]
+                accentMap[item.variant],
               )}
             />
 

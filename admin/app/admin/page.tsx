@@ -13,7 +13,11 @@ import { AssignUserDialog } from "@/components/assign-user-dialog";
 import { Button } from "@/components/ui/button";
 import { DevicesService } from "@/services/devices.service";
 import { UsersService } from "@/services/users.service";
-import { normalizeDeviceStatus, toOverviewStatus, type OverviewStatus } from "@/lib/device-status";
+import {
+  normalizeDeviceStatus,
+  toOverviewStatus,
+  type OverviewStatus,
+} from "@/lib/device-status";
 import { HelpButton } from "@/components/help/help-button";
 
 export type DeviceStatus = "all" | OverviewStatus;
@@ -26,13 +30,18 @@ export default function AdminOverviewPage() {
   const [devices, setDevices] = useState<OverviewDevice[]>([]);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
-  const [deviceToAssign, setDeviceToAssign] = useState<OverviewDevice | null>(null);
+  const [deviceToAssign, setDeviceToAssign] = useState<OverviewDevice | null>(
+    null,
+  );
 
   const userMap = useMemo(() => {
-    return users.reduce((acc, u) => {
-      acc[u.id || u._id] = u.name;
-      return acc;
-    }, {} as Record<string, string>);
+    return users.reduce(
+      (m, u) => {
+        m[u.id || u._id] = u.name;
+        return m;
+      },
+      {} as Record<string, string>,
+    );
   }, [users]);
 
   const fetchDevices = async () => {
@@ -70,7 +79,9 @@ export default function AdminOverviewPage() {
     const total = devices.length;
     const available = devices.filter((d) => d.status === "available").length;
     const inUse = devices.filter((d) => d.status === "in-use").length;
-    const maintenance = devices.filter((d) => d.status === "maintenance").length;
+    const maintenance = devices.filter(
+      (d) => d.status === "maintenance",
+    ).length;
     const error = devices.filter((d) => d.status === "error").length;
 
     return { total, available, inUse, maintenance, error };
@@ -103,7 +114,9 @@ export default function AdminOverviewPage() {
               try {
                 setLoading(true);
                 const result = await DevicesService.syncFromXiaowei();
-                alert(`Sync สำเร็จ! พบ ${result.total} เครื่อง, Sync แล้ว ${result.synced} เครื่อง`);
+                alert(
+                  `Sync สำเร็จ! พบ ${result.total} เครื่อง, Sync แล้ว ${result.synced} เครื่อง`,
+                );
                 await fetchDevices();
               } catch (error: any) {
                 alert(`Sync ไม่สำเร็จ: ${error.message}`);
@@ -133,7 +146,12 @@ export default function AdminOverviewPage() {
       {fetchError && (
         <div className="rounded-lg border border-destructive/50 bg-destructive/10 px-4 py-3 flex items-center justify-between gap-4">
           <p className="text-sm text-destructive">{fetchError}</p>
-          <Button variant="outline" size="sm" onClick={fetchDevices} disabled={loading}>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={fetchDevices}
+            disabled={loading}
+          >
             ลองใหม่
           </Button>
         </div>
@@ -193,7 +211,15 @@ export default function AdminOverviewPage() {
       {/* Dialog มอบหมายเครื่อง (จากภาพรวม) */}
       <AssignUserDialog
         open={!!deviceToAssign}
-        device={deviceToAssign ? { id: deviceToAssign.id, name: deviceToAssign.name, serial_number: deviceToAssign.serial_number } : null}
+        device={
+          deviceToAssign
+            ? {
+                id: deviceToAssign.id,
+                name: deviceToAssign.name,
+                serial_number: deviceToAssign.serial_number,
+              }
+            : null
+        }
         onClose={() => setDeviceToAssign(null)}
         onSuccess={() => {
           setDeviceToAssign(null);

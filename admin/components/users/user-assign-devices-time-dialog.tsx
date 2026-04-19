@@ -50,7 +50,13 @@ type DeviceItem = {
   id: string;
   name: string;
   serial_number: string;
-  status: "AVAILABLE" | "BUSY" | "OFFLINE" | "UNDER_REPAIR" | "DAMAGED" | "QUARANTINE";
+  status:
+    | "AVAILABLE"
+    | "BUSY"
+    | "OFFLINE"
+    | "UNDER_REPAIR"
+    | "DAMAGED"
+    | "QUARANTINE";
 };
 
 type Row = {
@@ -90,10 +96,13 @@ export function UserAssignDevicesTimeDialog({
   const [loadingDevices, setLoadingDevices] = useState(false);
 
   const deviceMap = useMemo(() => {
-    return devices.reduce((acc, d) => {
-      acc[d.id] = d;
-      return acc;
-    }, {} as Record<string, DeviceItem>);
+    return devices.reduce(
+      (acc, d) => {
+        acc[d.id] = d;
+        return acc;
+      },
+      {} as Record<string, DeviceItem>,
+    );
   }, [devices]);
 
   const fetchDevices = async () => {
@@ -124,9 +133,7 @@ export function UserAssignDevicesTimeDialog({
         const sec = Number(x.remaining_seconds ?? x.total_seconds ?? 0);
 
         // 🔵 ถ้าตรง package ใด package หนึ่ง
-        const pkg = Object.entries(PACKAGE_SECONDS).find(
-          ([, v]) => v === sec
-        );
+        const pkg = Object.entries(PACKAGE_SECONDS).find(([, v]) => v === sec);
 
         if (pkg) {
           return {
@@ -148,8 +155,7 @@ export function UserAssignDevicesTimeDialog({
           customMinutes: String(m),
         };
       });
-    }
-    else if (u && u.device_id) {
+    } else if (u && u.device_id) {
       preloadRows = [
         {
           device_id: String(u.device_id),
@@ -169,12 +175,15 @@ export function UserAssignDevicesTimeDialog({
           if (!r.device_id) return r;
           const exists = list.some((d) => d.id === r.device_id);
           return exists ? r : { ...r, device_id: "" };
-        })
+        }),
       );
     })();
   }, [open, user?.id]);
 
-  const selectedDeviceIds = useMemo(() => rows.map((r) => r.device_id).filter((x) => x && x.trim() !== ""), [rows]);
+  const selectedDeviceIds = useMemo(
+    () => rows.map((r) => r.device_id).filter((x) => x && x.trim() !== ""),
+    [rows],
+  );
 
   const getAssignSeconds = (row: Row) => {
     if (row.packageKey !== "custom") return PACKAGE_SECONDS[row.packageKey];
@@ -183,27 +192,34 @@ export function UserAssignDevicesTimeDialog({
 
   const validItems = useMemo(() => {
     return rows
-      .map((r) => ({ device_id: r.device_id.trim(), assign_seconds: getAssignSeconds(r) }))
+      .map((r) => ({
+        device_id: r.device_id.trim(),
+        assign_seconds: getAssignSeconds(r),
+      }))
       .filter((x) => x.device_id !== "" && x.assign_seconds > 0);
   }, [rows]);
 
-  const canSubmit = useMemo(
-    () => !!user?.id,
-    [user?.id]
-  );
+  const canSubmit = useMemo(() => !!user?.id, [user?.id]);
 
   const addRow = () => setRows((prev) => [...prev, createEmptyRow()]);
-  const removeRow = (idx: number) => setRows((prev) => prev.filter((_, i) => i !== idx));
+  const removeRow = (idx: number) =>
+    setRows((prev) => prev.filter((_, i) => i !== idx));
 
-  const updateRow = <K extends keyof Row>(idx: number, key: K, value: Row[K]) => {
-    setRows((prev) => prev.map((r, i) => (i === idx ? { ...r, [key]: value } : r)));
+  const updateRow = <K extends keyof Row>(
+    idx: number,
+    key: K,
+    value: Row[K],
+  ) => {
+    setRows((prev) =>
+      prev.map((r, i) => (i === idx ? { ...r, [key]: value } : r)),
+    );
   };
 
   const historyMap = useMemo(() => {
     const map: Record<string, number> = {};
     if (!user?.device_history) return map;
 
-    user.device_history.forEach(h => {
+    user.device_history.forEach((h) => {
       map[h.device_id] = h.use_count;
     });
 
@@ -222,7 +238,11 @@ export function UserAssignDevicesTimeDialog({
       onSuccess?.();
       onClose();
     } catch (err: any) {
-      toast({ variant: "destructive", title: "กำหนดเครื่องไม่สำเร็จ", description: err?.message || "เกิดข้อผิดพลาด" });
+      toast({
+        variant: "destructive",
+        title: "กำหนดเครื่องไม่สำเร็จ",
+        description: err?.message || "เกิดข้อผิดพลาด",
+      });
     } finally {
       setLoading(false);
     }
@@ -250,26 +270,36 @@ export function UserAssignDevicesTimeDialog({
             กำหนดอุปกรณ์และระยะเวลาใช้งานสำหรับผู้ใช้ {user?.username ?? ""}
           </DialogDescription>
           <DialogHeader>
-            <DialogTitle className="text-xl font-bold tracking-tight text-zinc-100">กำหนด Device + เวลา (Package)</DialogTitle>
+            <DialogTitle className="text-xl font-bold tracking-tight text-zinc-100">
+              กำหนด Device + เวลา (Package)
+            </DialogTitle>
             <p className="text-sm text-zinc-500">
-              ผู้ใช้: <span className="font-semibold text-blue-400">{user?.username}</span>
+              ผู้ใช้:{" "}
+              <span className="font-semibold text-blue-400">
+                {user?.username}
+              </span>
             </p>
           </DialogHeader>
         </div>
 
         {/* เลื่อนเฉพาะรายการ + ปุ่มเพิ่มเครื่อง — ปุ่มยืนยันคงอยู่ด้านล่าง */}
-        <div
-          className="min-h-0 min-w-0 overflow-y-auto overflow-x-hidden overscroll-y-contain overscroll-x-none touch-pan-y px-6 pt-4 pb-4 space-y-4 [-webkit-overflow-scrolling:touch]"
-        >
+        <div className="min-h-0 min-w-0 overflow-y-auto overflow-x-hidden overscroll-y-contain overscroll-x-none touch-pan-y px-6 pt-4 pb-4 space-y-4 [-webkit-overflow-scrolling:touch]">
           {rows.map((r, idx) => {
-            const disabledSet = new Set(selectedDeviceIds.filter((id) => id !== r.device_id));
+            const disabledSet = new Set(
+              selectedDeviceIds.filter((id) => id !== r.device_id),
+            );
             const assignSeconds = getAssignSeconds(r);
             const currentDevice = deviceMap[r.device_id];
 
             return (
-              <div key={idx} className="rounded-2xl border border-zinc-800 bg-zinc-900/30 p-5 space-y-4 transition-all hover:border-zinc-700">
+              <div
+                key={idx}
+                className="rounded-2xl border border-zinc-800 bg-zinc-900/30 p-5 space-y-4 transition-all hover:border-zinc-700"
+              >
                 <div className="flex items-center justify-between">
-                  <div className="text-xs font-bold text-zinc-500 uppercase tracking-widest">เครื่องที่ {idx + 1}</div>
+                  <div className="text-xs font-bold text-zinc-500 uppercase tracking-widest">
+                    เครื่องที่ {idx + 1}
+                  </div>
                   <Button
                     size="icon"
                     variant="ghost"
@@ -284,35 +314,62 @@ export function UserAssignDevicesTimeDialog({
                 {/* 🎯 Device Select Area */}
                 <div className="space-y-2">
                   <div className="flex justify-between items-center">
-                    <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">เลือก Device</label>
+                    <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">
+                      เลือก Device
+                    </label>
                     {currentDevice && (
-                      <Badge variant="outline" className={`text-[10px] border-none px-0 ${currentDevice.status === "AVAILABLE" ? "text-emerald-500" : "text-amber-500"
-                        }`}>
+                      <Badge
+                        variant="outline"
+                        className={`text-[10px] border-none px-0 ${
+                          currentDevice.status === "AVAILABLE"
+                            ? "text-emerald-500"
+                            : "text-amber-500"
+                        }`}
+                      >
                         ● {currentDevice.status}
                       </Badge>
                     )}
                   </div>
 
                   {loadingDevices ? (
-                    <div className="text-xs text-zinc-600 italic">กำลังโหลดรายการเครื่อง...</div>
+                    <div className="text-xs text-zinc-600 italic">
+                      กำลังโหลดรายการเครื่อง...
+                    </div>
                   ) : (
                     <select
                       value={r.device_id}
-                      onChange={(e) => updateRow(idx, "device_id", e.target.value)}
+                      onChange={(e) =>
+                        updateRow(idx, "device_id", e.target.value)
+                      }
                       className="w-full border border-zinc-800 rounded-xl px-3 py-2.5 text-sm bg-zinc-950 text-zinc-200 focus:outline-none focus:ring-1 focus:ring-zinc-700 appearance-none cursor-pointer"
                     >
-                      <option value="" className="bg-zinc-950 text-zinc-500">-- เลือกเครื่องจากรายการ --</option>
+                      <option value="" className="bg-zinc-950 text-zinc-500">
+                        -- เลือกเครื่องจากรายการ --
+                      </option>
                       {devices.map((d) => {
                         const isDisabled = disabledSet.has(d.id);
-                        const statusIndicator = d.status === "AVAILABLE" ? "🟢" : d.status === "BUSY" ? "🟡" : d.status === "QUARANTINE" ? "🟠" : "🔴";
+                        const statusIndicator =
+                          d.status === "AVAILABLE"
+                            ? "🟢"
+                            : d.status === "BUSY"
+                              ? "🟡"
+                              : d.status === "QUARANTINE"
+                                ? "🟠"
+                                : "🔴";
                         const count = historyMap[d.id] || 0;
                         const label =
                           `${d.name} • SN: ${d.serial_number} • ${d.status}` +
                           (count > 0 ? ` • ใช้ ${count} ครั้ง` : "");
 
                         return (
-                          <option key={d.id} value={d.id} disabled={isDisabled} className="bg-zinc-950 py-2">
-                            {statusIndicator} {label} {isDisabled ? " (เลือกแล้ว)" : ""}
+                          <option
+                            key={d.id}
+                            value={d.id}
+                            disabled={isDisabled}
+                            className="bg-zinc-950 py-2"
+                          >
+                            {statusIndicator} {label}{" "}
+                            {isDisabled ? " (เลือกแล้ว)" : ""}
                           </option>
                         );
                       })}
@@ -322,18 +379,31 @@ export function UserAssignDevicesTimeDialog({
 
                 {/* Package Buttons */}
                 <div className="space-y-3">
-                  <div className="text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">เวลา (Package)</div>
+                  <div className="text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">
+                    เวลา (Package)
+                  </div>
                   <div className="flex flex-wrap gap-2">
-                    {(["1d", "7d", "30d", "90d", "180d", "365d", "custom"] as PackageKey[]).map((k) => (
+                    {(
+                      [
+                        "1d",
+                        "7d",
+                        "30d",
+                        "90d",
+                        "180d",
+                        "365d",
+                        "custom",
+                      ] as PackageKey[]
+                    ).map((k) => (
                       <Button
                         key={k}
                         type="button"
                         variant={r.packageKey === k ? "default" : "outline"}
                         onClick={() => updateRow(idx, "packageKey", k)}
-                        className={`h-9 flex-1 min-w-[80px] text-xs transition-all ${r.packageKey === k
-                          ? 'bg-zinc-100 text-zinc-950 hover:bg-white shadow-lg'
-                          : 'bg-zinc-950 border-zinc-800 text-zinc-500 hover:border-zinc-600 hover:text-zinc-200'
-                          }`}
+                        className={`h-9 flex-1 min-w-[80px] text-xs transition-all ${
+                          r.packageKey === k
+                            ? "bg-zinc-100 text-zinc-950 hover:bg-white shadow-lg"
+                            : "bg-zinc-950 border-zinc-800 text-zinc-500 hover:border-zinc-600 hover:text-zinc-200"
+                        }`}
                       >
                         {k === "1d" && "1 วัน"}
                         {k === "7d" && "7 วัน"}
@@ -349,25 +419,38 @@ export function UserAssignDevicesTimeDialog({
                   {r.packageKey === "custom" && (
                     <div className="grid grid-cols-2 gap-3 p-4 bg-zinc-950/50 rounded-xl border border-zinc-800/50">
                       <div className="space-y-1.5">
-                        <label className="text-[10px] font-bold uppercase text-zinc-600">ชั่วโมง</label>
+                        <label className="text-[10px] font-bold uppercase text-zinc-600">
+                          ชั่วโมง
+                        </label>
                         <Input
                           type="number"
                           value={r.customHours}
-                          onChange={(e) => updateRow(idx, "customHours", e.target.value)}
+                          onChange={(e) =>
+                            updateRow(idx, "customHours", e.target.value)
+                          }
                           className="bg-zinc-950 border-zinc-800 text-zinc-200 focus:ring-0 h-9 font-mono"
                         />
                       </div>
                       <div className="space-y-1.5">
-                        <label className="text-[10px] font-bold uppercase text-zinc-600">นาที</label>
+                        <label className="text-[10px] font-bold uppercase text-zinc-600">
+                          นาที
+                        </label>
                         <Input
                           type="number"
                           value={r.customMinutes}
-                          onChange={(e) => updateRow(idx, "customMinutes", e.target.value)}
+                          onChange={(e) =>
+                            updateRow(idx, "customMinutes", e.target.value)
+                          }
                           className="bg-zinc-950 border-zinc-800 text-zinc-200 focus:ring-0 h-9 font-mono"
                         />
                       </div>
                       <div className="col-span-2 pt-1">
-                        <p className="text-[10px] text-zinc-500 italic">รวมเวลา: <span className="text-emerald-500 font-medium">{secondsToHoursText(assignSeconds)}</span></p>
+                        <p className="text-[10px] text-zinc-500 italic">
+                          รวมเวลา:{" "}
+                          <span className="text-emerald-500 font-medium">
+                            {secondsToHoursText(assignSeconds)}
+                          </span>
+                        </p>
                       </div>
                     </div>
                   )}
