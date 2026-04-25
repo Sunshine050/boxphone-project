@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
-import { Home, RotateCcw, Square } from "lucide-react";
+import { Expand, Home, RotateCcw, Square } from "lucide-react";
 import type { Session } from "@/types/session";
 
 const BASE_URL = (
@@ -32,6 +32,20 @@ async function sendInput(
     },
     credentials: "include",
     body: JSON.stringify({ type, payload }),
+  }).then(async (res) => {
+    if (!res.ok) {
+      let message = `Input failed (${res.status})`;
+      try {
+        const data = await res.json();
+        if (data?.message) {
+          message = String(data.message);
+        }
+      } catch {
+        // ignore non-JSON response
+      }
+      throw new Error(message);
+    }
+    return res;
   });
 }
 
@@ -61,9 +75,28 @@ function TouchOverlay({
       const img = imgRef.current;
       const nW = img && img.naturalWidth > 0 ? img.naturalWidth : 1080;
       const nH = img && img.naturalHeight > 0 ? img.naturalHeight : 2340;
+      const containerAspect = rect.width / rect.height;
+      const imageAspect = nW / nH;
+
+      let displayedWidth = rect.width;
+      let displayedHeight = rect.height;
+      let offsetX = 0;
+      let offsetY = 0;
+
+      if (imageAspect > containerAspect) {
+        displayedHeight = rect.width / imageAspect;
+        offsetY = (rect.height - displayedHeight) / 2;
+      } else {
+        displayedWidth = rect.height * imageAspect;
+        offsetX = (rect.width - displayedWidth) / 2;
+      }
+
+      const normalizedX = (clientX - rect.left - offsetX) / displayedWidth;
+      const normalizedY = (clientY - rect.top - offsetY) / displayedHeight;
+
       return {
-        x: ((clientX - rect.left) / rect.width) * nW,
-        y: ((clientY - rect.top) / rect.height) * nH,
+        x: Math.max(0, Math.min(1, normalizedX)) * nW,
+        y: Math.max(0, Math.min(1, normalizedY)) * nH,
       };
     },
     [imgRef],
@@ -163,12 +196,27 @@ function TouchOverlay({
   );
 }
 
-export function SessionPhoneControl({ session }: { session: Session }) {
+interface SessionPhoneControlProps {
+  session: Session;
+  variant?: "default" | "expanded";
+  onExpand?: () => void;
+}
+
+export function SessionPhoneControl({
+  session,
+  variant = "default",
+  onExpand,
+}: SessionPhoneControlProps) {
   const [now, setNow] = useState(Date.now());
   const [imgSrc, setImgSrc] = useState<string | null>(null);
   const [imgError, setImgError] = useState(false);
+  const [screenAspectRatio, setScreenAspectRatio] = useState(1080 / 2340);
   const imgRef = useRef<HTMLImageElement | null>(null);
   const imgTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const imgSrcRef = useRef<string | null>(null);
+  const refreshSeqRef = useRef(0);
+  const refreshAbortRef = useRef<AbortController | null>(null);
+  const consecutiveFailureRef = useRef(0);
 
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 1000);
@@ -178,33 +226,65 @@ export function SessionPhoneControl({ session }: { session: Session }) {
   const deviceId = session.device_id?._id;
   const refreshScreenshot = useCallback(() => {
     if (!deviceId) return;
+    const seq = ++refreshSeqRef.current;
+    refreshAbortRef.current?.abort();
+    const controller = new AbortController();
+    refreshAbortRef.current = controller;
+
     fetch(`${BASE_URL}/devices/${deviceId}/screenshot`, {
       credentials: "include",
       cache: "no-store",
+      signal: controller.signal,
     })
       .then((r) => {
         if (!r.ok) throw new Error();
         return r.blob();
       })
       .then((blob) => {
+        if (seq !== refreshSeqRef.current) return;
         const url = URL.createObjectURL(blob);
         setImgSrc((prev) => {
           if (prev) URL.revokeObjectURL(prev);
+          imgSrcRef.current = url;
           return url;
         });
+        consecutiveFailureRef.current = 0;
         setImgError(false);
       })
-      .catch(() => setImgError(true));
+      .catch(() => {
+        if (controller.signal.aborted || seq !== refreshSeqRef.current) return;
+        consecutiveFailureRef.current += 1;
+        // Keep showing last frame during transient backend/network glitches.
+        if (!imgSrcRef.current || consecutiveFailureRef.current >= 3) {
+          setImgError(true);
+        }
+      });
   }, [deviceId]);
 
   useEffect(() => {
     if (!deviceId) return;
+    setImgError(false);
+    consecutiveFailureRef.current = 0;
     refreshScreenshot();
     imgTimerRef.current = setInterval(refreshScreenshot, 2000);
     return () => {
       if (imgTimerRef.current) clearInterval(imgTimerRef.current);
+      refreshAbortRef.current?.abort();
     };
   }, [deviceId, refreshScreenshot]);
+
+  useEffect(() => {
+    imgSrcRef.current = imgSrc;
+  }, [imgSrc]);
+
+  useEffect(() => {
+    return () => {
+      refreshAbortRef.current?.abort();
+      if (imgSrcRef.current) {
+        URL.revokeObjectURL(imgSrcRef.current);
+      }
+    };
+  }, []);
 
   const handleActionRefresh = useCallback(() => {
     setTimeout(() => refreshScreenshot(), 400);
@@ -221,32 +301,63 @@ export function SessionPhoneControl({ session }: { session: Session }) {
   const minutes = Math.floor(remaining / 60);
   const seconds = remaining % 60;
   const expired = remaining <= 0;
+  const isExpanded = variant === "expanded";
 
   return (
-    <div className="flex w-[min(100%,380px)] shrink-0 flex-col">
+    <div
+      className={`flex shrink-0 flex-col ${isExpanded ? "w-[min(95vw,560px)]" : "w-full max-w-[220px]"}`}
+    >
       <div className="mb-3 flex items-center justify-between gap-2 rounded-xl border border-slate-800 bg-slate-900/80 px-3 py-2">
         <span className="truncate text-sm font-semibold text-white">
           {session.device_id?.name || "Device"}
         </span>
-        <div
-          className={`flex shrink-0 items-center gap-1 font-mono text-sm font-bold tabular-nums ${
-            expired ? "text-red-400" : "text-cyan-400"
-          }`}
-        >
-          {expired
-            ? "หมดเวลา"
-            : `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`}
+        <div className="flex items-center gap-2">
+          {!isExpanded && onExpand && (
+            <button
+              type="button"
+              onClick={onExpand}
+              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-700 bg-slate-800/70 text-slate-200 transition-colors hover:bg-slate-700 hover:text-white"
+              aria-label="ขยายจอ"
+              title="ขยายจอ"
+            >
+              <Expand className="h-4 w-4" />
+            </button>
+          )}
+          <div
+            className={`flex shrink-0 items-center gap-1 font-mono text-sm font-bold tabular-nums ${
+              expired ? "text-red-400" : "text-cyan-400"
+            }`}
+          >
+            {expired
+              ? "หมดเวลา"
+              : `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`}
+          </div>
         </div>
       </div>
 
       <div className="relative mx-auto w-full">
-        <div className="relative mx-auto aspect-[9/19.5] w-full max-w-xs overflow-hidden rounded-[2.5rem] border-[6px] border-slate-700 bg-slate-900 shadow-2xl shadow-cyan-900/20">
+        <div
+          className={`relative mx-auto overflow-hidden rounded-[2.25rem] border-4 border-slate-700 bg-slate-900 shadow-2xl shadow-cyan-900/20 ${
+            isExpanded
+              ? "h-[88vh] max-h-[88vh] w-auto max-w-[95vw]"
+              : "aspect-[9/16] w-full"
+          }`}
+          style={
+            isExpanded ? { aspectRatio: String(screenAspectRatio) } : undefined
+          }
+        >
           {imgSrc && !imgError ? (
             <img
               ref={imgRef}
               src={imgSrc}
               alt=""
-              className="pointer-events-none absolute inset-0 h-full w-full object-cover"
+              className="pointer-events-none absolute inset-0 h-full w-full object-contain"
+              onLoad={(e) => {
+                const { naturalWidth, naturalHeight } = e.currentTarget;
+                if (naturalWidth > 0 && naturalHeight > 0) {
+                  setScreenAspectRatio(naturalWidth / naturalHeight);
+                }
+              }}
               draggable={false}
             />
           ) : (

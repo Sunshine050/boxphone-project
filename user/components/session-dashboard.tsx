@@ -31,10 +31,32 @@ export function SessionDashboard({
   refreshData: _refreshData,
 }: DashboardProps) {
   const [sessions, setSessions] = useState<Session[]>(initialSessions);
+  const [expandedSessionId, setExpandedSessionId] = useState<string | null>(
+    null,
+  );
 
   useEffect(() => {
     setSessions(initialSessions);
   }, [initialSessions]);
+
+  const expandedSession =
+    sessions.find((s) => s._id === expandedSessionId) ?? null;
+
+  useEffect(() => {
+    if (!expandedSession) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setExpandedSessionId(null);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [expandedSession]);
 
   const handleLogout = async () => {
     await AuthService.logout();
@@ -43,7 +65,7 @@ export function SessionDashboard({
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-blue-950 to-slate-900 text-white">
-      <div className="container mx-auto p-4 sm:p-6">
+      <div className="mx-auto w-full max-w-[1400px] px-3 py-4 sm:px-5 sm:py-6">
         <div className="mb-6 flex items-center justify-between gap-4">
           <h1 className="text-xl font-bold sm:text-2xl">CloudPhone Devices</h1>
 
@@ -96,13 +118,32 @@ export function SessionDashboard({
             </CardContent>
           </Card>
         ) : (
-          <div className="flex flex-wrap justify-center gap-x-6 gap-y-10 sm:gap-x-8 sm:gap-y-10 xl:gap-x-10">
+          <div className="grid grid-cols-1 justify-items-center gap-x-4 gap-y-8 sm:grid-cols-2 lg:grid-cols-3 xl:gap-x-6 xl:gap-y-10">
             {sessions.map((s) => (
-              <SessionPhoneControl key={s._id} session={s} />
+              <SessionPhoneControl
+                key={s._id}
+                session={s}
+                onExpand={() => setExpandedSessionId(s._id)}
+              />
             ))}
           </div>
         )}
       </div>
+
+      {expandedSession && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 p-4">
+          <button
+            type="button"
+            aria-label="ปิดโหมดขยาย"
+            onClick={() => setExpandedSessionId(null)}
+            className="absolute right-4 top-4 rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-200 transition-colors hover:bg-slate-800"
+          >
+            ปิด
+          </button>
+
+          <SessionPhoneControl session={expandedSession} variant="expanded" />
+        </div>
+      )}
     </div>
   );
 }

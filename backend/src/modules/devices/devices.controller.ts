@@ -13,6 +13,7 @@ import {
   BadRequestException,
   NotFoundException,
 } from "@nestjs/common";
+import { SkipThrottle } from "@nestjs/throttler";
 import { Response } from "express";
 import { DevicesService } from "./devices.service";
 import { Device } from "./device.schema";
@@ -72,6 +73,7 @@ export class DevicesController {
    * GET /devices/screenshot?serial=xxx
    */
   @Get("screenshot")
+  @SkipThrottle()
   async getScreenshotBySerial(
     @Query("serial") serial: string,
     @CurrentUser() currentUser: any,
@@ -211,6 +213,7 @@ export class DevicesController {
    * GET /devices/:id/preview
    */
   @Get(":id/preview")
+  @SkipThrottle()
   async getPreview(@Param("id") id: string, @CurrentUser() currentUser: any) {
     try {
       const device = await this.devicesService.findOne(id);
@@ -250,6 +253,7 @@ export class DevicesController {
    * GET /devices/:id/screenshot
    */
   @Get(":id/screenshot")
+  @SkipThrottle()
   async getScreenshot(
     @Param("id") id: string,
     @CurrentUser() currentUser: any,
@@ -295,5 +299,44 @@ export class DevicesController {
         error: error.message,
       });
     }
+  }
+
+  /**
+   * ส่งคำสั่งควบคุมหน้าจอ (tap/swipe/key/text) ไปยังอุปกรณ์ผ่าน ADB
+   * POST /devices/:id/input
+   */
+  @Post(":id/input")
+  @SkipThrottle()
+  async sendInput(
+    @Param("id") id: string,
+    @Body() body: { type?: "tap" | "swipe" | "key" | "text"; payload?: any },
+    @CurrentUser() currentUser: any,
+  ) {
+    const type = body?.type;
+    const payload = body?.payload ?? {};
+    if (!type || !["tap", "swipe", "key", "text"].includes(type)) {
+      throw new BadRequestException(
+        "type must be one of: tap, swipe, key, text",
+      );
+    }
+
+    const device = await this.devicesService.findOne(id);
+    await this.devicesService.assertUserCanAccessDevice(currentUser, device);
+    if (!device) {
+      throw new NotFoundException("Device not found");
+    }
+
+    const serialToUse =
+      device.serial_number ||
+      (device as any).onlySerial ||
+      device.serial_number;
+    if (!serialToUse) {
+      throw new BadRequestException("Device serial not found");
+    }
+
+    await this.adbScreenshotService.sendInput(serialToUse, { type, payload });
+    this.adbScreenshotService.clearCacheForSerial(serialToUse);
+
+    return { ok: true };
   }
 }

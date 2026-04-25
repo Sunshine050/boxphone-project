@@ -40,7 +40,7 @@ export class SessionsService {
     private readonly logService: LogService,
     private readonly notificationService: NotificationService,
     private readonly adbScreenshotService: AdbScreenshotService,
-  ) { }
+  ) {}
 
   private readonly logger = new Logger(SessionsService.name);
 
@@ -65,9 +65,11 @@ export class SessionsService {
   @Cron(CronExpression.EVERY_10_SECONDS)
   async handleAutoCleanup() {
     // 1. ดึงเฉพาะ Session ที่มีสถานะ ACTIVE มาตรวจสอบ
-    const activeSessions = await this.sessionModel.find({
-      status: SessionStatus.ACTIVE,
-    }).exec();
+    const activeSessions = await this.sessionModel
+      .find({
+        status: SessionStatus.ACTIVE,
+      })
+      .exec();
 
     for (const session of activeSessions) {
       // 2. คำนวณเวลาที่เหลือจริง ณ วินาทีนี้
@@ -78,9 +80,9 @@ export class SessionsService {
       if (remaining <= 300 && remaining > 290) {
         await this.notificationService.createAndSend(
           session.user_id.toString(), // ส่งหาใคร
-          "เวลาของคุณใกล้หมดแล้ว!",      // หัวข้อ
+          "เวลาของคุณใกล้หมดแล้ว!", // หัวข้อ
           `อุปกรณ์ ${session.device_id} เหลือเวลาใช้งานไม่ถึง 5 นาที`, // ข้อความ
-          "WARNING"                   // ประเภท (สีส้ม/แดงใน UI)
+          "WARNING", // ประเภท (สีส้ม/แดงใน UI)
         );
       }
     }
@@ -105,7 +107,7 @@ export class SessionsService {
 
     if (existingSession) {
       throw new ConflictException(
-        "User already has an active session. Please complete or cancel the existing session first."
+        "User already has an active session. Please complete or cancel the existing session first.",
       );
     }
 
@@ -117,11 +119,13 @@ export class SessionsService {
 
     if (deviceSession) {
       throw new ConflictException(
-        "Device is already in use by another session"
+        "Device is already in use by another session",
       );
     }
 
-    const maxMoveCount = this.configService.get<number>("SESSION_MAX_MOVE_COUNT");
+    const maxMoveCount = this.configService.get<number>(
+      "SESSION_MAX_MOVE_COUNT",
+    );
     if (maxMoveCount === undefined) {
       throw new Error("SESSION_MAX_MOVE_COUNT is not configured");
     }
@@ -157,7 +161,7 @@ export class SessionsService {
 
     if (session.status !== SessionStatus.ACTIVE) {
       throw new BadRequestException(
-        `Cannot pause session with status: ${session.status}`
+        `Cannot pause session with status: ${session.status}`,
       );
     }
 
@@ -165,26 +169,28 @@ export class SessionsService {
     const lastResumeTime = session.resume_time || session.start_time;
 
     const elapsedSeconds = Math.floor(
-      (now.getTime() - lastResumeTime.getTime()) / 1000
+      (now.getTime() - lastResumeTime.getTime()) / 1000,
     );
 
     const actualRemaining = Math.max(
       0,
-      session.remaining_seconds - elapsedSeconds
+      session.remaining_seconds - elapsedSeconds,
     );
 
     const updatedSession = await this.sessionModel.findByIdAndUpdate(
       sessionId,
       {
-        status: SessionStatus.PAUSED,   // ⭐ FIX ตรงนี้
+        status: SessionStatus.PAUSED, // ⭐ FIX ตรงนี้
         remaining_seconds: actualRemaining,
         pause_time: now,
         disconnect_reason: reason || null,
       },
-      { new: true }
+      { new: true },
     );
 
-    const userId = (updatedSession.user_id as any)?.toString?.() ?? session.user_id?.toString();
+    const userId =
+      (updatedSession.user_id as any)?.toString?.() ??
+      session.user_id?.toString();
     if (userId) this.notificationService.notifySessionUpdate(userId);
     return updatedSession;
   }
@@ -205,7 +211,7 @@ export class SessionsService {
       session.status !== SessionStatus.DISCONNECTED
     ) {
       throw new BadRequestException(
-        `Cannot resume session with status: ${session.status}`
+        `Cannot resume session with status: ${session.status}`,
       );
     }
 
@@ -224,7 +230,7 @@ export class SessionsService {
         device.status === DeviceStatus.QUARANTINE;
       if (!canResume) {
         throw new ConflictException(
-          "Device is not available to resume session"
+          "Device is not available to resume session",
         );
       }
 
@@ -241,11 +247,14 @@ export class SessionsService {
         resume_time: new Date(),
         disconnect_reason: null,
       },
-      { new: true }
+      { new: true },
     );
 
-    const userIdResume = (updatedSession.user_id as any)?.toString?.() ?? session.user_id?.toString();
-    if (userIdResume) this.notificationService.notifySessionUpdate(userIdResume);
+    const userIdResume =
+      (updatedSession.user_id as any)?.toString?.() ??
+      session.user_id?.toString();
+    if (userIdResume)
+      this.notificationService.notifySessionUpdate(userIdResume);
     return updatedSession;
   }
 
@@ -259,9 +268,8 @@ export class SessionsService {
   async moveSession(
     sessionId: string,
     moveSessionDto: MoveSessionDto,
-    movedByUserId: string
+    movedByUserId: string,
   ): Promise<Session> {
-
     const session = await this.sessionModel.findById(sessionId);
     if (!session) {
       throw new NotFoundException("Session not found");
@@ -272,12 +280,12 @@ export class SessionsService {
       const lastResumeTime = session.resume_time || session.start_time;
 
       const elapsedSeconds = Math.floor(
-        (now.getTime() - lastResumeTime.getTime()) / 1000
+        (now.getTime() - lastResumeTime.getTime()) / 1000,
       );
 
       session.remaining_seconds = Math.max(
         0,
-        session.remaining_seconds - elapsedSeconds
+        session.remaining_seconds - elapsedSeconds,
       );
 
       session.status = SessionStatus.DISCONNECTED;
@@ -289,13 +297,13 @@ export class SessionsService {
       session.status !== SessionStatus.PAUSED
     ) {
       throw new BadRequestException(
-        `Cannot move session with status: ${session.status}`
+        `Cannot move session with status: ${session.status}`,
       );
     }
 
     if (session.moved_count >= session.max_move_count) {
       throw new BadRequestException(
-        `Maximum move count (${session.max_move_count}) reached`
+        `Maximum move count (${session.max_move_count}) reached`,
       );
     }
 
@@ -330,7 +338,7 @@ export class SessionsService {
         moved_count: session.moved_count + 1,
         disconnect_reason: null,
       },
-      { new: true }
+      { new: true },
     );
 
     await this.deviceModel.findByIdAndUpdate(moveSessionDto.to_device_id, {
@@ -356,7 +364,7 @@ export class SessionsService {
         $set: {
           "devices.$.device_id": moveSessionDto.to_device_id,
         },
-      }
+      },
     );
 
     const moveUserId = (updatedSession.user_id as any)?.toString?.();
@@ -384,10 +392,19 @@ export class SessionsService {
   }
 
   async getActiveSessionsByUser(userId: string): Promise<Session[]> {
-    const sessions = await this.sessionModel.find({
-      user_id: userId,
-      status: SessionStatus.ACTIVE
-    }).populate('device_id').exec();
+    const sessions = await this.sessionModel
+      .find({
+        user_id: userId,
+        status: {
+          $in: [
+            SessionStatus.ACTIVE,
+            SessionStatus.PAUSED,
+            SessionStatus.DISCONNECTED,
+          ],
+        },
+      })
+      .populate("device_id")
+      .exec();
 
     const now = new Date();
 
@@ -395,13 +412,24 @@ export class SessionsService {
     const result: any[] = [];
     for (const session of sessions as any[]) {
       const plain: any = session.toObject();
-      const startTime: Date =
-        session.resume_time || session.start_time || now;
-      const elapsedSeconds = Math.floor(
-        (now.getTime() - startTime.getTime()) / 1000
-      );
       const baseRemaining: number = session.remaining_seconds ?? 0;
-      const actualRemaining = Math.max(0, baseRemaining - elapsedSeconds);
+      // ลดเวลาเฉพาะ session ที่กำลัง ACTIVE เท่านั้น
+      const actualRemaining =
+        session.status === SessionStatus.ACTIVE
+          ? Math.max(
+              0,
+              baseRemaining -
+                Math.floor(
+                  (now.getTime() -
+                    (
+                      session.resume_time ||
+                      session.start_time ||
+                      now
+                    ).getTime()) /
+                    1000,
+                ),
+            )
+          : baseRemaining;
       plain.remaining_seconds = actualRemaining;
       result.push(plain);
     }
@@ -433,8 +461,8 @@ export class SessionsService {
   }
 
   /**
- * คำนวณเวลาที่เหลือและล้างข้อมูลเมื่อเวลาหมด (Auto-Cleanup)
- */
+   * คำนวณเวลาที่เหลือและล้างข้อมูลเมื่อเวลาหมด (Auto-Cleanup)
+   */
   async getRemainingTime(sessionId: string): Promise<number> {
     const session = await this.sessionModel.findById(sessionId).exec();
     if (!session) return 0;
@@ -443,7 +471,8 @@ export class SessionsService {
 
     if (session.status === SessionStatus.ACTIVE) {
       const now = Date.now();
-      const ref = (session.resume_time || session.start_time)?.getTime?.() ?? now;
+      const ref =
+        (session.resume_time || session.start_time)?.getTime?.() ?? now;
       const elapsed = Math.floor((now - ref) / 1000);
       actualRemaining = Math.max(0, actualRemaining - elapsed);
     }
@@ -459,7 +488,7 @@ export class SessionsService {
         await this.resetDeviceScreen(deviceId);
       } catch (e: any) {
         this.logger.warn(
-          `[AUTO_RESET] Failed to reset device screen for device ${deviceId}: ${e?.message || e}`
+          `[AUTO_RESET] Failed to reset device screen for device ${deviceId}: ${e?.message || e}`,
         );
       }
     }
@@ -495,7 +524,7 @@ export class SessionsService {
     if (userId && deviceId) {
       await this.userModel.updateOne(
         { _id: userId },
-        { $pull: { devices: { device_id: deviceId } } }
+        { $pull: { devices: { device_id: deviceId } } },
       );
     }
 
@@ -507,7 +536,7 @@ export class SessionsService {
             status: UserStatus.PENDING,
             device_id: null,
           },
-        }
+        },
       );
     }
 
@@ -528,24 +557,22 @@ export class SessionsService {
     const serial = (device as any).serial_number;
     if (!serial) {
       this.logger.warn(
-        `[AUTO_RESET] Device ${deviceId} has no serial_number – skip ADB reset`
+        `[AUTO_RESET] Device ${deviceId} has no serial_number – skip ADB reset`,
       );
       return;
     }
-    this.logger.debug(
-      `[AUTO_RESET] ADB keyevent HOME for serial=${serial}`
-    );
+    this.logger.debug(`[AUTO_RESET] ADB keyevent HOME for serial=${serial}`);
     try {
       await this.adbScreenshotService.sendInput(serial, {
         type: "key",
         payload: { keycode: "KEYCODE_HOME" },
       });
       this.logger.log(
-        `[AUTO_RESET] Device ${serial} reset to Home screen after timeout`
+        `[AUTO_RESET] Device ${serial} reset to Home screen after timeout`,
       );
     } catch (e: any) {
       this.logger.warn(
-        `[AUTO_RESET] ADB command failed for serial=${serial}: ${e?.message || e}`
+        `[AUTO_RESET] ADB command failed for serial=${serial}: ${e?.message || e}`,
       );
     }
   }
@@ -594,7 +621,7 @@ export class SessionsService {
       { _id: userId },
       {
         $pull: { devices: { device_id: deviceId } },
-      }
+      },
     );
 
     // 🔥 เช็คว่ายังมี ACTIVE session อื่นไหม
@@ -611,7 +638,7 @@ export class SessionsService {
             status: UserStatus.PENDING,
             device_id: null,
           },
-        }
+        },
       );
     }
 
@@ -641,11 +668,11 @@ export class SessionsService {
   }
 
   /**
- * User เริ่ม Session ด้วยตัวเอง
- * - ถ้ามี ACTIVE อยู่แล้ว → return ตัวเดิม
- * - ใช้ session ที่ admin create ไว้แล้ว
- * - เคารพ remaining_seconds + resume_time
- */
+   * User เริ่ม Session ด้วยตัวเอง
+   * - ถ้ามี ACTIVE อยู่แล้ว → return ตัวเดิม
+   * - ใช้ session ที่ admin create ไว้แล้ว
+   * - เคารพ remaining_seconds + resume_time
+   */
   async startAssignedSessionsByUser(userId: string): Promise<Session[]> {
     const user = await this.userModel.findById(userId).exec();
     if (!user || !user.devices) return [];
@@ -706,8 +733,10 @@ export class SessionsService {
     return this.getActiveSessionsByUser(userId);
   }
 
-
-  async reduceTimeFromSession(sessionId: string, seconds: number): Promise<Session> {
+  async reduceTimeFromSession(
+    sessionId: string,
+    seconds: number,
+  ): Promise<Session> {
     if (!seconds || seconds <= 0) {
       throw new BadRequestException("seconds must be greater than 0");
     }
@@ -721,7 +750,10 @@ export class SessionsService {
       throw new NotFoundException("Active or paused session not found");
     }
 
-    session.remaining_seconds = Math.max(0, (session.remaining_seconds ?? 0) - seconds);
+    session.remaining_seconds = Math.max(
+      0,
+      (session.remaining_seconds ?? 0) - seconds,
+    );
     await session.save();
 
     const userId = session.user_id?.toString();
@@ -730,7 +762,10 @@ export class SessionsService {
     return session;
   }
 
-  async addTimeToActiveSessions(userId: string, addSeconds: number): Promise<number> {
+  async addTimeToActiveSessions(
+    userId: string,
+    addSeconds: number,
+  ): Promise<number> {
     if (!addSeconds || addSeconds <= 0) return 0;
 
     const sessions = await this.sessionModel.find({
