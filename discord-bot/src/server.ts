@@ -5,6 +5,7 @@ import logger from './lib/logger';
 import { authMiddleware } from './middleware/auth';
 import { isDuplicate } from './middleware/dedup';
 import { AnyEvent } from './types/events';
+import { routeEvent } from './handlers/router';
 
 const app = express();
 app.use(express.json());
@@ -35,8 +36,7 @@ app.post('/webhook', authMiddleware, async (req, res) => {
 
   logger.info({ eventId: event.eventId, type: event.type }, 'Event received');
 
-  // TODO: route to handlers once implemented
-  // await routeEvent(client, event);
+  await routeEvent(client, event);
 
   res.status(200).json({ status: 'ok' });
 });
