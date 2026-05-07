@@ -1,0 +1,537 @@
+{
+  "info": {
+    "_postman_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "name": "BoxPhone Discord Bot — Webhook API",
+    "description": "Postman Collection v2.1 for the BoxPhone Discord bot webhook API.\n\nEndpoints:\n- POST /webhook — receives event payloads (auth via X-Webhook-Secret header)\n- GET  /health  — liveness check\n\nAll POST /webhook requests are validated by Zod discriminatedUnion on the `type` field.\n\nResponse codes:\n- 200  OK           — event processed successfully\n- 400  Bad Request  — Zod validation failed\n- 401  Unauthorized — wrong or missing X-Webhook-Secret\n- 409  Conflict     — duplicate eventId (dedup guard)",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:4001",
+      "type": "string"
+    },
+    {
+      "key": "webhook_secret",
+      "value": "dev-secret",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Health Check",
+      "item": [
+        {
+          "name": "GET /health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/health",
+              "host": ["{{base_url}}"],
+              "path": ["health"]
+            },
+            "description": "Liveness probe. Returns 200 when the Express server is up and running."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Session Events",
+      "item": [
+        {
+          "name": "session_start",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Webhook-Secret",
+                "value": "{{webhook_secret}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"session_start\",\n  \"eventId\": \"11111111-1111-4111-a111-111111111101\",\n  \"timestamp\": \"2026-05-07T10:00:00.000Z\",\n  \"discordUserId\": \"123456789012345678\",\n  \"deviceId\": \"device-001\",\n  \"deviceName\": \"BoxPhone-A\",\n  \"userId\": \"user-001\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/webhook",
+              "host": ["{{base_url}}"],
+              "path": ["webhook"]
+            },
+            "description": "Fired when a user starts a new phone session on a device.\n\nRequired extra fields:\n- deviceId   (string)\n- deviceName (string)\n- userId     (string)"
+          },
+          "response": []
+        },
+        {
+          "name": "session_end",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Webhook-Secret",
+                "value": "{{webhook_secret}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"session_end\",\n  \"eventId\": \"11111111-1111-4111-a111-111111111102\",\n  \"timestamp\": \"2026-05-07T10:30:00.000Z\",\n  \"discordUserId\": \"123456789012345678\",\n  \"deviceId\": \"device-001\",\n  \"deviceName\": \"BoxPhone-A\",\n  \"userId\": \"user-001\",\n  \"durationSeconds\": 1800\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/webhook",
+              "host": ["{{base_url}}"],
+              "path": ["webhook"]
+            },
+            "description": "Fired when a user's phone session ends.\n\nRequired extra fields:\n- deviceId       (string)\n- deviceName     (string)\n- userId         (string)\n- durationSeconds (integer ≥ 0)"
+          },
+          "response": []
+        },
+        {
+          "name": "session_warning",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Webhook-Secret",
+                "value": "{{webhook_secret}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"session_warning\",\n  \"eventId\": \"11111111-1111-4111-a111-111111111103\",\n  \"timestamp\": \"2026-05-07T10:25:00.000Z\",\n  \"discordUserId\": \"123456789012345678\",\n  \"deviceId\": \"device-001\",\n  \"deviceName\": \"BoxPhone-A\",\n  \"userId\": \"user-001\",\n  \"remainingSeconds\": 300\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/webhook",
+              "host": ["{{base_url}}"],
+              "path": ["webhook"]
+            },
+            "description": "Fired when a user's session is approaching its time limit (e.g. 5 minutes remaining).\n\nRequired extra fields:\n- deviceId         (string)\n- deviceName       (string)\n- userId           (string)\n- remainingSeconds (integer ≥ 0)"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Device Events",
+      "item": [
+        {
+          "name": "device_offline",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Webhook-Secret",
+                "value": "{{webhook_secret}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"device_offline\",\n  \"eventId\": \"22222222-2222-4222-b222-222222222201\",\n  \"timestamp\": \"2026-05-07T08:00:00.000Z\",\n  \"deviceId\": \"device-001\",\n  \"deviceName\": \"BoxPhone-A\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/webhook",
+              "host": ["{{base_url}}"],
+              "path": ["webhook"]
+            },
+            "description": "Fired when a BoxPhone device goes offline.\n\nNote: no userId — device events are not tied to a specific user session.\n\nRequired extra fields:\n- deviceId   (string)\n- deviceName (string)"
+          },
+          "response": []
+        },
+        {
+          "name": "device_online",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Webhook-Secret",
+                "value": "{{webhook_secret}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"device_online\",\n  \"eventId\": \"22222222-2222-4222-b222-222222222202\",\n  \"timestamp\": \"2026-05-07T08:05:00.000Z\",\n  \"deviceId\": \"device-001\",\n  \"deviceName\": \"BoxPhone-A\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/webhook",
+              "host": ["{{base_url}}"],
+              "path": ["webhook"]
+            },
+            "description": "Fired when a BoxPhone device comes back online.\n\nNote: no userId — device events are not tied to a specific user session.\n\nRequired extra fields:\n- deviceId   (string)\n- deviceName (string)"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Payment Events",
+      "item": [
+        {
+          "name": "payment_received",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Webhook-Secret",
+                "value": "{{webhook_secret}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"payment_received\",\n  \"eventId\": \"33333333-3333-4333-c333-333333333301\",\n  \"timestamp\": \"2026-05-07T09:00:00.000Z\",\n  \"discordUserId\": \"123456789012345678\",\n  \"userId\": \"user-001\",\n  \"amountTHB\": 99.00,\n  \"packageName\": \"Standard 30-day\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/webhook",
+              "host": ["{{base_url}}"],
+              "path": ["webhook"]
+            },
+            "description": "Fired when a payment is successfully received for a subscription package.\n\nRequired extra fields:\n- userId      (string)\n- amountTHB   (number > 0, Thai Baht)\n- packageName (string)"
+          },
+          "response": []
+        },
+        {
+          "name": "payment_failed",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Webhook-Secret",
+                "value": "{{webhook_secret}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"payment_failed\",\n  \"eventId\": \"33333333-3333-4333-c333-333333333302\",\n  \"timestamp\": \"2026-05-07T09:05:00.000Z\",\n  \"discordUserId\": \"123456789012345678\",\n  \"userId\": \"user-001\",\n  \"reason\": \"Insufficient funds\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/webhook",
+              "host": ["{{base_url}}"],
+              "path": ["webhook"]
+            },
+            "description": "Fired when a payment attempt fails.\n\nRequired extra fields:\n- userId (string)\n- reason (string) — human-readable failure reason"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Error Cases",
+      "item": [
+        {
+          "name": "401 — Missing X-Webhook-Secret",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"session_start\",\n  \"eventId\": \"ffffffff-ffff-4fff-afff-ffffffffffff\",\n  \"timestamp\": \"2026-05-07T10:00:00.000Z\",\n  \"deviceId\": \"device-001\",\n  \"deviceName\": \"BoxPhone-A\",\n  \"userId\": \"user-001\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/webhook",
+              "host": ["{{base_url}}"],
+              "path": ["webhook"]
+            },
+            "description": "Sends a valid payload but omits the X-Webhook-Secret header entirely.\n\nExpected response: 401 Unauthorized"
+          },
+          "response": []
+        },
+        {
+          "name": "401 — Wrong X-Webhook-Secret",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Webhook-Secret",
+                "value": "wrong-secret"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"session_start\",\n  \"eventId\": \"ffffffff-ffff-4fff-afff-fffffffffff0\",\n  \"timestamp\": \"2026-05-07T10:00:00.000Z\",\n  \"deviceId\": \"device-001\",\n  \"deviceName\": \"BoxPhone-A\",\n  \"userId\": \"user-001\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/webhook",
+              "host": ["{{base_url}}"],
+              "path": ["webhook"]
+            },
+            "description": "Sends a valid payload with an incorrect X-Webhook-Secret value.\n\nExpected response: 401 Unauthorized"
+          },
+          "response": []
+        },
+        {
+          "name": "400 — Missing required field (type)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Webhook-Secret",
+                "value": "{{webhook_secret}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"eventId\": \"eeeeeeee-eeee-4eee-aeee-eeeeeeeeee01\",\n  \"timestamp\": \"2026-05-07T10:00:00.000Z\",\n  \"deviceId\": \"device-001\",\n  \"deviceName\": \"BoxPhone-A\",\n  \"userId\": \"user-001\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/webhook",
+              "host": ["{{base_url}}"],
+              "path": ["webhook"]
+            },
+            "description": "Omits the required `type` discriminator field. Zod discriminatedUnion will reject the payload.\n\nExpected response: 400 Bad Request"
+          },
+          "response": []
+        },
+        {
+          "name": "400 — Invalid UUID for eventId",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Webhook-Secret",
+                "value": "{{webhook_secret}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"session_start\",\n  \"eventId\": \"not-a-valid-uuid\",\n  \"timestamp\": \"2026-05-07T10:00:00.000Z\",\n  \"deviceId\": \"device-001\",\n  \"deviceName\": \"BoxPhone-A\",\n  \"userId\": \"user-001\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/webhook",
+              "host": ["{{base_url}}"],
+              "path": ["webhook"]
+            },
+            "description": "Sends a non-UUID string for eventId. Zod's z.string().uuid() will reject it.\n\nExpected response: 400 Bad Request"
+          },
+          "response": []
+        },
+        {
+          "name": "400 — Invalid timestamp (not ISO 8601)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Webhook-Secret",
+                "value": "{{webhook_secret}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"session_start\",\n  \"eventId\": \"eeeeeeee-eeee-4eee-aeee-eeeeeeeeee02\",\n  \"timestamp\": \"07/05/2026 10:00\",\n  \"deviceId\": \"device-001\",\n  \"deviceName\": \"BoxPhone-A\",\n  \"userId\": \"user-001\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/webhook",
+              "host": ["{{base_url}}"],
+              "path": ["webhook"]
+            },
+            "description": "Sends a date string that is not a valid ISO 8601 datetime. Zod's z.string().datetime() will reject it.\n\nExpected response: 400 Bad Request"
+          },
+          "response": []
+        },
+        {
+          "name": "400 — Negative durationSeconds (session_end)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Webhook-Secret",
+                "value": "{{webhook_secret}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"session_end\",\n  \"eventId\": \"eeeeeeee-eeee-4eee-aeee-eeeeeeeeee03\",\n  \"timestamp\": \"2026-05-07T10:30:00.000Z\",\n  \"deviceId\": \"device-001\",\n  \"deviceName\": \"BoxPhone-A\",\n  \"userId\": \"user-001\",\n  \"durationSeconds\": -60\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/webhook",
+              "host": ["{{base_url}}"],
+              "path": ["webhook"]
+            },
+            "description": "Sends a negative durationSeconds value. Zod's z.number().int().nonnegative() will reject it.\n\nExpected response: 400 Bad Request"
+          },
+          "response": []
+        },
+        {
+          "name": "400 — Zero amountTHB (payment_received)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Webhook-Secret",
+                "value": "{{webhook_secret}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"payment_received\",\n  \"eventId\": \"eeeeeeee-eeee-4eee-aeee-eeeeeeeeee04\",\n  \"timestamp\": \"2026-05-07T09:00:00.000Z\",\n  \"userId\": \"user-001\",\n  \"amountTHB\": 0,\n  \"packageName\": \"Standard 30-day\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/webhook",
+              "host": ["{{base_url}}"],
+              "path": ["webhook"]
+            },
+            "description": "Sends amountTHB = 0, which violates z.number().positive() (must be > 0).\n\nExpected response: 400 Bad Request"
+          },
+          "response": []
+        },
+        {
+          "name": "409 — Duplicate eventId",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Webhook-Secret",
+                "value": "{{webhook_secret}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"session_start\",\n  \"eventId\": \"11111111-1111-4111-a111-111111111101\",\n  \"timestamp\": \"2026-05-07T10:00:00.000Z\",\n  \"discordUserId\": \"123456789012345678\",\n  \"deviceId\": \"device-001\",\n  \"deviceName\": \"BoxPhone-A\",\n  \"userId\": \"user-001\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/webhook",
+              "host": ["{{base_url}}"],
+              "path": ["webhook"]
+            },
+            "description": "Re-sends the same eventId as the 'session_start' request in the Session Events folder (11111111-1111-4111-a111-111111111101).\n\nSend the original session_start request first, then send this one to trigger the dedup guard.\n\nExpected response: 409 Conflict"
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}
