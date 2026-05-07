@@ -94,6 +94,9 @@ export class User {
   @Prop({ type: String, required: false, default: null })
   device_id?: string;
 
+  @Prop({ type: String, default: null })
+  discord_id: string | null;
+
   @Prop({ type: [UserDeviceSchema], default: [] })
   devices: UserDevice[];
 
