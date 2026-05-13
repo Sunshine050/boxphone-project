@@ -8,10 +8,12 @@ import { User, UserSchema } from "../users/user.schema";
 import { Device, DeviceSchema } from "../devices/device.schema";
 import { ScheduleModule } from "@nestjs/schedule";
 import { DevicesModule } from "../devices/devices.module";
+import { DiscordModule } from "../discord/discord.module";
 
 @Module({
   imports: [
     DevicesModule,
+    DiscordModule,
     ScheduleModule.forRoot(),
     MongooseModule.forFeature([
       { name: Session.name, schema: SessionSchema },

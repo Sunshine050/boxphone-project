@@ -21,6 +21,7 @@ import { Cron, CronExpression } from "@nestjs/schedule";
 import { LogService } from "../log/log.service";
 import { NotificationService } from "../notification/notification.service";
 import { AdbScreenshotService } from "../devices/adb-screenshot.service";
+import { WebhookEmitterService } from "../discord/webhook-emitter.service";
 
 @Injectable()
 export class SessionsService {
@@ -40,6 +41,7 @@ export class SessionsService {
     private readonly logService: LogService,
     private readonly notificationService: NotificationService,
     private readonly adbScreenshotService: AdbScreenshotService,
+    private readonly webhookEmitter: WebhookEmitterService,
   ) {}
 
   private readonly logger = new Logger(SessionsService.name);
@@ -84,6 +86,12 @@ export class SessionsService {
           `อุปกรณ์ ${session.device_id} เหลือเวลาใช้งานไม่ถึง 5 นาที`, // ข้อความ
           "WARNING", // ประเภท (สีส้ม/แดงใน UI)
         );
+        await this.webhookEmitter.emit({
+          type: 'session_warning',
+          userId: session.user_id.toString(),
+          deviceId: session.device_id.toString(),
+          sessionId: session._id.toString(),
+        });
       }
     }
   }
@@ -511,6 +519,15 @@ export class SessionsService {
       });
     }
 
+    if (userId && deviceId) {
+      await this.webhookEmitter.emit({
+        type: 'session_end',
+        userId,
+        deviceId,
+        sessionId,
+      });
+    }
+
     await this.sessionModel.findByIdAndDelete(sessionId);
     if (userId) this.notificationService.notifySessionUpdate(userId);
 
@@ -707,7 +724,7 @@ export class SessionsService {
         target_device_id: deviceId.toString(),
       });
 
-      await this.sessionModel.create({
+      const newSession = await this.sessionModel.create({
         user_id: userId,
         device_id: deviceId,
         package: "ASSIGNED",
@@ -716,6 +733,14 @@ export class SessionsService {
         status: SessionStatus.ACTIVE,
         start_time: new Date(),
         max_move_count: 3,
+      });
+
+      await this.webhookEmitter.emit({
+        type: 'session_start',
+        userId,
+        deviceId: deviceId.toString(),
+        deviceName: device.name,
+        sessionId: (newSession as any)._id?.toString(),
       });
 
       await this.userModel.updateOne(

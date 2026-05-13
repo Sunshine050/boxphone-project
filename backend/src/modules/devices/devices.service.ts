@@ -8,6 +8,7 @@ import { Device, DeviceDocument, DeviceStatus } from "./device.schema";
 import { XiaoweiService } from "./xiaowei.service";
 import { XiaoweiWebSocketService } from "./xiaowei-websocket.service";
 import { User, UserDocument, UserRole } from "../users/user.schema";
+import { WebhookEmitterService } from "../discord/webhook-emitter.service";
 
 const execAsync = promisify(exec);
 
@@ -21,6 +22,7 @@ export class DevicesService {
     private readonly configService: ConfigService,
     private readonly xiaoweiService: XiaoweiService,
     private readonly xiaoweiWsService: XiaoweiWebSocketService,
+    private readonly webhookEmitter: WebhookEmitterService,
   ) {}
 
   async findAll(): Promise<Device[]> {
@@ -263,6 +265,16 @@ export class DevicesService {
             this.logger.log(
               `[SYNC] Updated device: ${name} (${serial})${keepManualStatus ? " [status kept]" : ""}`,
             );
+
+            const currentUserId = (device as any).current_user_id?.toString();
+            if (!keepManualStatus && currentStatus !== status && currentUserId) {
+              await this.webhookEmitter.emit({
+                type: status === DeviceStatus.OFFLINE ? 'device_offline' : 'device_online',
+                userId: currentUserId,
+                deviceId,
+                deviceName: device.name,
+              });
+            }
           }
         }
 

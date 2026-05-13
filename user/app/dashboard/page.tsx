@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { motion } from "framer-motion";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 import { getNotificationSocket } from "@/lib/socket-client";
 import { playNotificationSound } from "@/lib/notification-sound";
@@ -16,11 +16,29 @@ export type { Session };
 
 export default function DashboardPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [sessions, setSessions] = useState<Session[]>([]);
   const [lastSyncTimestamp, setLastSyncTimestamp] = useState<number>(
     Date.now(),
   );
   const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const discord = searchParams.get("discord");
+    if (discord === "success") {
+      toast.success("เชื่อมต่อ Discord สำเร็จ!", {
+        description: "คุณจะได้รับการแจ้งเตือนทาง Discord แล้ว",
+        duration: 5000,
+      });
+      router.replace("/dashboard");
+    } else if (discord === "error") {
+      toast.error("เชื่อมต่อ Discord ไม่สำเร็จ", {
+        description: "กรุณาลองใหม่อีกครั้ง",
+        duration: 5000,
+      });
+      router.replace("/dashboard");
+    }
+  }, [searchParams, router]);
 
   const loadSessions = useCallback(async () => {
     try {

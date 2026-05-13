@@ -8,11 +8,13 @@ import { XiaoweiWebSocketService } from './xiaowei-websocket.service';
 import { AdbScreenshotService } from './adb-screenshot.service';
 import { ScrcpyService } from './scrcpy.service';
 import { User, UserSchema } from '../users/user.schema';
+import { DiscordModule } from '../discord/discord.module';
 
 @Module({
     imports: [
         MongooseModule.forFeature([{ name: Device.name, schema: DeviceSchema }]),
         MongooseModule.forFeature([{ name: User.name, schema: UserSchema }]),
+        DiscordModule,
     ],
     controllers: [DevicesController],
     providers: [DevicesService, XiaoweiService, XiaoweiWebSocketService, AdbScreenshotService, ScrcpyService],

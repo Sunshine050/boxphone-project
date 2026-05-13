@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { LogOut } from "lucide-react";
 import { NotificationBell } from "./notification-bell";
+import { DiscordConnectButton } from "./discord-connect-button";
 import type { Session } from "@/types/session";
 import { AuthService } from "@/services/auth.service";
 import { SessionPhoneControl } from "@/components/session-phone-control";
@@ -100,6 +101,8 @@ export function SessionDashboard({
 
           <div className="flex items-center gap-3 sm:gap-4">
             <NotificationBell />
+
+            <DiscordConnectButton />
 
             <Dialog>
               <DialogTrigger asChild>
