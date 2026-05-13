@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException, ConflictException, Logger } from '@nestjs/common';
+import { Injectable, UnauthorizedException, ConflictException, BadRequestException, Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { UsersService } from '../users/users.service';
@@ -6,6 +6,7 @@ import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import * as bcrypt from 'bcrypt';
 import { UserRole } from '../users/user.schema';
+import axios from 'axios';
 
 
 @Injectable()
@@ -116,5 +117,40 @@ export class AuthService {
 
     async validateUser(userId: string) {
         return await this.usersService.findById(userId);
+    }
+
+    async linkDiscordAccount(userId: string, code: string): Promise<string> {
+        const clientId = this.configService.get<string>('DISCORD_CLIENT_ID') ?? '';
+        const clientSecret = this.configService.get<string>('DISCORD_CLIENT_SECRET') ?? '';
+        const callbackUrl = this.configService.get<string>('DISCORD_CALLBACK_URL') ?? '';
+
+        if (!clientId || !clientSecret || !callbackUrl) {
+            throw new BadRequestException('Discord OAuth is not configured');
+        }
+
+        const params = new URLSearchParams({
+            client_id: clientId,
+            client_secret: clientSecret,
+            grant_type: 'authorization_code',
+            code,
+            redirect_uri: callbackUrl,
+        });
+
+        const tokenRes = await axios.post<{ access_token: string }>(
+            'https://discord.com/api/oauth2/token',
+            params.toString(),
+            { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } },
+        );
+
+        const profileRes = await axios.get<{ id: string; username: string }>(
+            'https://discord.com/api/users/@me',
+            { headers: { Authorization: `Bearer ${tokenRes.data.access_token}` } },
+        );
+
+        const discordId = profileRes.data.id;
+        this.logger.log(`[DISCORD] Linking userId=${userId} → discordId=${discordId} (${profileRes.data.username})`);
+
+        await this.usersService.update(userId, { discord_id: discordId });
+        return discordId;
     }
 }

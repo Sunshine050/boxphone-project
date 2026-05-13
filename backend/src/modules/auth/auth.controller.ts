@@ -3,6 +3,7 @@ import {
   Post,
   Get,
   Body,
+  Query,
   ValidationPipe,
   Logger,
   Res,
@@ -131,13 +132,52 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   async me(@Req() req: Request) {
     const user = (req as any).user;
+    const fullUser = await this.authService.validateUser(user.id);
     return {
       user: {
         id: user.id,
         username: user.username,
         role: user.role,
+        discord_id: (fullUser as any)?.discord_id ?? null,
       },
     };
+  }
+
+  @Get('discord')
+  @UseGuards(JwtAuthGuard)
+  discordOAuth(@Req() req: Request, @Res() res: Response) {
+    const user = (req as any).user;
+    const clientId = this.configService.get<string>('DISCORD_CLIENT_ID');
+    const callbackUrl = this.configService.get<string>('DISCORD_CALLBACK_URL');
+
+    const params = new URLSearchParams({
+      client_id: clientId ?? '',
+      redirect_uri: callbackUrl ?? '',
+      response_type: 'code',
+      scope: 'identify',
+      state: user.id,
+    });
+
+    this.logger.log(`[DISCORD] OAuth redirect for userId=${user.id}`);
+    return res.redirect(`https://discord.com/oauth2/authorize?${params.toString()}`);
+  }
+
+  @Get('discord/callback')
+  async discordCallback(
+    @Query('code') code: string,
+    @Query('state') userId: string,
+    @Res() res: Response,
+  ) {
+    const frontendUrl = this.configService.get<string>('FRONTEND_URL') ?? 'http://localhost:3000';
+
+    try {
+      await this.authService.linkDiscordAccount(userId, code);
+      this.logger.log(`[DISCORD] Linked successfully userId=${userId}`);
+      return res.redirect(`${frontendUrl}/dashboard?discord=success`);
+    } catch (error) {
+      this.logger.error(`[DISCORD] Link failed userId=${userId}`, error?.message);
+      return res.redirect(`${frontendUrl}/dashboard?discord=error`);
+    }
   }
 
   @Post('register')
