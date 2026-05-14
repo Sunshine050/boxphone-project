@@ -1,6 +1,7 @@
 import { Module, OnModuleInit } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { MongooseModule, InjectConnection } from '@nestjs/mongoose';
+import { ScheduleModule } from '@nestjs/schedule';
 import { Connection } from 'mongoose';
 import { AppGateway } from './gateway/app.gateway';
 import { DevicesModule } from './modules/devices/devices.module';
@@ -42,6 +43,7 @@ import { SystemModule } from './modules/system/system.module';
       },
     }),
 
+    ScheduleModule.forRoot(),
     LogModule,
     AuthModule,
     UsersModule,
