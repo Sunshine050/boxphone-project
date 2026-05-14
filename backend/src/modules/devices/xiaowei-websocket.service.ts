@@ -5,7 +5,8 @@ import {
   OnModuleDestroy,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import * as WebSocket from 'ws';
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const WebSocket = require('ws');
 
 /**
  * Xiaowei WebSocket Service (Correct Spec Version)
