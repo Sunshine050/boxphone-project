@@ -18,6 +18,8 @@ export interface EmitOptions {
   deviceId: string;
   deviceName?: string;
   sessionId?: string;
+  remainingSeconds?: number;
+  durationSeconds?: number;
 }
 
 @Injectable()
@@ -56,9 +58,9 @@ export class WebhookEmitterService {
       userId: opts.userId,
     };
 
-    if (opts.sessionId) {
-      payload.sessionId = opts.sessionId;
-    }
+    if (opts.sessionId) payload.sessionId = opts.sessionId;
+    if (opts.remainingSeconds !== undefined) payload.remainingSeconds = opts.remainingSeconds;
+    if (opts.durationSeconds !== undefined) payload.durationSeconds = opts.durationSeconds;
 
     try {
       await axios.post(`${botUrl}/webhook`, payload, {
