@@ -91,6 +91,7 @@ export class SessionsService {
           userId: session.user_id.toString(),
           deviceId: session.device_id.toString(),
           sessionId: session._id.toString(),
+          remainingSeconds: Math.round(remaining),
         });
       }
     }
@@ -525,6 +526,7 @@ export class SessionsService {
         userId,
         deviceId,
         sessionId,
+        durationSeconds: session.total_seconds,
       });
     }
 
