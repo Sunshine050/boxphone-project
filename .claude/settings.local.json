@@ -70,7 +70,20 @@
       "Bash(curl -s http://localhost:3031)",
       "Bash(nslookup -type=SRV _mongodb._tcp.realphone.mgym3sf.mongodb.net 8.8.8.8)",
       "Bash(nslookup *)",
-      "PowerShell(Start-Process \"http://localhost:3000\")"
+      "PowerShell(Start-Process \"http://localhost:3000\")",
+      "PowerShell(Start-Sleep -Seconds 2; Invoke-WebRequest -Uri \"http://localhost:3031/devices\" -UseBasicParsing -TimeoutSec 5 | Select-Object StatusCode, StatusDescription)",
+      "PowerShell(pm2 stop *)",
+      "Bash(Test-Path \"C:\\\\boxphone-project\\\\backend\\\\dist\\\\main.js\")",
+      "Bash(Test-Path \"C:\\\\boxphone-project\\\\admin\\\\.next\")",
+      "Bash(Test-Path \"C:\\\\boxphone-project\\\\user\\\\.next\")",
+      "PowerShell(Invoke-RestMethod -Uri \"http://localhost:3031/users\" -Method GET -ErrorAction SilentlyContinue 2>&1 | Out-String; Invoke-WebRequest -Uri \"http://localhost:3031/users\" -UseBasicParsing -ErrorAction SilentlyContinue | Select-Object StatusCode, Content | Out-String)",
+      "PowerShell(pm2 list *)",
+      "PowerShell(netstat *)",
+      "PowerShell(Get-Content \"C:\\\\boxphone-project\\\\backend\\\\logs\\\\backend-out.log\" | Select-Object -Last 200 | Where-Object { $_ -notmatch \"XiaoweiWebSocketService|Reconnecting|Connecting to Xiaowei|ECONNREFUSED 127.0.0.1:22222|Xiaowei WS closed\" } | Select-Object -Last 30)",
+      "PowerShell(Get-Content \"C:\\\\boxphone-project\\\\backend\\\\logs\\\\backend-out.log\" | Select-String -NotMatch \"XiaoweiWebSocketService|Reconnecting|Connecting to Xiaowei|ECONNREFUSED 127.0.0.1:22222|Xiaowei WS closed\" | Select-Object -Last 20 | ForEach-Object { $_.Line })",
+      "PowerShell(Get-Content \"C:\\\\boxphone-project\\\\backend\\\\logs\\\\backend-out.log\" | Select-String -Pattern \"ready|listen|port|3031|seed|MongoDB|ADMIN|Bootstrap\" | Select-Object -Last 20 | ForEach-Object { $_.Line })",
+      "PowerShell(Get-Content \"C:\\\\boxphone-project\\\\backend\\\\logs\\\\backend-err.log\" | Select-String -Pattern \"2026-05-16 03:\" | ForEach-Object { $_.Line })",
+      "PowerShell(Get-Content \"C:\\\\boxphone-project\\\\backend\\\\logs\\\\backend-out.log\" | Select-String -Pattern \"Server ready|NestApplication|Nest application successfully\" | ForEach-Object { $_.Line })"
     ]
   }
 }

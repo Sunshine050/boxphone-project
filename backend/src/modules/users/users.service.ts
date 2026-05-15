@@ -435,7 +435,7 @@ export class UsersService {
         }
         return {
           ...d,
-          device_id: d.device_id.toString(),
+          device_id: d.device_id != null ? String(d.device_id) : '',
           remaining_seconds: currentRem,
         };
       });

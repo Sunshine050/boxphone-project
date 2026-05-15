@@ -46,6 +46,8 @@ module.exports = {
       env_production: {
         NODE_ENV: 'production',
         PORT: 3000,
+        // Used when the admin build calls /api/proxy (same VPS as backend)
+        BACKEND_PROXY_URL: 'http://127.0.0.1:3031',
       },
     },
 
@@ -67,6 +69,7 @@ module.exports = {
       env_production: {
         NODE_ENV: 'production',
         PORT: 3001,
+        BACKEND_PROXY_URL: 'http://127.0.0.1:3031',
       },
     },
   ],

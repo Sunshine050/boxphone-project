@@ -51,7 +51,13 @@ export class XiaoweiWebSocketService
 
   async onModuleInit() {
     if (!this.wsUrl) return;
-    await this.connect();
+    // อย่า await — ถ้าเสี่ยวเหว๋ยปิดอยู่ connect() จะไม่ resolve ทำให้ Nest ไม่ bind พอร์ต HTTP
+    void this.connect().catch((err: Error) => {
+      this.logger.warn(
+        `Xiaowei WS unavailable at startup (${err?.message || err}); API continues, retrying in background`,
+      );
+      this.scheduleReconnect();
+    });
   }
 
   onModuleDestroy() {
@@ -62,6 +68,23 @@ export class XiaoweiWebSocketService
 
   private async connect(): Promise<void> {
     return new Promise((resolve, reject) => {
+      let settled = false;
+      const finish = (fn: () => void) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(connectTimeout);
+        fn();
+      };
+
+      const connectTimeout = setTimeout(() => {
+        try {
+          this.ws?.terminate();
+        } catch {
+          // ignore
+        }
+        finish(() => reject(new Error('Xiaowei WS connection timeout')));
+      }, 8000);
+
       try {
         this.logger.log(`Connecting to Xiaowei WS...`);
 
@@ -71,7 +94,7 @@ export class XiaoweiWebSocketService
           this.wrongProtocolLogged = false;
           this.logger.log('✅ Xiaowei WebSocket connected');
           this.clearReconnect();
-          resolve();
+          finish(resolve);
         });
 
         this.ws.on('message', (data) => {
@@ -84,6 +107,10 @@ export class XiaoweiWebSocketService
 
         this.ws.on('close', () => {
           this.logger.warn('❌ Xiaowei WS closed');
+          if (!settled) {
+            finish(() => reject(new Error('Xiaowei WS closed before open')));
+            return;
+          }
           this.scheduleReconnect();
         });
 
@@ -93,15 +120,18 @@ export class XiaoweiWebSocketService
             if (!this.wrongProtocolLogged) {
               this.wrongProtocolLogged = true;
               this.logger.warn(
-                '⚠️ The server returned HTTP 200 (not WebSocket). This port is likely the HTTP API. Set XIAOWEI_WS_URL to the WebSocket port (e.g. ws://127.0.0.1:22222/) in .env and check Xiaowei settings.'
+                '⚠️ The server returned HTTP 200 (not WebSocket). This port is likely the HTTP API. Set XIAOWEI_WS_URL to the WebSocket port (e.g. ws://127.0.0.1:22222/) in .env and check Xiaowei settings.',
               );
             }
-          } else {
+          } else if (settled) {
             this.logger.error(`WS error: ${msg}`);
+          }
+          if (!settled) {
+            finish(() => reject(err));
           }
         });
       } catch (err) {
-        reject(err);
+        finish(() => reject(err));
       }
     });
   }
