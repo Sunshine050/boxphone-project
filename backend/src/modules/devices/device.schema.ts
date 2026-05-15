@@ -27,25 +27,25 @@ export class Device {
     })
     status: DeviceStatus;
 
-    @Prop()
+    @Prop({ type: String })
     model: string;
 
-    @Prop()
+    @Prop({ type: Number })
     sdk_version: number;
 
     @Prop({ type: Object })
     metadata: any;
 
-    @Prop()
+    @Prop({ type: String })
     current_user_id: string;
 
-    @Prop({ default: null })
-    previous_user_id: string | null;
+    @Prop({ type: String, required: false, default: null })
+    previous_user_id?: string;
 
-    @Prop({ default: null })
-    last_user_disconnected_at: Date | null;
+    @Prop({ type: Date, required: false, default: null })
+    last_user_disconnected_at?: Date;
 
-    @Prop()
+    @Prop({ type: Date })
     last_connected_at: Date;
 }
 

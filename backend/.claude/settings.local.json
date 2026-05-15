@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pm2 list *)",
+      "Bash(pm2 restart *)",
+      "Bash(pm2 logs *)",
+      "Bash(Start-Sleep -Seconds 8)"
+    ]
+  }
+}

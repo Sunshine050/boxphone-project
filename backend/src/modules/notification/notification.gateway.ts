@@ -8,7 +8,6 @@ import { Server, Socket } from "socket.io";
 import { Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { JwtService } from "@nestjs/jwt";
-import { UsersService } from "../users/users.service";
 
 @WebSocketGateway({
   pingInterval: 25000,
@@ -22,7 +21,6 @@ export class NotificationGateway
   constructor(
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
-    private readonly usersService: UsersService,
   ) {}
 
   @WebSocketServer()
@@ -52,12 +50,7 @@ export class NotificationGateway
         throw new Error("Invalid token payload");
       }
 
-      const user = await this.usersService.findById(userId);
-      if (!user) {
-        throw new Error("User not found");
-      }
-
-      client.join(`user_${(user as any)._id.toString()}`);
+      client.join(`user_${userId}`);
       this.logger.log(`Notification socket connected: ${client.id}`);
     } catch (error: any) {
       this.logger.warn(`Notification socket rejected ${client.id}: ${error.message}`);

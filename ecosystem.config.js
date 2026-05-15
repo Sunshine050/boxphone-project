@@ -28,7 +28,7 @@ module.exports = {
     // ─── Admin (Next.js) ────────────────────────────────────────────────────
     {
       name: 'boxphone-admin',
-      script: 'node_modules/.bin/next',
+      script: 'node_modules/next/dist/bin/next',
       args: 'start --port 3000',
       cwd: './admin',
       instances: 1,
@@ -49,7 +49,7 @@ module.exports = {
     // ─── User App (Next.js) ─────────────────────────────────────────────────
     {
       name: 'boxphone-user',
-      script: 'node_modules/.bin/next',
+      script: 'node_modules/next/dist/bin/next',
       args: 'start --port 3001',
       cwd: './user',
       instances: 1,
