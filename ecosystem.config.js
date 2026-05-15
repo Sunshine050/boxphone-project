@@ -22,6 +22,9 @@ module.exports = {
       env_production: {
         NODE_ENV: 'production',
         PORT: 3031,
+        ALLOW_ADMIN_SEED_IN_PRODUCTION: 'true',
+        COOKIE_DOMAIN: '.myrealphone.cloud',
+        ADB_PATH: 'C:\\Program Files (x86)\\xiaowei_android\\tools\\adb.exe',
       },
     },
 

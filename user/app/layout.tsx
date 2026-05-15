@@ -1,6 +1,5 @@
 import type React from "react"
 import type { Metadata } from "next"
-import { Analytics } from "@vercel/analytics/next"
 import localFont from "next/font/local"
 import "./globals.css"
 
@@ -32,7 +31,6 @@ export default function RootLayout({
     <html lang="en" className={inter.variable}>
       <body className="font-sans">
         {children}
-        <Analytics />
       </body>
     </html>
   )

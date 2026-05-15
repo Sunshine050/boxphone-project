@@ -100,10 +100,7 @@ export class AuthController {
 
       const csrfToken = randomBytes(32).toString('hex');
       res.cookie('csrf_token', csrfToken, {
-        httpOnly: false,
-        secure: isProduction,
-        sameSite: 'lax',
-        path: '/',
+        ...getCsrfCookieOptions(isProduction, this.configService),
         maxAge: maxAgeMs,
       });
 

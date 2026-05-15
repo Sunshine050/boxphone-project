@@ -1,7 +1,6 @@
 import { io, Socket } from "socket.io-client";
-import { getApiBaseUrl } from "@boxphon/shared/client/api-base-url";
 
-const BACKEND_URL = getApiBaseUrl();
+const BACKEND_URL = process.env.NEXT_PUBLIC_SOCKET_URL || "https://api.myrealphone.cloud";
 
 let notificationSocket: Socket | null = null;
 

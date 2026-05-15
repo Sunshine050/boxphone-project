@@ -69,7 +69,8 @@
       "Bash(curl -s http://localhost:3031/api/health)",
       "Bash(curl -s http://localhost:3031)",
       "Bash(nslookup -type=SRV _mongodb._tcp.realphone.mgym3sf.mongodb.net 8.8.8.8)",
-      "Bash(nslookup *)"
+      "Bash(nslookup *)",
+      "PowerShell(Start-Process \"http://localhost:3000\")"
     ]
   }
 }

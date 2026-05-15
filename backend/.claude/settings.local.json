@@ -4,7 +4,24 @@
       "Bash(pm2 list *)",
       "Bash(pm2 restart *)",
       "Bash(pm2 logs *)",
-      "Bash(Start-Sleep -Seconds 8)"
+      "Bash(Start-Sleep -Seconds 8)",
+      "PowerShell(pm2 *)",
+      "Read(//c/boxphone-project/user/**)",
+      "Read(//c/nginx/conf/**)",
+      "Read(//c/nginx/**)",
+      "Bash(find /c -maxdepth 3 -name \"nginx.conf\")",
+      "PowerShell(Get-Command *)",
+      "PowerShell(netstat *)",
+      "PowerShell(Get-Process *)",
+      "PowerShell(Get-Service *)",
+      "PowerShell(wmic process *)",
+      "PowerShell(try { $r = Invoke-WebRequest -Uri \"https://api.myrealphone.cloud/auth/login\" -Method GET -UseBasicParsing -ErrorAction Stop; \"Status: $\\($r.StatusCode\\)\" } catch { \"Error: $\\($_.Exception.Message\\)\" })",
+      "Bash(curl -s -o /dev/null -w 'Status: %{http_code}\\\\nHeaders:\\\\n' -X OPTIONS https://api.myrealphone.cloud/auth/login -H 'Origin: https://admin.myrealphone.cloud' -H 'Access-Control-Request-Method: POST' -H 'Access-Control-Request-Headers: Content-Type' -D -)",
+      "PowerShell($q = [wmi]\"Win32_Process.Handle='15636'\"; $q.ExecutablePath)",
+      "PowerShell(Get-WmiObject *)",
+      "PowerShell(Get-ChildItem *)",
+      "PowerShell(& \"C:\\\\Program Files \\(x86\\)\\\\xiaowei_android\\\\tools\\\\adb.exe\" devices 2>&1)",
+      "PowerShell(Get-ChildItem \"C:\\\\Program Files \\(x86\\)\\\\xiaowei_android\\\\\" -Depth 2 | Where-Object { $_.Name -match \"\\\\.json|\\\\.yaml|\\\\.ini|\\\\.config|\\\\.conf|\\\\.xml|api|doc|readme\" -or $_.PSIsContainer } | Select-Object FullName | Select-Object -First 40)"
     ]
   }
 }

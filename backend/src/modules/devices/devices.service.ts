@@ -168,7 +168,8 @@ export class DevicesService {
     if (xiaoweiDevices.length === 0) {
       try {
         const adbPath = this.configService.get<string>("ADB_PATH") || "adb";
-        const { stdout: adbOut } = await execAsync(`${adbPath} devices`, {
+        const adbCmd = adbPath.includes(" ") ? `"${adbPath}"` : adbPath;
+        const { stdout: adbOut } = await execAsync(`${adbCmd} devices`, {
           encoding: "utf8",
           timeout: 5000,
         });

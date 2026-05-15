@@ -147,6 +147,9 @@ export class XiaoweiWebSocketService
       return;
     }
 
+    // log ทุก message จาก Xiaowei เพื่อ debug โครงสร้าง
+    this.logger.log(`[XW-RAW] code=${msg.code} action=${msg.action} keys=${Object.keys(msg).join(',')} sample=${raw.substring(0, 300)}`);
+
     /** รองรับหลายรูปแบบการตอบกลับรายการอุปกรณ์ */
     const extractDeviceList = (data: any): any[] => {
       if (Array.isArray(data)) return data;
@@ -155,6 +158,9 @@ export class XiaoweiWebSocketService
         if (Array.isArray(data.devices)) return data.devices;
         if (Array.isArray(data.data)) return data.data;
         if (Array.isArray(data.deviceList)) return data.deviceList;
+        if (Array.isArray(data.phoneList)) return data.phoneList;
+        if (Array.isArray(data.phone_list)) return data.phone_list;
+        if (Array.isArray(data.result)) return data.result;
       }
       return [];
     };
@@ -166,9 +172,6 @@ export class XiaoweiWebSocketService
       }
     };
 
-    /**
-     * Device list: data เป็น array หรือ object ที่มี list/devices/data
-     */
     const list = extractDeviceList(msg.data);
     if (list.length > 0) {
       list.forEach(addDevice);
@@ -176,36 +179,23 @@ export class XiaoweiWebSocketService
       return;
     }
 
-    /** บันทึก raw เมื่อได้ code 10000 แต่ไม่มี device (ใช้ debug) */
-    if (msg.code === 10000 && msg.data != null && !Array.isArray(msg.data)) {
-      this.logger.debug(`WS response code=10000, data keys: ${Object.keys(msg.data || {}).join(', ')}`);
-    }
-
-    /**
-     * ACK / status (ไม่มี data หรือ data ไม่ใช่รายการเครื่อง)
-     */
-    if (msg.code === 10000) {
+    // ลองดึงจาก top-level โดยตรง (บาง version ไม่ wrap ใน data)
+    const topList = extractDeviceList(msg);
+    if (topList.length > 0) {
+      topList.forEach(addDevice);
+      this.logger.log(`📱 Devices (top-level): ${this.devices.size}`);
       return;
     }
 
     if (msg.code === 10001) {
-      const errorMsg = msg.message || 'กรุณาเปิดใช้งานสมาชิกภาพของคุณก่อนใช้งาน' || '请激活会员后使用';
-      this.logger.error(
-        `❌ Xiaowei requires account/device activation: ${errorMsg} (Code: 10001). ` +
-        `Please check: 1) Login to Xiaowei, 2) Activate VIP/Membership, 3) Bind Device to Account`
-      );
+      const errorMsg = msg.message || '请激活会员后使用';
+      this.logger.error(`❌ Xiaowei activation required: ${errorMsg} (Code: 10001)`);
       return;
     }
-
-    // แสดงรูปแบบข้อความที่เสี่ยวเหว๋ยส่งมา (ช่วย debug ตอน Sync ได้ 0 เครื่อง)
-    this.logger.warn(
-      `Xiaowei WS message (not device list): code=${msg.code}, keys=${Object.keys(msg).join(', ')}. ` +
-      `Sample: ${raw.substring(0, 200)}${raw.length > 200 ? '...' : ''}`
-    );
   }
 
   private handleBinaryMessage(buffer: Buffer) {
-    /** ภาพหน้าจอจริงจะใหญ่ (มัก 40KB+); ขนาดต่ำกว่า MIN = อาจเป็น JSON/ข้อความจากเสี่ยวเหว๋ย ไม่ใช่ภาพ */
+    this.logger.log(`[XW-BIN] binary ${buffer.length} bytes, hex-head=${buffer.slice(0, 16).toString('hex')}, utf8-head=${buffer.slice(0, 100).toString('utf8').replace(/\n/g, '\\n')}`);
     const MIN_PREVIEW_BYTES = 5000;
     const serial = this.lastRequestedSerial;
 
@@ -281,29 +271,38 @@ export class XiaoweiWebSocketService
     }
 
     const countBefore = this.devices.size;
+    const send = (msg: object) => {
+      const s = JSON.stringify(msg);
+      this.logger.log(`[XW-SEND] ${s}`);
+      this.ws!.send(s);
+    };
 
-    // ตามเอกสาร: getDeviceList ใช้ "device" (เอกพจน์), ค่า "all" = ทั้งหมด
-    this.ws.send(
-      JSON.stringify({
-        action: 'getDeviceList',
-        device: 'all',
-        data: {},
-      }),
-    );
+    // ลอง format ต่างๆ ที่ Xiaowei versions ใช้
+    send({ t: 'device.list' });
+    await new Promise((r) => setTimeout(r, 1000));
+    if (this.devices.size > countBefore) return Array.from(this.devices.values());
 
-    // รอคำตอบ JSON (อย่างน้อย 3 วินาที)
-    await new Promise((r) => setTimeout(r, 3000));
+    send({ action: 'getDeviceList' });
+    await new Promise((r) => setTimeout(r, 1000));
+    if (this.devices.size > countBefore) return Array.from(this.devices.values());
+
+    send({ action: 'getDeviceList', devices: 'all' });
+    await new Promise((r) => setTimeout(r, 1000));
+    if (this.devices.size > countBefore) return Array.from(this.devices.values());
+
+    send({ action: 'getDeviceList', device: 'all', data: {} });
+    await new Promise((r) => setTimeout(r, 1000));
+    if (this.devices.size > countBefore) return Array.from(this.devices.values());
+
+    send({ t: 'getDeviceList' });
+    await new Promise((r) => setTimeout(r, 1000));
 
     const list = Array.from(this.devices.values());
     if (list.length === 0) {
-      this.logger.warn(
-        `⚠️  No devices from Xiaowei (had ${countBefore} before request). ` +
-        'Check: 1) Xiaowei open + API enabled, 2) VIP. Log shows binary only = list may use different action in your Xiaowei version.'
-      );
+      this.logger.warn(`⚠️ No devices from Xiaowei after all formats. Check: Xiaowei open, devices connected, VIP active.`);
     } else {
       this.logger.log(`📱 Device list: ${list.length} devices`);
     }
-
     return list;
   }
 

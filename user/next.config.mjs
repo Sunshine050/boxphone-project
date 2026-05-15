@@ -22,6 +22,14 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
+  async rewrites() {
+    return [
+      {
+        source: '/backend/:path*',
+        destination: 'http://localhost:3031/:path*',
+      },
+    ];
+  },
 };
 
 export default nextConfig;

@@ -63,9 +63,10 @@ export class AdbScreenshotService {
   private async listAdbDeviceSerials(): Promise<string[]> {
     const adbPath = this.configService.get<string>("ADB_PATH") || "adb";
     try {
-      const { stdout } = await execAsync(`${adbPath} devices`, {
+      const { stdout } = await execFileAsync(adbPath, ["devices"], {
         encoding: "utf8",
         timeout: 8000,
+        windowsHide: true,
       });
       const serials: string[] = [];
       for (const line of String(stdout).split(/\r?\n/)) {
@@ -151,6 +152,7 @@ export class AdbScreenshotService {
       encoding: "buffer" as const,
       timeout: 15000,
       maxBuffer: 10 * 1024 * 1024,
+      windowsHide: true,
     };
     try {
       this.logger.debug(
@@ -172,7 +174,7 @@ export class AdbScreenshotService {
       try {
         const { stdout: out } = await execAsync(
           `${adbPath} -s ${serial} shell screencap -p`,
-          { encoding: "buffer", timeout: 15000, maxBuffer: 10 * 1024 * 1024 },
+          { encoding: "buffer", timeout: 15000, maxBuffer: 10 * 1024 * 1024, windowsHide: true },
         );
         if (Buffer.isBuffer(out) && out.length > 0) {
           this.logger.log(
@@ -237,7 +239,7 @@ export class AdbScreenshotService {
     }
 
     this.logger.debug(`[INPUT] adb ${args.join(" ")}`);
-    const opts = { timeout: 8000 };
+    const opts = { timeout: 8000, windowsHide: true };
     const { stderr } = await execFileAsync(adbPath, args, opts as any);
     if (stderr) this.logger.warn(`[INPUT] stderr: ${stderr}`);
   }
