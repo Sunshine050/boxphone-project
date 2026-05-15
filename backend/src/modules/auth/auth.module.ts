@@ -9,6 +9,7 @@ import { AuthController } from './auth.controller';
 import { UsersModule } from '../users/users.module';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { LoginAttemptService } from './services/login-attempt.service';
+import { CsrfGuard } from './guards/csrf.guard';
 
 @Module({
   imports: [
@@ -49,6 +50,10 @@ import { LoginAttemptService } from './services/login-attempt.service';
     {
       provide: APP_GUARD,
       useClass: ThrottlerGuard,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: CsrfGuard,
     },
   ],
   exports: [AuthService, JwtModule],

@@ -16,12 +16,24 @@ function assertStrongSecurityConfig(configService: ConfigService): void {
     throw new Error('Unsafe JWT_SECRET configuration');
   }
 
+  const deviceSocketSecret = configService.get<string>('DEVICE_SOCKET_SECRET')?.trim() || '';
+  if (!deviceSocketSecret || deviceSocketSecret.length < 32 || deviceSocketSecret.startsWith('change-me')) {
+    throw new Error(
+      'Unsafe DEVICE_SOCKET_SECRET configuration — must be at least 32 characters and not a default value',
+    );
+  }
+
   const nodeEnv = configService.get<string>('NODE_ENV');
   if (nodeEnv === 'production') {
     const adminUser = configService.get<string>('ADMIN_USERNAME')?.trim().toLowerCase() || '';
     const adminPass = configService.get<string>('ADMIN_PASSWORD')?.trim() || '';
     if (adminUser === 'admin' || adminPass.length < 12 || adminPass.includes('change-me')) {
       throw new Error('Unsafe ADMIN credentials for production');
+    }
+
+    const corsOrigins = configService.get<string>('CORS_ORIGINS')?.trim() || '';
+    if (!corsOrigins) {
+      throw new Error('CORS_ORIGINS is required in production');
     }
   }
 }

@@ -1,4 +1,4 @@
-import { Injectable, ExecutionContext, Logger } from '@nestjs/common';
+import { Injectable, ExecutionContext, Logger, UnauthorizedException } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 
 /**
@@ -37,7 +37,7 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
         
         if (err || !user) {
             this.logger.error(`[AUTH] ❌ Unauthorized - Method: ${request.method}, Path: ${request.url}, Error: ${err?.message || info?.message || 'Invalid token'}`);
-            throw err || new Error('Unauthorized');
+            throw err || new UnauthorizedException('Unauthorized');
         }
 
         this.logger.debug(`[AUTH] ✅ Authenticated - User: ${user.username}, Role: ${user.role}, Method: ${request.method}, Path: ${request.url}`);

@@ -28,7 +28,8 @@ type AuthenticatedSocket = Socket & {
 
 @WebSocketGateway({
   // CORS ของ Socket.IO ตั้งที่ ConfigurableSocketIoAdapter (main.ts) จาก CORS_ORIGINS
-  maxHttpBufferSize: 1e8, // 100 MB for image streams just in case
+  // 5 MB เพียงพอสำหรับ JPEG frame ที่บีบอัดแล้วและลด DoS / memory exhaustion risk
+  maxHttpBufferSize: 5e6,
 })
 export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer() server: Server;
