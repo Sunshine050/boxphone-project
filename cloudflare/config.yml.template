@@ -1,0 +1,41 @@
+# ─── Cloudflare Tunnel Config — BoxPhone Production ──────────────────────────
+#
+# วิธีใช้:
+#   1. คัดลอกไฟล์นี้เป็น config.yml
+#   2. แทนที่ TUNNEL_ID ด้วย Tunnel ID จริง (ได้จาก: cloudflared tunnel list)
+#   3. แทนที่ DOMAIN_HERE ด้วย domain จริงทุกจุด เช่น boxphone.com
+#   4. วางไฟล์ไว้ที่: C:\Users\<username>\.cloudflared\config.yml
+#   5. รัน: cloudflared tunnel run
+#
+# หมายเหตุ Windows: path ของ credentials ใช้ forward slash หรือ double-backslash
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Tunnel ID — ได้จาก cloudflared tunnel create boxphone
+tunnel: TUNNEL_ID
+
+# ไฟล์ credentials ที่ได้ตอนสร้าง tunnel (อย่า commit ไฟล์นี้)
+credentials-file: C:\Users\USERNAME\.cloudflared\TUNNEL_ID.json
+
+# ─── Ingress Rules ───────────────────────────────────────────────────────────
+# ลำดับสำคัญ — จับคู่จากบนลงล่าง, ใช้ rule แรกที่ match
+
+ingress:
+  # Backend API — NestJS รันที่ port 3031
+  - hostname: api.DOMAIN_HERE.com
+    service: http://localhost:3031
+
+  # Admin Panel — Next.js รันที่ port 3000
+  - hostname: admin.DOMAIN_HERE.com
+    service: http://localhost:3000
+
+  # User App — Next.js รันที่ port 3001
+  - hostname: app.DOMAIN_HERE.com
+    service: http://localhost:3001
+
+  # Webhook port 4000 — ไม่ expose ออกอินเทอร์เน็ต (internal only)
+  # ถ้าต้องการ expose ในอนาคต ให้เพิ่ม hostname ที่นี่
+  # - hostname: webhook.DOMAIN_HERE.com
+  #   service: http://localhost:4000
+
+  # Fallback rule — ต้องมีเสมอ (rule สุดท้ายต้องไม่มี hostname)
+  - service: http_status:404
