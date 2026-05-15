@@ -5,8 +5,11 @@ export type DeviceDocument = HydratedDocument<Device>;
 
 export enum DeviceStatus {
     AVAILABLE = 'AVAILABLE',
-    BUSY = 'BUSY',
+    BUSY = 'INUSE',
     OFFLINE = 'OFFLINE',
+    UNDER_REPAIR = 'UNDER_REPAIR',
+    DAMAGED = 'DAMAGED',
+    QUARANTINE = 'QUARANTINE',
 }
 
 @Schema({ timestamps: true })
@@ -25,7 +28,25 @@ export class Device {
     status: DeviceStatus;
 
     @Prop()
+    model: string;
+
+    @Prop()
+    sdk_version: number;
+
+    @Prop({ type: Object })
+    metadata: any;
+
+    @Prop()
     current_user_id: string;
+
+    @Prop({ default: null })
+    previous_user_id: string | null;
+
+    @Prop({ default: null })
+    last_user_disconnected_at: Date | null;
+
+    @Prop()
+    last_connected_at: Date;
 }
 
 export const DeviceSchema = SchemaFactory.createForClass(Device);

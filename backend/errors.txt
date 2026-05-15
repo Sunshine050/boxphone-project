@@ -1,0 +1,90 @@
+src/modules/users/users.service.ts(251,1): error TS1185: Merge conflict marker encountered.
+src/modules/users/users.service.ts(260,1): error TS1185: Merge conflict marker encountered.
+src/modules/users/users.service.ts(268,1): error TS1185: Merge conflict marker encountered.
+src/modules/users/users.service.ts(302,1): error TS1185: Merge conflict marker encountered.
+src/modules/users/users.service.ts(314,1): error TS1185: Merge conflict marker encountered.
+src/modules/users/users.service.ts(339,1): error TS1185: Merge conflict marker encountered.
+src/modules/users/users.service.ts(348,4): error TS1128: Declaration or statement expected.
+src/modules/users/users.service.ts(389,1): error TS1185: Merge conflict marker encountered.
+src/modules/users/users.service.ts(429,1): error TS1185: Merge conflict marker encountered.
+src/modules/users/users.service.ts(435,1): error TS1185: Merge conflict marker encountered.
+src/modules/users/users.service.ts(445,8): error TS1359: Identifier expected. 'const' is a reserved word that cannot be used here.
+src/modules/users/users.service.ts(445,14): error TS1005: ',' expected.
+src/modules/users/users.service.ts(445,16): error TS1005: ',' expected.
+src/modules/users/users.service.ts(445,19): error TS1005: ',' expected.
+src/modules/users/users.service.ts(472,3): error TS1068: Unexpected token. A constructor, method, accessor, or property was expected.
+src/modules/users/users.service.ts(481,1): error TS1128: Declaration or statement expected.
+src/modules/users/users.service.ts(485,3): error TS1434: Unexpected keyword or identifier.
+src/modules/users/users.service.ts(485,18): error TS1005: ';' expected.
+src/modules/users/users.service.ts(485,32): error TS1011: An element access expression should take an argument.
+src/modules/users/users.service.ts(486,11): error TS1005: ':' expected.
+src/modules/users/users.service.ts(486,53): error TS1005: ',' expected.
+src/modules/users/users.service.ts(487,12): error TS1005: ':' expected.
+src/modules/users/users.service.ts(511,7): error TS1005: ',' expected.
+src/modules/users/users.service.ts(514,3): error TS1434: Unexpected keyword or identifier.
+src/modules/users/users.service.ts(514,32): error TS1005: ',' expected.
+src/modules/users/users.service.ts(514,42): error TS1005: ';' expected.
+src/modules/users/users.service.ts(518,3): error TS1434: Unexpected keyword or identifier.
+src/modules/users/users.service.ts(518,24): error TS1005: ',' expected.
+src/modules/users/users.service.ts(518,33): error TS1005: ';' expected.
+src/modules/users/users.service.ts(519,12): error TS1005: ':' expected.
+src/modules/users/users.service.ts(519,50): error TS1005: ',' expected.
+src/modules/users/users.service.ts(522,3): error TS1434: Unexpected keyword or identifier.
+src/modules/users/users.service.ts(522,33): error TS1005: ',' expected.
+src/modules/users/users.service.ts(522,43): error TS1005: ';' expected.
+src/modules/users/users.service.ts(528,3): error TS1434: Unexpected keyword or identifier.
+src/modules/users/users.service.ts(528,22): error TS1005: ',' expected.
+src/modules/users/users.service.ts(528,45): error TS1005: ',' expected.
+src/modules/users/users.service.ts(528,51): error TS1005: ';' expected.
+src/modules/users/users.service.ts(529,22): error TS1005: ',' expected.
+src/modules/users/users.service.ts(529,31): error TS1005: ',' expected.
+src/modules/users/users.service.ts(529,33): error TS1136: Property assignment expected.
+src/modules/users/users.service.ts(551,3): error TS1128: Declaration or statement expected.
+src/modules/users/users.service.ts(557,3): error TS1434: Unexpected keyword or identifier.
+src/modules/users/users.service.ts(558,11): error TS1005: ',' expected.
+src/modules/users/users.service.ts(559,13): error TS1005: ',' expected.
+src/modules/users/users.service.ts(560,18): error TS1005: ',' expected.
+src/modules/users/users.service.ts(561,4): error TS1005: ';' expected.
+src/modules/users/users.service.ts(562,11): error TS1005: ':' expected.
+src/modules/users/users.service.ts(562,15): error TS1005: ',' expected.
+src/modules/users/users.service.ts(562,50): error TS1005: ',' expected.
+src/modules/users/users.service.ts(563,9): error TS1003: Identifier expected.
+src/modules/users/users.service.ts(563,16): error TS1005: '{' expected.
+src/modules/users/users.service.ts(563,22): error TS1005: ':' expected.
+src/modules/users/users.service.ts(563,61): error TS1005: ',' expected.
+src/modules/users/users.service.ts(565,11): error TS1005: ':' expected.
+src/modules/users/users.service.ts(565,57): error TS1005: ',' expected.
+src/modules/users/users.service.ts(566,9): error TS1003: Identifier expected.
+src/modules/users/users.service.ts(566,18): error TS1005: '{' expected.
+src/modules/users/users.service.ts(566,24): error TS1005: ':' expected.
+src/modules/users/users.service.ts(566,65): error TS1005: ',' expected.
+src/modules/users/users.service.ts(568,15): error TS1005: ',' expected.
+src/modules/users/users.service.ts(568,68): error TS1005: ',' expected.
+src/modules/users/users.service.ts(568,70): error TS1136: Property assignment expected.
+src/modules/users/users.service.ts(596,3): error TS1128: Declaration or statement expected.
+src/modules/users/users.service.ts(601,3): error TS1434: Unexpected keyword or identifier.
+src/modules/users/users.service.ts(601,32): error TS1005: ',' expected.
+src/modules/users/users.service.ts(601,55): error TS1005: ',' expected.
+src/modules/users/users.service.ts(601,61): error TS1005: ';' expected.
+src/modules/users/users.service.ts(602,11): error TS1005: ':' expected.
+src/modules/users/users.service.ts(602,15): error TS1005: ',' expected.
+src/modules/users/users.service.ts(602,50): error TS1005: ',' expected.
+src/modules/users/users.service.ts(603,9): error TS1003: Identifier expected.
+src/modules/users/users.service.ts(603,16): error TS1005: '{' expected.
+src/modules/users/users.service.ts(603,22): error TS1005: ':' expected.
+src/modules/users/users.service.ts(603,61): error TS1005: ',' expected.
+src/modules/users/users.service.ts(604,9): error TS1003: Identifier expected.
+src/modules/users/users.service.ts(604,14): error TS1005: ',' expected.
+src/modules/users/users.service.ts(604,24): error TS1005: ',' expected.
+src/modules/users/users.service.ts(604,26): error TS1136: Property assignment expected.
+src/modules/users/users.service.ts(631,3): error TS1128: Declaration or statement expected.
+src/modules/users/users.service.ts(633,3): error TS1434: Unexpected keyword or identifier.
+src/modules/users/users.service.ts(633,22): error TS1005: ')' expected.
+src/modules/users/users.service.ts(633,24): error TS1434: Unexpected keyword or identifier.
+src/modules/users/users.service.ts(633,30): error TS1128: Declaration or statement expected.
+src/modules/users/users.service.ts(633,31): error TS1128: Declaration or statement expected.
+src/modules/users/users.service.ts(633,45): error TS1109: Expression expected.
+src/modules/users/users.service.ts(634,11): error TS1005: ',' expected.
+src/modules/users/users.service.ts(634,15): error TS1005: ':' expected.
+src/modules/users/users.service.ts(634,58): error TS1005: ',' expected.
+src/modules/users/users.service.ts(636,1): error TS1128: Declaration or statement expected.

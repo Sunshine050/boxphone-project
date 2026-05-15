@@ -1,0 +1,231 @@
+"use client";
+
+import { motion } from "framer-motion";
+import { useEffect, useMemo, useState } from "react";
+import { Input } from "@/components/ui/input";
+import { Search } from "lucide-react";
+import {
+  OverviewPhoneGrid,
+  type OverviewDevice,
+} from "@/components/overview-phone-grid";
+import { StatusSummaryCards } from "@/components/status-summary-cards";
+import { AssignUserDialog } from "@/components/assign-user-dialog";
+import { Button } from "@/components/ui/button";
+import { DevicesService } from "@/services/devices.service";
+import { UsersService } from "@/services/users.service";
+import {
+  normalizeDeviceStatus,
+  toOverviewStatus,
+  type OverviewStatus,
+} from "@/lib/device-status";
+import { HelpButton } from "@/components/help/help-button";
+
+export type DeviceStatus = "all" | OverviewStatus;
+
+export default function AdminOverviewPage() {
+  const [query, setQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<DeviceStatus>("all");
+
+  const [users, setUsers] = useState<any[]>([]);
+  const [devices, setDevices] = useState<OverviewDevice[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
+  const [deviceToAssign, setDeviceToAssign] = useState<OverviewDevice | null>(
+    null,
+  );
+
+  const userMap = useMemo(() => {
+    return users.reduce(
+      (m, u) => {
+        m[u.id || u._id] = u.name;
+        return m;
+      },
+      {} as Record<string, string>,
+    );
+  }, [users]);
+
+  const fetchDevices = async () => {
+    setLoading(true);
+    setFetchError(null);
+    try {
+      const [data, userData] = await Promise.all([
+        DevicesService.getAll(),
+        UsersService.getAll(),
+      ]);
+
+      const mapped: OverviewDevice[] = (data || []).map((d: any) => ({
+        id: d.id || d._id,
+        name: d.name,
+        serial_number: d.serial_number,
+        status: toOverviewStatus(normalizeDeviceStatus(d.status)),
+        user: d.current_user_id ?? undefined,
+      }));
+
+      setDevices(mapped);
+      setUsers(userData);
+    } catch (e: any) {
+      setFetchError(e?.message || "ไม่สามารถโหลดข้อมูลได้");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchDevices();
+  }, []);
+
+  /** ✅ Summary counts (ส่งให้ cards ได้ ถ้าอยากใช้ต่อ) */
+  const summary = useMemo(() => {
+    const total = devices.length;
+    const available = devices.filter((d) => d.status === "available").length;
+    const inUse = devices.filter((d) => d.status === "in-use").length;
+    const maintenance = devices.filter(
+      (d) => d.status === "maintenance",
+    ).length;
+    const error = devices.filter((d) => d.status === "error").length;
+
+    return { total, available, inUse, maintenance, error };
+  }, [devices]);
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5 }}
+      className="p-4 sm:p-6 md:p-8 space-y-6 md:space-y-8"
+    >
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2">
+            <h1 className="text-xl sm:text-3xl font-semibold">ภาพรวมระบบ</h1>
+            <HelpButton topic="overview" />
+          </div>
+          <p className="text-sm text-muted-foreground mt-1">
+            สถานะเครื่อง Android แบบเรียลไทม์
+          </p>
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          {/* ✅ Sync from Xiaowei button */}
+          <Button
+            variant="default"
+            onClick={async () => {
+              try {
+                setLoading(true);
+                const result = await DevicesService.syncFromXiaowei();
+                alert(
+                  `Sync สำเร็จ! พบ ${result.total} เครื่อง, Sync แล้ว ${result.synced} เครื่อง`,
+                );
+                await fetchDevices();
+              } catch (error: any) {
+                alert(`Sync ไม่สำเร็จ: ${error.message}`);
+              } finally {
+                setLoading(false);
+              }
+            }}
+            disabled={loading}
+            className="shrink-0"
+          >
+            {loading ? "กำลัง Sync..." : "Sync จากเสี่ยวเหว๋ย"}
+          </Button>
+
+          {/* ✅ refresh button */}
+          <Button
+            variant="outline"
+            onClick={fetchDevices}
+            disabled={loading}
+            className="shrink-0"
+          >
+            {loading ? "กำลังโหลด..." : "รีเฟรช"}
+          </Button>
+        </div>
+      </div>
+
+      {/* ข้อความเมื่อเชื่อมต่อ backend ไม่ได้ */}
+      {fetchError && (
+        <div className="rounded-lg border border-destructive/50 bg-destructive/10 px-4 py-3 flex items-center justify-between gap-4">
+          <p className="text-sm text-destructive">{fetchError}</p>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={fetchDevices}
+            disabled={loading}
+          >
+            ลองใหม่
+          </Button>
+        </div>
+      )}
+
+      {/* สรุปสถานะ */}
+      <StatusSummaryCards />
+      {/* ถ้าคุณอยากให้ cards ใช้ summary จริง เดี๋ยวผมแก้ component ให้รับ props ได้ */}
+
+      {/* ตัวกรอง */}
+      <div className="flex flex-wrap items-center gap-3">
+        {/* ค้นหา */}
+        <div className="relative flex-1 min-w-[240px] max-w-sm">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="ค้นหาชื่อเครื่อง / ผู้ใช้"
+            className="pl-10"
+          />
+        </div>
+
+        {/* กรองตามสถานะ */}
+        <div className="flex flex-wrap gap-2">
+          {[
+            { key: "all", label: `ทั้งหมด (${summary.total})` },
+            { key: "in-use", label: `กำลังใช้งาน (${summary.inUse})` },
+            { key: "available", label: `ว่าง (${summary.available})` },
+            { key: "error", label: `ผิดพลาด (${summary.error})` },
+            { key: "maintenance", label: `ซ่อมบำรุง (${summary.maintenance})` },
+          ].map((s) => (
+            <Button
+              key={s.key}
+              size="sm"
+              variant={statusFilter === s.key ? "default" : "outline"}
+              onClick={() => setStatusFilter(s.key as DeviceStatus)}
+            >
+              {s.label}
+            </Button>
+          ))}
+        </div>
+      </div>
+
+      {/* Grid */}
+      {loading ? (
+        <div className="text-muted-foreground text-sm">กำลังโหลดข้อมูล...</div>
+      ) : (
+        <OverviewPhoneGrid
+          query={query}
+          statusFilter={statusFilter}
+          devices={devices}
+          userMap={userMap}
+          onAssign={(device) => setDeviceToAssign(device)}
+        />
+      )}
+
+      {/* Dialog มอบหมายเครื่อง (จากภาพรวม) */}
+      <AssignUserDialog
+        open={!!deviceToAssign}
+        device={
+          deviceToAssign
+            ? {
+                id: deviceToAssign.id,
+                name: deviceToAssign.name,
+                serial_number: deviceToAssign.serial_number,
+              }
+            : null
+        }
+        onClose={() => setDeviceToAssign(null)}
+        onSuccess={() => {
+          setDeviceToAssign(null);
+          fetchDevices();
+        }}
+      />
+    </motion.div>
+  );
+}

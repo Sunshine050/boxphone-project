@@ -1,0 +1,156 @@
+"use client";
+
+import type React from "react";
+import { useState } from "react";
+import { motion } from "framer-motion";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { Smartphone, Loader2, Eye, EyeOff } from "lucide-react";
+
+/* ================= Animation ================= */
+
+const container = {
+  hidden: { opacity: 0, y: 24 },
+  show: {
+    opacity: 1,
+    y: 0,
+    transition: { duration: 0.5, ease: "easeOut" },
+  },
+};
+
+const item = {
+  hidden: { opacity: 0, y: 12 },
+  show: { opacity: 1, y: 0 },
+};
+
+/* ================= Props ================= */
+
+interface LoginFormProps {
+  onSubmit: (username: string, password: string) => void;
+  isLoading: boolean;
+  error?: string;
+}
+
+/* ================= Component ================= */
+
+export function LoginForm({ onSubmit, isLoading, error }: LoginFormProps) {
+  const [showPassword, setShowPassword] = useState(false);
+
+  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+
+    const formData = new FormData(e.currentTarget);
+    const username = formData.get("username") as string;
+    const password = formData.get("password") as string;
+
+    onSubmit(username, password);
+  };
+
+  return (
+    <motion.div
+      variants={container}
+      initial="hidden"
+      animate="show"
+      className="w-full max-w-md"
+    >
+      <Card className="border border-blue-500/30 shadow-2xl bg-card ring-1 ring-blue-400/20">
+        <CardHeader className="space-y-2 text-center">
+          <motion.div variants={item} className="flex justify-center mb-4">
+            <div className="p-4 rounded-2xl bg-primary/10 ring-1 ring-primary/20">
+              <Smartphone className="h-9 w-9 text-primary" />
+            </div>
+          </motion.div>
+
+          <motion.div variants={item}>
+            <CardTitle className="text-2xl font-semibold tracking-tight">
+              Admin Myreal-Phone
+            </CardTitle>
+          </motion.div>
+
+          <motion.div variants={item}>
+            <CardDescription className="text-muted-foreground">
+              Cloud Phone Device Management System
+            </CardDescription>
+          </motion.div>
+        </CardHeader>
+
+        <CardContent>
+          <motion.form onSubmit={handleSubmit} className="space-y-4">
+            {/* Email */}
+            <motion.div variants={item} className="space-y-2">
+              <Label htmlFor="username">Username</Label>
+              <Input
+                id="username"
+                name="username"
+                type="text"
+                placeholder="admin"
+                required
+              />
+            </motion.div>
+
+            {/* Password */}
+            <motion.div variants={item} className="space-y-2">
+              <Label htmlFor="password">Password</Label>
+
+              <div className="relative">
+                <Input
+                  id="password"
+                  name="password"
+                  type={showPassword ? "text" : "password"}
+                  placeholder="••••••••"
+                  required
+                  className="pr-10"
+                />
+
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((v) => !v)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                >
+                  {showPassword ? (
+                    <EyeOff className="h-4 w-4" />
+                  ) : (
+                    <Eye className="h-4 w-4" />
+                  )}
+                </button>
+              </div>
+            </motion.div>
+
+            {/* Error */}
+            {error && (
+              <motion.div
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="text-sm text-red-500 text-center"
+              >
+                {error}
+              </motion.div>
+            )}
+
+            {/* Submit */}
+            <motion.div variants={item}>
+              <Button type="submit" className="w-full" disabled={isLoading}>
+                {isLoading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    กำลังเข้าสู่ระบบ...
+                  </>
+                ) : (
+                  "เข้าสู่ระบบ"
+                )}
+              </Button>
+            </motion.div>
+          </motion.form>
+        </CardContent>
+      </Card>
+    </motion.div>
+  );
+}

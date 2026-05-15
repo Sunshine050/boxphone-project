@@ -1,0 +1,922 @@
+
+> remote-control-backend@0.0.1 build
+> nest build
+
+[96msrc/modules/auth/auth.service.ts[0m:[93m31[0m:[93m46[0m - [91merror[0m[90m TS2339: [0mProperty 'findByUsername' does not exist on type 'UsersService'.
+
+[7m31[0m         const user = await this.usersService.findByUsername(username);
+[7m  [0m [91m                                             ~~~~~~~~~~~~~~[0m
+[96msrc/modules/auth/auth.service.ts[0m:[93m87[0m:[93m54[0m - [91merror[0m[90m TS2339: [0mProperty 'findByUsername' does not exist on type 'UsersService'.
+
+[7m87[0m         const existingUser = await this.usersService.findByUsername(registerDto.username);
+[7m  [0m [91m                                                     ~~~~~~~~~~~~~~[0m
+[96msrc/modules/auth/auth.service.ts[0m:[93m117[0m:[93m40[0m - [91merror[0m[90m TS2339: [0mProperty 'findById' does not exist on type 'UsersService'.
+
+[7m117[0m         return await this.usersService.findById(userId);
+[7m   [0m [91m                                       ~~~~~~~~[0m
+[96msrc/modules/users/users.controller.ts[0m:[93m73[0m:[93m30[0m - [91merror[0m[90m TS2339: [0mProperty 'findAll' does not exist on type 'UsersService'.
+
+[7m73[0m     return this.usersService.findAll();
+[7m  [0m [91m                             ~~~~~~~[0m
+[96msrc/modules/users/users.controller.ts[0m:[93m87[0m:[93m16[0m - [91merror[0m[90m TS2339: [0mProperty 'notificationService' does not exist on type 'UsersController'.
+
+[7m87[0m     await this.notificationService.createAndSend(
+[7m  [0m [91m               ~~~~~~~~~~~~~~~~~~~[0m
+[96msrc/modules/users/users.controller.ts[0m:[93m157[0m:[93m30[0m - [91merror[0m[90m TS2339: [0mProperty 'findByIdFormatted' does not exist on type 'UsersService'.
+
+[7m157[0m     return this.usersService.findByIdFormatted(id);
+[7m   [0m [91m                             ~~~~~~~~~~~~~~~~~[0m
+[96msrc/modules/users/users.controller.ts[0m:[93m167[0m:[93m29[0m - [91merror[0m[90m TS2339: [0mProperty 'delete' does not exist on type 'UsersService'.
+
+[7m167[0m     await this.usersService.delete(id);
+[7m   [0m [91m                            ~~~~~~[0m
+[96msrc/modules/users/users.controller.ts[0m:[93m186[0m:[93m49[0m - [91merror[0m[90m TS2339: [0mProperty 'connectDevice' does not exist on type 'UsersService'.
+
+[7m186[0m       const user: any = await this.usersService.connectDevice(
+[7m   [0m [91m                                                ~~~~~~~~~~~~~[0m
+[96msrc/modules/users/users.controller.ts[0m:[93m218[0m:[93m47[0m - [91merror[0m[90m TS2339: [0mProperty 'disconnectDevice' does not exist on type 'UsersService'.
+
+[7m218[0m     const user: any = await this.usersService.disconnectDevice(
+[7m   [0m [91m                                              ~~~~~~~~~~~~~~~~[0m
+[96msrc/modules/users/users.controller.ts[0m:[93m241[0m:[93m30[0m - [91merror[0m[90m TS2339: [0mProperty 'update' does not exist on type 'UsersService'.
+
+[7m241[0m     return this.usersService.update(id, updateUserDto);
+[7m   [0m [91m                             ~~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m109[0m:[93m37[0m - [91merror[0m[90m TS2339: [0mProperty 'findByUsername' does not exist on type 'UsersService'.
+
+[7m109[0m     const existingUser = await this.findByUsername(createUserDto.username);
+[7m   [0m [91m                                    ~~~~~~~~~~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m168[0m:[93m37[0m - [91merror[0m[90m TS2339: [0mProperty 'findByUsername' does not exist on type 'UsersService'.
+
+[7m168[0m     const existingUser = await this.findByUsername(payload.username);
+[7m   [0m [91m                                    ~~~~~~~~~~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m216[0m:[93m29[0m - [91merror[0m[90m TS2339: [0mProperty 'findById' does not exist on type 'UsersService'.
+
+[7m216[0m     const user = await this.findById(userId);
+[7m   [0m [91m                            ~~~~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m251[0m:[93m1[0m - [91merror[0m[90m TS1185: [0mMerge conflict marker encountered.
+
+[7m251[0m <<<<<<< HEAD
+[7m   [0m [91m~~~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m258[0m:[93m34[0m - [91merror[0m[90m TS2339: [0mProperty 'findById' does not exist on type 'UsersService'.
+
+[7m258[0m     const user: any = await this.findById(userId);
+[7m   [0m [91m                                 ~~~~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m260[0m:[93m1[0m - [91merror[0m[90m TS1185: [0mMerge conflict marker encountered.
+
+[7m260[0m =======
+[7m   [0m [91m~~~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m268[0m:[93m1[0m - [91merror[0m[90m TS1185: [0mMerge conflict marker encountered.
+
+[7m268[0m >>>>>>> f86868e6e11e90b97677ce3a6e9d109325ba82b2
+[7m   [0m [91m~~~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m302[0m:[93m1[0m - [91merror[0m[90m TS1185: [0mMerge conflict marker encountered.
+
+[7m302[0m <<<<<<< HEAD
+[7m   [0m [91m~~~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m303[0m:[93m20[0m - [91merror[0m[90m TS2304: [0mCannot find name 'devicesArr'.
+
+[7m303[0m     user.devices = devicesArr;
+[7m   [0m [91m                   ~~~~~~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m314[0m:[93m1[0m - [91merror[0m[90m TS1185: [0mMerge conflict marker encountered.
+
+[7m314[0m =======
+[7m   [0m [91m~~~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m339[0m:[93m1[0m - [91merror[0m[90m TS1185: [0mMerge conflict marker encountered.
+
+[7m339[0m >>>>>>> f86868e6e11e90b97677ce3a6e9d109325ba82b2
+[7m   [0m [91m~~~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m343[0m:[93m22[0m - [91merror[0m[90m TS2304: [0mCannot find name 'seconds'.
+
+[7m343[0m       total_seconds: seconds,
+[7m   [0m [91m                     ~~~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m344[0m:[93m26[0m - [91merror[0m[90m TS2304: [0mCannot find name 'seconds'.
+
+[7m344[0m       remaining_seconds: seconds,
+[7m   [0m [91m                         ~~~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m348[0m:[93m4[0m - [91merror[0m[90m TS1128: [0mDeclaration or statement expected.
+
+[7m348[0m   });
+[7m   [0m [91m   ~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m351[0m:[93m18[0m - [91merror[0m[90m TS2304: [0mCannot find name 'updatedDevices'.
+
+[7m351[0m   user.devices = updatedDevices;
+[7m   [0m [91m                 ~~~~~~~~~~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m355[0m:[93m19[0m - [91merror[0m[90m TS2304: [0mCannot find name 'removedDevices'.
+
+[7m355[0m   for (const d of removedDevices) {
+[7m   [0m [91m                  ~~~~~~~~~~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m389[0m:[93m1[0m - [91merror[0m[90m TS1185: [0mMerge conflict marker encountered.
+
+[7m389[0m <<<<<<< HEAD
+[7m   [0m [91m~~~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m429[0m:[93m1[0m - [91merror[0m[90m TS1185: [0mMerge conflict marker encountered.
+
+[7m429[0m =======
+[7m   [0m [91m~~~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m435[0m:[93m1[0m - [91merror[0m[90m TS1185: [0mMerge conflict marker encountered.
+
+[7m435[0m >>>>>>> f86868e6e11e90b97677ce3a6e9d109325ba82b2
+[7m   [0m [91m~~~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m445[0m:[93m8[0m - [91merror[0m[90m TS1359: [0mIdentifier expected. 'const' is a reserved word that cannot be used here.
+
+[7m445[0m   for (const u of users) {
+[7m   [0m [91m       ~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m445[0m:[93m14[0m - [91merror[0m[90m TS1005: [0m',' expected.
+
+[7m445[0m   for (const u of users) {
+[7m   [0m [91m             ~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m445[0m:[93m16[0m - [91merror[0m[90m TS1005: [0m',' expected.
+
+[7m445[0m   for (const u of users) {
+[7m   [0m [91m               ~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m445[0m:[93m19[0m - [91merror[0m[90m TS1005: [0m',' expected.
+
+[7m445[0m   for (const u of users) {
+[7m   [0m [91m                  ~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m453[0m:[93m58[0m - [91merror[0m[90m TS2304: [0mCannot find name 'seconds'.
+
+[7m453[0m         d.total_seconds = Number(d.total_seconds ?? 0) + seconds;
+[7m   [0m [91m                                                         ~~~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m454[0m:[93m66[0m - [91merror[0m[90m TS2304: [0mCannot find name 'seconds'.
+
+[7m454[0m         d.remaining_seconds = Number(d.remaining_seconds ?? 0) + seconds;
+[7m   [0m [91m                                                                 ~~~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m462[0m:[93m7[0m - [91merror[0m[90m TS2304: [0mCannot find name 'seconds'.
+
+[7m462[0m       seconds
+[7m   [0m [91m      ~~~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m467[0m:[93m7[0m - [91merror[0m[90m TS2663: [0mCannot find name 'updatedUsers'. Did you mean the instance member 'this.updatedUsers'?
+
+[7m467[0m       updatedUsers.push(u);
+[7m   [0m [91m      ~~~~~~~~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m472[0m:[93m3[0m - [91merror[0m[90m TS1068: [0mUnexpected token. A constructor, method, accessor, or property was expected.
+
+[7m472[0m   await this.logService.createLog({
+[7m   [0m [91m  ~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m472[0m:[93m9[0m - [91merror[0m[90m TS2532: [0mObject is possibly 'undefined'.
+
+[7m472[0m   await this.logService.createLog({
+[7m   [0m [91m        ~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m475[0m:[93m58[0m - [91merror[0m[90m TS2304: [0mCannot find name 'seconds'.
+
+[7m475[0m     message: `เติมเวลาให้ผู้ใช้ที่กำลังใช้งานทั้งหมด (+${seconds}s)`,
+[7m   [0m [91m                                                         ~~~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m476[0m:[93m20[0m - [91merror[0m[90m TS2552: [0mCannot find name 'updatedUsers'. Did you mean 'updatedUser'?
+
+[7m476[0m     meta: { count: updatedUsers.length, added_seconds: seconds },
+[7m   [0m [91m                   ~~~~~~~~~~~~[0m
+
+  [96msrc/modules/users/users.service.ts[0m:[93m578[0m:[93m11[0m
+    [7m578[0m     const updatedUser = await this.userModel
+    [7m   [0m [96m          ~~~~~~~~~~~[0m
+    'updatedUser' is declared here.
+[96msrc/modules/users/users.service.ts[0m:[93m476[0m:[93m56[0m - [91merror[0m[90m TS2304: [0mCannot find name 'seconds'.
+
+[7m476[0m     meta: { count: updatedUsers.length, added_seconds: seconds },
+[7m   [0m [91m                                                       ~~~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m481[0m:[93m1[0m - [91merror[0m[90m TS1128: [0mDeclaration or statement expected.
+
+[7m481[0m }
+[7m   [0m [91m~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m485[0m:[93m3[0m - [91merror[0m[90m TS1434: [0mUnexpected keyword or identifier.
+
+[7m485[0m   async findAll(): Promise<any[]> {
+[7m   [0m [91m  ~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m485[0m:[93m3[0m - [91merror[0m[90m TS2304: [0mCannot find name 'async'.
+
+[7m485[0m   async findAll(): Promise<any[]> {
+[7m   [0m [91m  ~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m485[0m:[93m9[0m - [91merror[0m[90m TS2304: [0mCannot find name 'findAll'.
+
+[7m485[0m   async findAll(): Promise<any[]> {
+[7m   [0m [91m        ~~~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m485[0m:[93m18[0m - [91merror[0m[90m TS1005: [0m';' expected.
+
+[7m485[0m   async findAll(): Promise<any[]> {
+[7m   [0m [91m                 ~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m485[0m:[93m20[0m - [91merror[0m[90m TS2365: [0mOperator '>' cannot be applied to types 'boolean' and '{ const: any; return: any; }'.
+
+[7m485[0m   async findAll(): Promise<any[]> {
+[7m   [0m [91m                   ~~~~~~~~~~~~~~~~[0m
+[7m486[0m     const users = await this.userModel.find().exec();
+[7m   [0m [91m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+[7m...[0m 
+[7m511[0m     });
+[7m   [0m [91m~~~~~~~[0m
+[7m512[0m   }
+[7m   [0m [91m~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m485[0m:[93m28[0m - [91merror[0m[90m TS2693: [0m'any' only refers to a type, but is being used as a value here.
+
+[7m485[0m   async findAll(): Promise<any[]> {
+[7m   [0m [91m                           ~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m485[0m:[93m32[0m - [91merror[0m[90m TS1011: [0mAn element access expression should take an argument.
+
+[7m485[0m   async findAll(): Promise<any[]> {
+[7m   [0m [91m                               [0m
+[96msrc/modules/users/users.service.ts[0m:[93m486[0m:[93m11[0m - [91merror[0m[90m TS1005: [0m':' expected.
+
+[7m486[0m     const users = await this.userModel.find().exec();
+[7m   [0m [91m          ~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m486[0m:[93m11[0m - [91merror[0m[90m TS2304: [0mCannot find name 'users'.
+
+[7m486[0m     const users = await this.userModel.find().exec();
+[7m   [0m [91m          ~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m486[0m:[93m25[0m - [91merror[0m[90m TS2532: [0mObject is possibly 'undefined'.
+
+[7m486[0m     const users = await this.userModel.find().exec();
+[7m   [0m [91m                        ~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m486[0m:[93m53[0m - [91merror[0m[90m TS1005: [0m',' expected.
+
+[7m486[0m     const users = await this.userModel.find().exec();
+[7m   [0m [91m                                                    ~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m487[0m:[93m12[0m - [91merror[0m[90m TS1005: [0m':' expected.
+
+[7m487[0m     return users.map((u: any) => {
+[7m   [0m [91m           ~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m487[0m:[93m12[0m - [91merror[0m[90m TS2304: [0mCannot find name 'users'.
+
+[7m487[0m     return users.map((u: any) => {
+[7m   [0m [91m           ~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m511[0m:[93m7[0m - [91merror[0m[90m TS1005: [0m',' expected.
+
+[7m511[0m     });
+[7m   [0m [91m      ~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m514[0m:[93m3[0m - [91merror[0m[90m TS1434: [0mUnexpected keyword or identifier.
+
+[7m514[0m   async findByUsername(username: string) {
+[7m   [0m [91m  ~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m514[0m:[93m3[0m - [91merror[0m[90m TS2304: [0mCannot find name 'async'.
+
+[7m514[0m   async findByUsername(username: string) {
+[7m   [0m [91m  ~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m514[0m:[93m9[0m - [91merror[0m[90m TS2304: [0mCannot find name 'findByUsername'.
+
+[7m514[0m   async findByUsername(username: string) {
+[7m   [0m [91m        ~~~~~~~~~~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m514[0m:[93m24[0m - [91merror[0m[90m TS2304: [0mCannot find name 'username'.
+
+[7m514[0m   async findByUsername(username: string) {
+[7m   [0m [91m                       ~~~~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m514[0m:[93m32[0m - [91merror[0m[90m TS1005: [0m',' expected.
+
+[7m514[0m   async findByUsername(username: string) {
+[7m   [0m [91m                               ~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m514[0m:[93m34[0m - [91merror[0m[90m TS2693: [0m'string' only refers to a type, but is being used as a value here.
+
+[7m514[0m   async findByUsername(username: string) {
+[7m   [0m [91m                                 ~~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m514[0m:[93m42[0m - [91merror[0m[90m TS1005: [0m';' expected.
+
+[7m514[0m   async findByUsername(username: string) {
+[7m   [0m [91m                                         ~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m515[0m:[93m12[0m - [91merror[0m[90m TS2532: [0mObject is possibly 'undefined'.
+
+[7m515[0m     return this.userModel.findOne({ username });
+[7m   [0m [91m           ~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m518[0m:[93m3[0m - [91merror[0m[90m TS1434: [0mUnexpected keyword or identifier.
+
+[7m518[0m   async findById(userId: string): Promise<User | null> {
+[7m   [0m [91m  ~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m518[0m:[93m3[0m - [91merror[0m[90m TS2304: [0mCannot find name 'async'.
+
+[7m518[0m   async findById(userId: string): Promise<User | null> {
+[7m   [0m [91m  ~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m518[0m:[93m9[0m - [91merror[0m[90m TS2304: [0mCannot find name 'findById'.
+
+[7m518[0m   async findById(userId: string): Promise<User | null> {
+[7m   [0m [91m        ~~~~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m518[0m:[93m18[0m - [91merror[0m[90m TS2304: [0mCannot find name 'userId'.
+
+[7m518[0m   async findById(userId: string): Promise<User | null> {
+[7m   [0m [91m                 ~~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m518[0m:[93m24[0m - [91merror[0m[90m TS1005: [0m',' expected.
+
+[7m518[0m   async findById(userId: string): Promise<User | null> {
+[7m   [0m [91m                       ~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m518[0m:[93m26[0m - [91merror[0m[90m TS2693: [0m'string' only refers to a type, but is being used as a value here.
+
+[7m518[0m   async findById(userId: string): Promise<User | null> {
+[7m   [0m [91m                         ~~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m518[0m:[93m33[0m - [91merror[0m[90m TS1005: [0m';' expected.
+
+[7m518[0m   async findById(userId: string): Promise<User | null> {
+[7m   [0m [91m                                ~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m518[0m:[93m35[0m - [91merror[0m[90m TS2365: [0mOperator '<' cannot be applied to types 'PromiseConstructor' and 'typeof User'.
+
+[7m518[0m   async findById(userId: string): Promise<User | null> {
+[7m   [0m [91m                                  ~~~~~~~~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m518[0m:[93m35[0m - [91merror[0m[90m TS2447: [0mThe '|' operator is not allowed for boolean types. Consider using '||' instead.
+
+[7m518[0m   async findById(userId: string): Promise<User | null> {
+[7m   [0m [91m                                  ~~~~~~~~~~~~~~~~~~~~~~[0m
+[7m519[0m     return this.userModel.findById(userId).exec();
+[7m   [0m [91m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+[7m520[0m   }
+[7m   [0m [91m~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m518[0m:[93m50[0m - [91merror[0m[90m TS18050: [0mThe value 'null' cannot be used here.
+
+[7m518[0m   async findById(userId: string): Promise<User | null> {
+[7m   [0m [91m                                                 ~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m519[0m:[93m12[0m - [91merror[0m[90m TS1005: [0m':' expected.
+
+[7m519[0m     return this.userModel.findById(userId).exec();
+[7m   [0m [91m           ~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m519[0m:[93m12[0m - [91merror[0m[90m TS2532: [0mObject is possibly 'undefined'.
+
+[7m519[0m     return this.userModel.findById(userId).exec();
+[7m   [0m [91m           ~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m519[0m:[93m36[0m - [91merror[0m[90m TS2304: [0mCannot find name 'userId'.
+
+[7m519[0m     return this.userModel.findById(userId).exec();
+[7m   [0m [91m                                   ~~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m519[0m:[93m50[0m - [91merror[0m[90m TS1005: [0m',' expected.
+
+[7m519[0m     return this.userModel.findById(userId).exec();
+[7m   [0m [91m                                                 ~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m522[0m:[93m3[0m - [91merror[0m[90m TS1434: [0mUnexpected keyword or identifier.
+
+[7m522[0m   async findByIdFormatted(userId: string) {
+[7m   [0m [91m  ~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m522[0m:[93m3[0m - [91merror[0m[90m TS2304: [0mCannot find name 'async'.
+
+[7m522[0m   async findByIdFormatted(userId: string) {
+[7m   [0m [91m  ~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m522[0m:[93m9[0m - [91merror[0m[90m TS2304: [0mCannot find name 'findByIdFormatted'.
+
+[7m522[0m   async findByIdFormatted(userId: string) {
+[7m   [0m [91m        ~~~~~~~~~~~~~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m522[0m:[93m27[0m - [91merror[0m[90m TS2304: [0mCannot find name 'userId'.
+
+[7m522[0m   async findByIdFormatted(userId: string) {
+[7m   [0m [91m                          ~~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m522[0m:[93m33[0m - [91merror[0m[90m TS1005: [0m',' expected.
+
+[7m522[0m   async findByIdFormatted(userId: string) {
+[7m   [0m [91m                                ~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m522[0m:[93m35[0m - [91merror[0m[90m TS2693: [0m'string' only refers to a type, but is being used as a value here.
+
+[7m522[0m   async findByIdFormatted(userId: string) {
+[7m   [0m [91m                                  ~~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m522[0m:[93m43[0m - [91merror[0m[90m TS1005: [0m';' expected.
+
+[7m522[0m   async findByIdFormatted(userId: string) {
+[7m   [0m [91m                                          ~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m523[0m:[93m24[0m - [91merror[0m[90m TS2532: [0mObject is possibly 'undefined'.
+
+[7m523[0m     const user = await this.userModel.findById(userId).exec();
+[7m   [0m [91m                       ~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m523[0m:[93m48[0m - [91merror[0m[90m TS2304: [0mCannot find name 'userId'.
+
+[7m523[0m     const user = await this.userModel.findById(userId).exec();
+[7m   [0m [91m                                               ~~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m525[0m:[93m12[0m - [91merror[0m[90m TS2532: [0mObject is possibly 'undefined'.
+
+[7m525[0m     return this.formatUserResponse(user);
+[7m   [0m [91m           ~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m528[0m:[93m3[0m - [91merror[0m[90m TS1434: [0mUnexpected keyword or identifier.
+
+[7m528[0m   async update(userId: string, updateUserDto: any): Promise<User | null> {
+[7m   [0m [91m  ~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m528[0m:[93m3[0m - [91merror[0m[90m TS2304: [0mCannot find name 'async'.
+
+[7m528[0m   async update(userId: string, updateUserDto: any): Promise<User | null> {
+[7m   [0m [91m  ~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m528[0m:[93m9[0m - [91merror[0m[90m TS2304: [0mCannot find name 'update'.
+
+[7m528[0m   async update(userId: string, updateUserDto: any): Promise<User | null> {
+[7m   [0m [91m        ~~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m528[0m:[93m16[0m - [91merror[0m[90m TS2304: [0mCannot find name 'userId'.
+
+[7m528[0m   async update(userId: string, updateUserDto: any): Promise<User | null> {
+[7m   [0m [91m               ~~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m528[0m:[93m22[0m - [91merror[0m[90m TS1005: [0m',' expected.
+
+[7m528[0m   async update(userId: string, updateUserDto: any): Promise<User | null> {
+[7m   [0m [91m                     ~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m528[0m:[93m24[0m - [91merror[0m[90m TS2693: [0m'string' only refers to a type, but is being used as a value here.
+
+[7m528[0m   async update(userId: string, updateUserDto: any): Promise<User | null> {
+[7m   [0m [91m                       ~~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m528[0m:[93m32[0m - [91merror[0m[90m TS2304: [0mCannot find name 'updateUserDto'.
+
+[7m528[0m   async update(userId: string, updateUserDto: any): Promise<User | null> {
+[7m   [0m [91m                               ~~~~~~~~~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m528[0m:[93m45[0m - [91merror[0m[90m TS1005: [0m',' expected.
+
+[7m528[0m   async update(userId: string, updateUserDto: any): Promise<User | null> {
+[7m   [0m [91m                                            ~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m528[0m:[93m47[0m - [91merror[0m[90m TS2693: [0m'any' only refers to a type, but is being used as a value here.
+
+[7m528[0m   async update(userId: string, updateUserDto: any): Promise<User | null> {
+[7m   [0m [91m                                              ~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m528[0m:[93m51[0m - [91merror[0m[90m TS1005: [0m';' expected.
+
+[7m528[0m   async update(userId: string, updateUserDto: any): Promise<User | null> {
+[7m   [0m [91m                                                  ~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m528[0m:[93m53[0m - [91merror[0m[90m TS2365: [0mOperator '<' cannot be applied to types 'PromiseConstructor' and 'typeof User'.
+
+[7m528[0m   async update(userId: string, updateUserDto: any): Promise<User | null> {
+[7m   [0m [91m                                                    ~~~~~~~~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m528[0m:[93m53[0m - [91merror[0m[90m TS2447: [0mThe '|' operator is not allowed for boolean types. Consider using '||' instead.
+
+[7m528[0m   async update(userId: string, updateUserDto: any): Promise<User | null> {
+[7m   [0m [91m                                                    ~~~~~~~~~~~~~~~~~~~~~~[0m
+[7m529[0m     if (updateUserDto.password) {
+[7m   [0m [91m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m528[0m:[93m68[0m - [91merror[0m[90m TS18050: [0mThe value 'null' cannot be used here.
+
+[7m528[0m   async update(userId: string, updateUserDto: any): Promise<User | null> {
+[7m   [0m [91m                                                                   ~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m529[0m:[93m22[0m - [91merror[0m[90m TS1005: [0m',' expected.
+
+[7m529[0m     if (updateUserDto.password) {
+[7m   [0m [91m                     ~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m529[0m:[93m31[0m - [91merror[0m[90m TS1005: [0m',' expected.
+
+[7m529[0m     if (updateUserDto.password) {
+[7m   [0m [91m                              ~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m529[0m:[93m33[0m - [91merror[0m[90m TS1136: [0mProperty assignment expected.
+
+[7m529[0m     if (updateUserDto.password) {
+[7m   [0m [91m                                ~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m531[0m:[93m9[0m - [91merror[0m[90m TS2532: [0mObject is possibly 'undefined'.
+
+[7m531[0m         this.configService.get<string>("BCRYPT_SALT_ROUNDS")
+[7m   [0m [91m        ~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m538[0m:[93m7[0m - [91merror[0m[90m TS2304: [0mCannot find name 'updateUserDto'.
+
+[7m538[0m       updateUserDto.password_hash = await bcrypt.hash(
+[7m   [0m [91m      ~~~~~~~~~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m539[0m:[93m9[0m - [91merror[0m[90m TS2304: [0mCannot find name 'updateUserDto'.
+
+[7m539[0m         updateUserDto.password,
+[7m   [0m [91m        ~~~~~~~~~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m543[0m:[93m7[0m - [91merror[0m[90m TS2304: [0mCannot find name 'updateUserDto'.
+
+[7m543[0m       updateUserDto.password_plain = updateUserDto.password;
+[7m   [0m [91m      ~~~~~~~~~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m543[0m:[93m38[0m - [91merror[0m[90m TS2304: [0mCannot find name 'updateUserDto'.
+
+[7m543[0m       updateUserDto.password_plain = updateUserDto.password;
+[7m   [0m [91m                                     ~~~~~~~~~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m545[0m:[93m14[0m - [91merror[0m[90m TS2304: [0mCannot find name 'updateUserDto'.
+
+[7m545[0m       delete updateUserDto.password;
+[7m   [0m [91m             ~~~~~~~~~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m548[0m:[93m12[0m - [91merror[0m[90m TS2532: [0mObject is possibly 'undefined'.
+
+[7m548[0m     return this.userModel
+[7m   [0m [91m           ~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m549[0m:[93m26[0m - [91merror[0m[90m TS2304: [0mCannot find name 'userId'.
+
+[7m549[0m       .findByIdAndUpdate(userId, updateUserDto, { new: true })
+[7m   [0m [91m                         ~~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m549[0m:[93m34[0m - [91merror[0m[90m TS2304: [0mCannot find name 'updateUserDto'.
+
+[7m549[0m       .findByIdAndUpdate(userId, updateUserDto, { new: true })
+[7m   [0m [91m                                 ~~~~~~~~~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m551[0m:[93m3[0m - [91merror[0m[90m TS1128: [0mDeclaration or statement expected.
+
+[7m551[0m   }
+[7m   [0m [91m  ~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m557[0m:[93m3[0m - [91merror[0m[90m TS1434: [0mUnexpected keyword or identifier.
+
+[7m557[0m   async connectDevice(
+[7m   [0m [91m  ~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m557[0m:[93m3[0m - [91merror[0m[90m TS2304: [0mCannot find name 'async'.
+
+[7m557[0m   async connectDevice(
+[7m   [0m [91m  ~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m557[0m:[93m9[0m - [91merror[0m[90m TS2304: [0mCannot find name 'connectDevice'.
+
+[7m557[0m   async connectDevice(
+[7m   [0m [91m        ~~~~~~~~~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m558[0m:[93m5[0m - [91merror[0m[90m TS2304: [0mCannot find name 'userId'.
+
+[7m558[0m     userId: string,
+[7m   [0m [91m    ~~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m558[0m:[93m11[0m - [91merror[0m[90m TS1005: [0m',' expected.
+
+[7m558[0m     userId: string,
+[7m   [0m [91m          ~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m558[0m:[93m13[0m - [91merror[0m[90m TS2693: [0m'string' only refers to a type, but is being used as a value here.
+
+[7m558[0m     userId: string,
+[7m   [0m [91m            ~~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m559[0m:[93m5[0m - [91merror[0m[90m TS2304: [0mCannot find name 'deviceId'.
+
+[7m559[0m     deviceId: string,
+[7m   [0m [91m    ~~~~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m559[0m:[93m13[0m - [91merror[0m[90m TS1005: [0m',' expected.
+
+[7m559[0m     deviceId: string,
+[7m   [0m [91m            ~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m559[0m:[93m15[0m - [91merror[0m[90m TS2693: [0m'string' only refers to a type, but is being used as a value here.
+
+[7m559[0m     deviceId: string,
+[7m   [0m [91m              ~~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m560[0m:[93m5[0m - [91merror[0m[90m TS2304: [0mCannot find name 'deviceService'.
+
+[7m560[0m     deviceService: any
+[7m   [0m [91m    ~~~~~~~~~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m560[0m:[93m18[0m - [91merror[0m[90m TS1005: [0m',' expected.
+
+[7m560[0m     deviceService: any
+[7m   [0m [91m                 ~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m560[0m:[93m20[0m - [91merror[0m[90m TS2693: [0m'any' only refers to a type, but is being used as a value here.
+
+[7m560[0m     deviceService: any
+[7m   [0m [91m                   ~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m561[0m:[93m4[0m - [91merror[0m[90m TS1005: [0m';' expected.
+
+[7m561[0m   ): Promise<User> {
+[7m   [0m [91m   ~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m561[0m:[93m6[0m - [91merror[0m[90m TS2365: [0mOperator '<' cannot be applied to types 'PromiseConstructor' and 'typeof User'.
+
+[7m561[0m   ): Promise<User> {
+[7m   [0m [91m     ~~~~~~~~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m561[0m:[93m6[0m - [91merror[0m[90m TS2365: [0mOperator '>' cannot be applied to types 'boolean' and '{ const: any; any: any; if(: any, user: any): any; if(: any, device: any): any; if(device: any): any; throw: NotFoundException; "": boolean; }'.
+
+[7m561[0m   ): Promise<User> {
+[7m   [0m [91m     ~~~~~~~~~~~~~~~[0m
+[7m562[0m     const user: any = await this.findById(userId);
+[7m   [0m [91m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+[7m...[0m 
+[7m567[0m 
+[7m   [0m [91m[0m
+[7m568[0m     if (device.current_user_id && device.current_user_id !== userId) {
+[7m   [0m [91m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m562[0m:[93m11[0m - [91merror[0m[90m TS1005: [0m':' expected.
+
+[7m562[0m     const user: any = await this.findById(userId);
+[7m   [0m [91m          ~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m562[0m:[93m11[0m - [91merror[0m[90m TS2304: [0mCannot find name 'user'.
+
+[7m562[0m     const user: any = await this.findById(userId);
+[7m   [0m [91m          ~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m562[0m:[93m15[0m - [91merror[0m[90m TS1005: [0m',' expected.
+
+[7m562[0m     const user: any = await this.findById(userId);
+[7m   [0m [91m              ~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m562[0m:[93m29[0m - [91merror[0m[90m TS2532: [0mObject is possibly 'undefined'.
+
+[7m562[0m     const user: any = await this.findById(userId);
+[7m   [0m [91m                            ~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m562[0m:[93m43[0m - [91merror[0m[90m TS2304: [0mCannot find name 'userId'.
+
+[7m562[0m     const user: any = await this.findById(userId);
+[7m   [0m [91m                                          ~~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m562[0m:[93m50[0m - [91merror[0m[90m TS1005: [0m',' expected.
+
+[7m562[0m     const user: any = await this.findById(userId);
+[7m   [0m [91m                                                 ~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m563[0m:[93m9[0m - [91merror[0m[90m TS1003: [0mIdentifier expected.
+
+[7m563[0m     if (!user) throw new NotFoundException("User not found");
+[7m   [0m [91m        ~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m563[0m:[93m16[0m - [91merror[0m[90m TS1005: [0m'{' expected.
+
+[7m563[0m     if (!user) throw new NotFoundException("User not found");
+[7m   [0m [91m               ~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m563[0m:[93m22[0m - [91merror[0m[90m TS1005: [0m':' expected.
+
+[7m563[0m     if (!user) throw new NotFoundException("User not found");
+[7m   [0m [91m                     ~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m563[0m:[93m61[0m - [91merror[0m[90m TS1005: [0m',' expected.
+
+[7m563[0m     if (!user) throw new NotFoundException("User not found");
+[7m   [0m [91m                                                            ~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m565[0m:[93m11[0m - [91merror[0m[90m TS1005: [0m':' expected.
+
+[7m565[0m     const device = await deviceService.findOne(deviceId);
+[7m   [0m [91m          ~~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m565[0m:[93m11[0m - [91merror[0m[90m TS2304: [0mCannot find name 'device'.
+
+[7m565[0m     const device = await deviceService.findOne(deviceId);
+[7m   [0m [91m          ~~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m565[0m:[93m26[0m - [91merror[0m[90m TS2304: [0mCannot find name 'deviceService'.
+
+[7m565[0m     const device = await deviceService.findOne(deviceId);
+[7m   [0m [91m                         ~~~~~~~~~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m565[0m:[93m48[0m - [91merror[0m[90m TS2304: [0mCannot find name 'deviceId'.
+
+[7m565[0m     const device = await deviceService.findOne(deviceId);
+[7m   [0m [91m                                               ~~~~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m565[0m:[93m57[0m - [91merror[0m[90m TS1005: [0m',' expected.
+
+[7m565[0m     const device = await deviceService.findOne(deviceId);
+[7m   [0m [91m                                                        ~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m566[0m:[93m9[0m - [91merror[0m[90m TS1003: [0mIdentifier expected.
+
+[7m566[0m     if (!device) throw new NotFoundException("Device not found");
+[7m   [0m [91m        ~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m566[0m:[93m18[0m - [91merror[0m[90m TS1005: [0m'{' expected.
+
+[7m566[0m     if (!device) throw new NotFoundException("Device not found");
+[7m   [0m [91m                 ~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m566[0m:[93m24[0m - [91merror[0m[90m TS1005: [0m':' expected.
+
+[7m566[0m     if (!device) throw new NotFoundException("Device not found");
+[7m   [0m [91m                       ~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m566[0m:[93m65[0m - [91merror[0m[90m TS1005: [0m',' expected.
+
+[7m566[0m     if (!device) throw new NotFoundException("Device not found");
+[7m   [0m [91m                                                                ~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m568[0m:[93m15[0m - [91merror[0m[90m TS1005: [0m',' expected.
+
+[7m568[0m     if (device.current_user_id && device.current_user_id !== userId) {
+[7m   [0m [91m              ~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m568[0m:[93m35[0m - [91merror[0m[90m TS2304: [0mCannot find name 'device'.
+
+[7m568[0m     if (device.current_user_id && device.current_user_id !== userId) {
+[7m   [0m [91m                                  ~~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m568[0m:[93m62[0m - [91merror[0m[90m TS2304: [0mCannot find name 'userId'.
+
+[7m568[0m     if (device.current_user_id && device.current_user_id !== userId) {
+[7m   [0m [91m                                                             ~~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m568[0m:[93m68[0m - [91merror[0m[90m TS1005: [0m',' expected.
+
+[7m568[0m     if (device.current_user_id && device.current_user_id !== userId) {
+[7m   [0m [91m                                                                   ~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m568[0m:[93m70[0m - [91merror[0m[90m TS1136: [0mProperty assignment expected.
+
+[7m568[0m     if (device.current_user_id && device.current_user_id !== userId) {
+[7m   [0m [91m                                                                     ~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m572[0m:[93m9[0m - [91merror[0m[90m TS2304: [0mCannot find name 'user'.
+
+[7m572[0m     if (user.device_id && user.device_id.toString() !== deviceId) {
+[7m   [0m [91m        ~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m572[0m:[93m27[0m - [91merror[0m[90m TS2304: [0mCannot find name 'user'.
+
+[7m572[0m     if (user.device_id && user.device_id.toString() !== deviceId) {
+[7m   [0m [91m                          ~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m572[0m:[93m57[0m - [91merror[0m[90m TS2304: [0mCannot find name 'deviceId'.
+
+[7m572[0m     if (user.device_id && user.device_id.toString() !== deviceId) {
+[7m   [0m [91m                                                        ~~~~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m576[0m:[93m25[0m - [91merror[0m[90m TS2304: [0mCannot find name 'user'.
+
+[7m576[0m     const shouldStart = user.remaining_seconds > 0 && user.started_at == null;
+[7m   [0m [91m                        ~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m576[0m:[93m55[0m - [91merror[0m[90m TS2304: [0mCannot find name 'user'.
+
+[7m576[0m     const shouldStart = user.remaining_seconds > 0 && user.started_at == null;
+[7m   [0m [91m                                                      ~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m578[0m:[93m11[0m - [91merror[0m[90m TS2451: [0mCannot redeclare block-scoped variable 'updatedUser'.
+
+[7m578[0m     const updatedUser = await this.userModel
+[7m   [0m [91m          ~~~~~~~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m578[0m:[93m31[0m - [91merror[0m[90m TS2532: [0mObject is possibly 'undefined'.
+
+[7m578[0m     const updatedUser = await this.userModel
+[7m   [0m [91m                              ~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m580[0m:[93m9[0m - [91merror[0m[90m TS2304: [0mCannot find name 'userId'.
+
+[7m580[0m         userId,
+[7m   [0m [91m        ~~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m583[0m:[93m22[0m - [91merror[0m[90m TS2304: [0mCannot find name 'deviceId'.
+
+[7m583[0m           device_id: deviceId,
+[7m   [0m [91m                     ~~~~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m590[0m:[93m11[0m - [91merror[0m[90m TS2304: [0mCannot find name 'deviceService'.
+
+[7m590[0m     await deviceService.update(deviceId, {
+[7m   [0m [91m          ~~~~~~~~~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m590[0m:[93m32[0m - [91merror[0m[90m TS2304: [0mCannot find name 'deviceId'.
+
+[7m590[0m     await deviceService.update(deviceId, {
+[7m   [0m [91m                               ~~~~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m591[0m:[93m24[0m - [91merror[0m[90m TS2304: [0mCannot find name 'userId'.
+
+[7m591[0m       current_user_id: userId,
+[7m   [0m [91m                       ~~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m596[0m:[93m3[0m - [91merror[0m[90m TS1128: [0mDeclaration or statement expected.
+
+[7m596[0m   }
+[7m   [0m [91m  ~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m601[0m:[93m3[0m - [91merror[0m[90m TS1434: [0mUnexpected keyword or identifier.
+
+[7m601[0m   async disconnectDevice(userId: string, deviceService: any): Promise<User> {
+[7m   [0m [91m  ~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m601[0m:[93m3[0m - [91merror[0m[90m TS2304: [0mCannot find name 'async'.
+
+[7m601[0m   async disconnectDevice(userId: string, deviceService: any): Promise<User> {
+[7m   [0m [91m  ~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m601[0m:[93m9[0m - [91merror[0m[90m TS2304: [0mCannot find name 'disconnectDevice'.
+
+[7m601[0m   async disconnectDevice(userId: string, deviceService: any): Promise<User> {
+[7m   [0m [91m        ~~~~~~~~~~~~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m601[0m:[93m26[0m - [91merror[0m[90m TS2304: [0mCannot find name 'userId'.
+
+[7m601[0m   async disconnectDevice(userId: string, deviceService: any): Promise<User> {
+[7m   [0m [91m                         ~~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m601[0m:[93m32[0m - [91merror[0m[90m TS1005: [0m',' expected.
+
+[7m601[0m   async disconnectDevice(userId: string, deviceService: any): Promise<User> {
+[7m   [0m [91m                               ~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m601[0m:[93m34[0m - [91merror[0m[90m TS2693: [0m'string' only refers to a type, but is being used as a value here.
+
+[7m601[0m   async disconnectDevice(userId: string, deviceService: any): Promise<User> {
+[7m   [0m [91m                                 ~~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m601[0m:[93m42[0m - [91merror[0m[90m TS2304: [0mCannot find name 'deviceService'.
+
+[7m601[0m   async disconnectDevice(userId: string, deviceService: any): Promise<User> {
+[7m   [0m [91m                                         ~~~~~~~~~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m601[0m:[93m55[0m - [91merror[0m[90m TS1005: [0m',' expected.
+
+[7m601[0m   async disconnectDevice(userId: string, deviceService: any): Promise<User> {
+[7m   [0m [91m                                                      ~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m601[0m:[93m57[0m - [91merror[0m[90m TS2693: [0m'any' only refers to a type, but is being used as a value here.
+
+[7m601[0m   async disconnectDevice(userId: string, deviceService: any): Promise<User> {
+[7m   [0m [91m                                                        ~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m601[0m:[93m61[0m - [91merror[0m[90m TS1005: [0m';' expected.
+
+[7m601[0m   async disconnectDevice(userId: string, deviceService: any): Promise<User> {
+[7m   [0m [91m                                                            ~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m601[0m:[93m63[0m - [91merror[0m[90m TS2365: [0mOperator '<' cannot be applied to types 'PromiseConstructor' and 'typeof User'.
+
+[7m601[0m   async disconnectDevice(userId: string, deviceService: any): Promise<User> {
+[7m   [0m [91m                                                              ~~~~~~~~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m601[0m:[93m63[0m - [91merror[0m[90m TS2365: [0mOperator '>' cannot be applied to types 'boolean' and '{ const: any; any: any; if(: any, user: any): any; if(: any, user: any): any; throw: NotFoundException; "": any; }'.
+
+[7m601[0m   async disconnectDevice(userId: string, deviceService: any): Promise<User> {
+[7m   [0m [91m                                                              ~~~~~~~~~~~~~~~[0m
+[7m602[0m     const user: any = await this.findById(userId);
+[7m   [0m [91m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+[7m603[0m     if (!user) throw new NotFoundException("User not found");
+[7m   [0m [91m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+[7m604[0m     if (!user.device_id) {
+[7m   [0m [91m~~~~~~~~~~~~~~~~~~~~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m602[0m:[93m11[0m - [91merror[0m[90m TS1005: [0m':' expected.
+
+[7m602[0m     const user: any = await this.findById(userId);
+[7m   [0m [91m          ~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m602[0m:[93m11[0m - [91merror[0m[90m TS2304: [0mCannot find name 'user'.
+
+[7m602[0m     const user: any = await this.findById(userId);
+[7m   [0m [91m          ~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m602[0m:[93m15[0m - [91merror[0m[90m TS1005: [0m',' expected.
+
+[7m602[0m     const user: any = await this.findById(userId);
+[7m   [0m [91m              ~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m602[0m:[93m29[0m - [91merror[0m[90m TS2532: [0mObject is possibly 'undefined'.
+
+[7m602[0m     const user: any = await this.findById(userId);
+[7m   [0m [91m                            ~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m602[0m:[93m43[0m - [91merror[0m[90m TS2304: [0mCannot find name 'userId'.
+
+[7m602[0m     const user: any = await this.findById(userId);
+[7m   [0m [91m                                          ~~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m602[0m:[93m50[0m - [91merror[0m[90m TS1005: [0m',' expected.
+
+[7m602[0m     const user: any = await this.findById(userId);
+[7m   [0m [91m                                                 ~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m603[0m:[93m9[0m - [91merror[0m[90m TS1003: [0mIdentifier expected.
+
+[7m603[0m     if (!user) throw new NotFoundException("User not found");
+[7m   [0m [91m        ~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m603[0m:[93m16[0m - [91merror[0m[90m TS1005: [0m'{' expected.
+
+[7m603[0m     if (!user) throw new NotFoundException("User not found");
+[7m   [0m [91m               ~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m603[0m:[93m22[0m - [91merror[0m[90m TS1005: [0m':' expected.
+
+[7m603[0m     if (!user) throw new NotFoundException("User not found");
+[7m   [0m [91m                     ~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m603[0m:[93m61[0m - [91merror[0m[90m TS1005: [0m',' expected.
+
+[7m603[0m     if (!user) throw new NotFoundException("User not found");
+[7m   [0m [91m                                                            ~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m604[0m:[93m9[0m - [91merror[0m[90m TS1003: [0mIdentifier expected.
+
+[7m604[0m     if (!user.device_id) {
+[7m   [0m [91m        ~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m604[0m:[93m14[0m - [91merror[0m[90m TS1005: [0m',' expected.
+
+[7m604[0m     if (!user.device_id) {
+[7m   [0m [91m             ~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m604[0m:[93m24[0m - [91merror[0m[90m TS1005: [0m',' expected.
+
+[7m604[0m     if (!user.device_id) {
+[7m   [0m [91m                       ~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m604[0m:[93m26[0m - [91merror[0m[90m TS1136: [0mProperty assignment expected.
+
+[7m604[0m     if (!user.device_id) {
+[7m   [0m [91m                         ~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m608[0m:[93m31[0m - [91merror[0m[90m TS2532: [0mObject is possibly 'undefined'.
+
+[7m608[0m     const realtimeRemaining = this.calcRemaining(user);
+[7m   [0m [91m                              ~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m608[0m:[93m50[0m - [91merror[0m[90m TS2304: [0mCannot find name 'user'.
+
+[7m608[0m     const realtimeRemaining = this.calcRemaining(user);
+[7m   [0m [91m                                                 ~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m610[0m:[93m25[0m - [91merror[0m[90m TS2304: [0mCannot find name 'user'.
+
+[7m610[0m     const oldDeviceId = user.device_id;
+[7m   [0m [91m                        ~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m612[0m:[93m11[0m - [91merror[0m[90m TS2451: [0mCannot redeclare block-scoped variable 'updatedUser'.
+
+[7m612[0m     const updatedUser = await this.userModel
+[7m   [0m [91m          ~~~~~~~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m612[0m:[93m31[0m - [91merror[0m[90m TS2532: [0mObject is possibly 'undefined'.
+
+[7m612[0m     const updatedUser = await this.userModel
+[7m   [0m [91m                              ~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m614[0m:[93m9[0m - [91merror[0m[90m TS2304: [0mCannot find name 'userId'.
+
+[7m614[0m         userId,
+[7m   [0m [91m        ~~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m625[0m:[93m11[0m - [91merror[0m[90m TS2304: [0mCannot find name 'deviceService'.
+
+[7m625[0m     await deviceService.update(oldDeviceId.toString(), {
+[7m   [0m [91m          ~~~~~~~~~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m631[0m:[93m3[0m - [91merror[0m[90m TS1128: [0mDeclaration or statement expected.
+
+[7m631[0m   }
+[7m   [0m [91m  ~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m633[0m:[93m3[0m - [91merror[0m[90m TS1434: [0mUnexpected keyword or identifier.
+
+[7m633[0m   async delete(userId: string): Promise<void> {
+[7m   [0m [91m  ~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m633[0m:[93m3[0m - [91merror[0m[90m TS2304: [0mCannot find name 'async'.
+
+[7m633[0m   async delete(userId: string): Promise<void> {
+[7m   [0m [91m  ~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m633[0m:[93m16[0m - [91merror[0m[90m TS2304: [0mCannot find name 'userId'.
+
+[7m633[0m   async delete(userId: string): Promise<void> {
+[7m   [0m [91m               ~~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m633[0m:[93m16[0m - [91merror[0m[90m TS2703: [0mThe operand of a 'delete' operator must be a property reference.
+
+[7m633[0m   async delete(userId: string): Promise<void> {
+[7m   [0m [91m               ~~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m633[0m:[93m22[0m - [91merror[0m[90m TS1005: [0m')' expected.
+
+[7m633[0m   async delete(userId: string): Promise<void> {
+[7m   [0m [91m                     ~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m633[0m:[93m24[0m - [91merror[0m[90m TS1434: [0mUnexpected keyword or identifier.
+
+[7m633[0m   async delete(userId: string): Promise<void> {
+[7m   [0m [91m                       ~~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m633[0m:[93m24[0m - [91merror[0m[90m TS2693: [0m'string' only refers to a type, but is being used as a value here.
+
+[7m633[0m   async delete(userId: string): Promise<void> {
+[7m   [0m [91m                       ~~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m633[0m:[93m30[0m - [91merror[0m[90m TS1128: [0mDeclaration or statement expected.
+
+[7m633[0m   async delete(userId: string): Promise<void> {
+[7m   [0m [91m                             ~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m633[0m:[93m31[0m - [91merror[0m[90m TS1128: [0mDeclaration or statement expected.
+
+[7m633[0m   async delete(userId: string): Promise<void> {
+[7m   [0m [91m                              ~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m633[0m:[93m33[0m - [91merror[0m[90m TS2365: [0mOperator '>' cannot be applied to types 'boolean' and '{ await: any; this: any; }'.
+
+[7m633[0m   async delete(userId: string): Promise<void> {
+[7m   [0m [91m                                ~~~~~~~~~~~~~~~[0m
+[7m634[0m     await this.userModel.findByIdAndDelete(userId).exec();
+[7m   [0m [91m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+[7m635[0m   }
+[7m   [0m [91m~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m633[0m:[93m41[0m - [91merror[0m[90m TS2532: [0mObject is possibly 'undefined'.
+
+[7m633[0m   async delete(userId: string): Promise<void> {
+[7m   [0m [91m                                        ~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m633[0m:[93m45[0m - [91merror[0m[90m TS1109: [0mExpression expected.
+
+[7m633[0m   async delete(userId: string): Promise<void> {
+[7m   [0m [91m                                            ~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m634[0m:[93m5[0m - [91merror[0m[90m TS18004: [0mNo value exists in scope for the shorthand property 'await'. Either declare one or provide an initializer.
+
+[7m634[0m     await this.userModel.findByIdAndDelete(userId).exec();
+[7m   [0m [91m    ~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m634[0m:[93m11[0m - [91merror[0m[90m TS1005: [0m',' expected.
+
+[7m634[0m     await this.userModel.findByIdAndDelete(userId).exec();
+[7m   [0m [91m          ~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m634[0m:[93m15[0m - [91merror[0m[90m TS1005: [0m':' expected.
+
+[7m634[0m     await this.userModel.findByIdAndDelete(userId).exec();
+[7m   [0m [91m              ~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m634[0m:[93m44[0m - [91merror[0m[90m TS2304: [0mCannot find name 'userId'.
+
+[7m634[0m     await this.userModel.findByIdAndDelete(userId).exec();
+[7m   [0m [91m                                           ~~~~~~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m634[0m:[93m58[0m - [91merror[0m[90m TS1005: [0m',' expected.
+
+[7m634[0m     await this.userModel.findByIdAndDelete(userId).exec();
+[7m   [0m [91m                                                         ~[0m
+[96msrc/modules/users/users.service.ts[0m:[93m636[0m:[93m1[0m - [91merror[0m[90m TS1128: [0mDeclaration or statement expected.
+
+[7m636[0m }
+[7m   [0m [91m~[0m
+[96msrc/seed/seed-admin.ts[0m:[93m20[0m:[93m44[0m - [91merror[0m[90m TS2339: [0mProperty 'findByUsername' does not exist on type 'UsersService'.
+
+[7m20[0m   const existingAdmin = await usersService.findByUsername(adminUsername);
+[7m  [0m [91m                                           ~~~~~~~~~~~~~~[0m
+
+Found 220 error(s).
+
