@@ -21,8 +21,8 @@ import {
   saveOrientationMode,
   cycleOrientationMode,
   orientationLabel,
-  computeFrameAspectRatio,
-  isLandscapeFrame,
+  frameAspectRatioCss,
+  getFrameDimensions,
 } from "@/lib/screen-orientation";
 
 const BASE_URL = (
@@ -293,9 +293,9 @@ export function SessionPhoneControl({
     "unknown",
   );
 
-  const screenAspectRatio = useMemo(
+  const frameAspectCss = useMemo(
     () =>
-      computeFrameAspectRatio(
+      frameAspectRatioCss(
         streamSize.width,
         streamSize.height,
         orientationMode,
@@ -303,7 +303,14 @@ export function SessionPhoneControl({
     [streamSize.width, streamSize.height, orientationMode],
   );
 
-  const landscapeFrame = isLandscapeFrame(screenAspectRatio);
+  const landscapeFrame = useMemo(() => {
+    const { width, height } = getFrameDimensions(
+      streamSize.width,
+      streamSize.height,
+      orientationMode,
+    );
+    return width >= height;
+  }, [streamSize.width, streamSize.height, orientationMode]);
 
   const applyStreamDimensions = useCallback((width: number, height: number) => {
     if (width > 0 && height > 0) {
@@ -478,23 +485,23 @@ export function SessionPhoneControl({
       <Monitor className="h-3.5 w-3.5" />
     );
 
-  const frameSizeStyle: React.CSSProperties = isExpanded
-    ? landscapeFrame
-      ? { width: "100%", maxHeight: "min(78vh, 520px)" }
-      : { width: "100%", maxHeight: "min(82vh, 720px)" }
-    : { width: "100%" };
+  const frameSizeStyle: React.CSSProperties = {
+    width: "100%",
+    aspectRatio: frameAspectCss,
+    ...(isExpanded && landscapeFrame
+      ? { maxHeight: "min(78vh, 520px)" }
+      : isExpanded
+        ? { maxHeight: "min(82vh, 720px)" }
+        : {}),
+  };
 
   const deviceName = session.device_id?.name || "Device";
 
   return (
     <motion.div
-      layout
       className={`flex w-full min-w-0 shrink-0 flex-col ${shellMaxClass}`}
     >
-      <motion.div
-        layout
-        className="flex w-full min-w-0 flex-col overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/50 p-2 shadow-lg shadow-black/20 sm:rounded-3xl sm:p-3 md:p-3.5"
-      >
+      <div className="flex w-full min-w-0 flex-col overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/50 p-2 shadow-lg shadow-black/20 sm:rounded-3xl sm:p-3 md:p-3.5">
         <motion.div
           layout
           className="mb-2 flex min-w-0 items-center gap-1 border-b border-slate-800/90 pb-2 sm:mb-3 sm:gap-1.5 sm:pb-2.5"
@@ -553,17 +560,19 @@ export function SessionPhoneControl({
         </motion.div>
         </motion.div>
 
-        <motion.div layout className="relative mx-auto w-full min-w-0">
         <motion.div
           layout
+          className="relative mx-auto w-full min-w-0"
           transition={{ type: "spring", stiffness: 320, damping: 32 }}
+        >
+        <div
+          key={`${orientationMode}-${frameAspectCss}`}
           className="relative mx-auto w-full min-w-0 overflow-hidden rounded-[1.75rem] border-[3px] border-slate-700 bg-slate-900 shadow-xl shadow-cyan-900/20 sm:rounded-[2rem] sm:border-4 md:rounded-[2.25rem]"
           style={{
-            aspectRatio: String(screenAspectRatio),
+            ...frameSizeStyle,
             isolation: "isolate",
             userSelect: "none",
             WebkitUserSelect: "none",
-            ...frameSizeStyle,
           }}
         >
           {/* ── stream layer ── */}
@@ -634,14 +643,11 @@ export function SessionPhoneControl({
               </span>
             </div>
           )}
-        </motion.div>
+        </div>
 
         {/* ── Android nav buttons (Back / Home / Recents) ── */}
         {streamActive && deviceId && (
-          <motion.div
-            layout
-            className="mt-3 flex min-w-0 justify-around gap-1 px-0.5 sm:mt-4 sm:gap-2 sm:px-1"
-          >
+          <div className="mt-3 flex min-w-0 justify-around gap-1 px-0.5 sm:mt-4 sm:gap-2 sm:px-1">
             {[
               { icon: <RotateCcw className="h-4 w-4 sm:h-5 sm:w-5" />, key: KEY.BACK,    label: "Back"    },
               { icon: <Home       className="h-4 w-4 sm:h-5 sm:w-5" />, key: KEY.HOME,    label: "Home"    },
@@ -662,10 +668,10 @@ export function SessionPhoneControl({
                 <span className="text-[8px] text-slate-500 sm:text-[9px]">{btn.label}</span>
               </button>
             ))}
-          </motion.div>
+          </div>
         )}
         </motion.div>
-      </motion.div>
+      </div>
     </motion.div>
   );
 }
