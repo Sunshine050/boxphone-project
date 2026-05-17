@@ -37,6 +37,9 @@ module.exports = {
         SCRCPY_PORT_POOL_SIZE: '100',
         SCRCPY_IDLE_TIMEOUT_MS: '30000',
         MAX_CONCURRENT_STREAMS: '20',
+        // c2.android.avc.encoder = software H.264 fallback — avoids
+        // OMX.qcom.video.encoder.avc stack-corruption crash on Android 10 + Samsung
+        SCRCPY_VIDEO_ENCODER: 'c2.android.avc.encoder',
       },
     },
 

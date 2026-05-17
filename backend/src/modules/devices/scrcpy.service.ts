@@ -103,6 +103,12 @@ export class ScrcpyService implements OnModuleInit, OnModuleDestroy {
     return parseInt(this.config.get<string>("SCRCPY_MAX_SIZE") || "1280", 10);
   }
 
+  /** Optional encoder override — e.g. "c2.android.avc.encoder" to avoid
+   *  OMX.qcom.video.encoder.avc stack-corruption crash on some Samsung/Qualcomm devices. */
+  private get videoEncoder(): string {
+    return this.config.get<string>("SCRCPY_VIDEO_ENCODER") || "";
+  }
+
   private get portPoolStart(): number {
     return parseInt(
       this.config.get<string>("SCRCPY_PORT_POOL_START") || "27183",
@@ -488,8 +494,16 @@ export class ScrcpyService implements OnModuleInit, OnModuleDestroy {
         "send_codec_meta=true",
       ];
 
+      // Allow overriding the video encoder to work around OMX crashes on
+      // some Samsung/Qualcomm devices (e.g. OMX.qcom.video.encoder.avc
+      // causes stack corruption on Android 10 + scrcpy 2.4).
+      if (this.videoEncoder) {
+        scrcpyArgs.push(`video_encoder=${this.videoEncoder}`);
+      }
+
       this.logger.log(
-        `[scrcpy/${serial}] launching: adb ${scrcpyArgs.slice(0, 3).join(" ")} ... scid=${scid}`,
+        `[scrcpy/${serial}] launching: adb ${scrcpyArgs.slice(0, 3).join(" ")} ... scid=${scid}` +
+          (this.videoEncoder ? ` encoder=${this.videoEncoder}` : ""),
       );
 
       state.shellProcess = spawn(this.adbPath, scrcpyArgs, {
