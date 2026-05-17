@@ -36,6 +36,7 @@ interface ScrcpyStreamState {
   shellProcess: ChildProcess | null;
   socket: net.Socket | null;
   deviceName: string;
+  codecId: string;
   width: number;
   height: number;
   configPacket: Buffer | null;
@@ -43,7 +44,8 @@ interface ScrcpyStreamState {
   idleTimer: NodeJS.Timeout | null;
   status: "starting" | "running" | "stopping" | "stopped";
   buffer: Buffer;
-  metaReceived: boolean;
+  deviceMetaReceived: boolean;
+  videoHeaderReceived: boolean;
 }
 
 /**
@@ -209,6 +211,10 @@ export class ScrcpyService implements OnModuleInit, OnModuleDestroy {
       stream.idleTimer = null;
     }
 
+    // Wait until scrcpy sends the video header (codec_id + width + height)
+    // so the metadata we return is correct. Bounded to 5s to avoid hangs.
+    await this.waitForVideoHeader(stream, 5000);
+
     stream.subscribers.set(subscriberId, listener);
 
     if (stream.configPacket) {
@@ -238,6 +244,27 @@ export class ScrcpyService implements OnModuleInit, OnModuleDestroy {
     };
   }
 
+  private waitForVideoHeader(
+    state: ScrcpyStreamState,
+    timeoutMs: number,
+  ): Promise<void> {
+    if (state.videoHeaderReceived) return Promise.resolve();
+    return new Promise((resolve) => {
+      const startedAt = Date.now();
+      const tick = () => {
+        if (state.videoHeaderReceived) return resolve();
+        if (Date.now() - startedAt >= timeoutMs) {
+          this.logger.warn(
+            `[scrcpy/${state.serial}] video header not received within ${timeoutMs}ms — returning zero metadata`,
+          );
+          return resolve();
+        }
+        setTimeout(tick, 100);
+      };
+      tick();
+    });
+  }
+
   unsubscribe(serial: string, subscriberId: string): void {
     const stream = this.streams.get(serial);
     if (!stream) return;
@@ -258,7 +285,7 @@ export class ScrcpyService implements OnModuleInit, OnModuleDestroy {
 
   getStreamMetadata(serial: string): StreamMetadata | null {
     const stream = this.streams.get(serial);
-    if (!stream || !stream.metaReceived) return null;
+    if (!stream || !stream.videoHeaderReceived) return null;
     return {
       width: stream.width,
       height: stream.height,
@@ -317,6 +344,7 @@ export class ScrcpyService implements OnModuleInit, OnModuleDestroy {
       shellProcess: null,
       socket: null,
       deviceName: "",
+      codecId: "",
       width: 0,
       height: 0,
       configPacket: null,
@@ -324,7 +352,8 @@ export class ScrcpyService implements OnModuleInit, OnModuleDestroy {
       idleTimer: null,
       status: "starting",
       buffer: Buffer.alloc(0),
-      metaReceived: false,
+      deviceMetaReceived: false,
+      videoHeaderReceived: false,
     };
 
     this.streams.set(serial, state);
@@ -463,21 +492,36 @@ export class ScrcpyService implements OnModuleInit, OnModuleDestroy {
   private handleData(state: ScrcpyStreamState, chunk: Buffer): void {
     state.buffer = Buffer.concat([state.buffer, chunk]);
 
-    if (!state.metaReceived) {
-      // Initial frame: dummy(1) + device_name(64) + width(4) + height(4) = 73 bytes
-      const META_LEN = 1 + 64 + 4 + 4;
-      if (state.buffer.length < META_LEN) return;
+    // scrcpy v2.x protocol order (send_dummy_byte=true, send_device_meta=true):
+    //   1) dummy byte (1)
+    //   2) device meta: name (DEVICE_NAME_FIELD_LENGTH = 64)
+    //   3) video stream header: codec_id (4) + width (4) + height (4) = 12
+    //   4) repeated frame: pts+flags (8) + size (4) + payload(size)
+    if (!state.deviceMetaReceived) {
+      const DEVICE_META_LEN = 1 + 64;
+      if (state.buffer.length < DEVICE_META_LEN) return;
       const nameBuf = state.buffer.slice(1, 65);
       const nullIdx = nameBuf.indexOf(0);
       state.deviceName = nameBuf
         .slice(0, nullIdx === -1 ? 64 : nullIdx)
         .toString("utf8");
-      state.width = state.buffer.readUInt32BE(65);
-      state.height = state.buffer.readUInt32BE(69);
-      state.buffer = state.buffer.slice(META_LEN);
-      state.metaReceived = true;
+      state.buffer = state.buffer.slice(DEVICE_META_LEN);
+      state.deviceMetaReceived = true;
+    }
+
+    if (!state.videoHeaderReceived) {
+      const VIDEO_HEADER_LEN = 12;
+      if (state.buffer.length < VIDEO_HEADER_LEN) return;
+      // codec_id is 4-byte ASCII tag (e.g. 0x68323634 = "h264")
+      const codecIdBuf = state.buffer.slice(0, 4);
+      const codecAscii = codecIdBuf.toString("ascii").replace(/\0+$/, "");
+      state.codecId = codecAscii || codecIdBuf.toString("hex");
+      state.width = state.buffer.readUInt32BE(4);
+      state.height = state.buffer.readUInt32BE(8);
+      state.buffer = state.buffer.slice(VIDEO_HEADER_LEN);
+      state.videoHeaderReceived = true;
       this.logger.log(
-        `[scrcpy/${state.serial}] meta: name="${state.deviceName}" ${state.width}x${state.height}`,
+        `[scrcpy/${state.serial}] meta: name="${state.deviceName}" codec=${state.codecId} ${state.width}x${state.height}`,
       );
     }
 

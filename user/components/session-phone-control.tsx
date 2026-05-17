@@ -392,7 +392,7 @@ export function SessionPhoneControl({
             isExpanded ? { aspectRatio: String(screenAspectRatio) } : undefined
           }
         >
-          {streamingMode === "scrcpy" && deviceSerial ? (
+          {streamingMode === "scrcpy" && deviceSerial && !expired ? (
             <H264Player
               ref={h264PlayerRef}
               deviceSerial={deviceSerial}
@@ -454,7 +454,7 @@ export function SessionPhoneControl({
               <div className="pointer-events-none absolute right-2 top-2 z-10 flex items-center gap-1 rounded-full bg-black/60 px-2 py-0.5">
                 <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-green-400" />
                 <span className="text-[9px] font-semibold text-green-400">
-                  {streamingMode === "scrcpy" ? "LIVE • H.264" : "LIVE"}
+                  {streamingMode === "scrcpy" ? "LIVE \u2022 H.264" : "LIVE"}
                 </span>
               </div>
             )}
