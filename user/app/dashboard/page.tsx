@@ -36,12 +36,14 @@ export default function DashboardPage() {
     loadSessions();
 
     // Sync client clock against server clock so countdowns don't drift if the
-    // user's machine clock is wrong. Re-syncs every 10 minutes.
+    // user's machine clock is wrong. Re-syncs every 5 minutes.
+    // The first sync forces a sessions reload so that remaining_seconds and
+    // the corrected now() both come from server time at the same moment.
     const apiBase = getApiBaseUrl();
-    syncServerTime(apiBase);
+    syncServerTime(apiBase).then(() => loadSessions());
     const syncTimer = setInterval(() => {
-      syncServerTime(apiBase);
-    }, 10 * 60 * 1000);
+      syncServerTime(apiBase).then(() => loadSessions());
+    }, 5 * 60 * 1000);
 
     let cancelled = false;
     let socket: ReturnType<typeof getNotificationSocket> | null = null;

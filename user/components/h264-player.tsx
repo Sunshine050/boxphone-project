@@ -178,6 +178,10 @@ export const H264Player = forwardRef<H264PlayerHandle, H264PlayerProps>(
     const configPacketRef = useRef<Uint8Array | null>(null);
     const naturalSizeRef = useRef({ width: 0, height: 0 });
     const decoderConfiguredRef = useRef(false);
+    // After configure() or a reconfigure triggered by a new config packet,
+    // WebCodecs requires the very first chunk to be a keyframe.  Drop all
+    // delta frames until one arrives.
+    const waitingKeyFrameRef = useRef(true);
     const subscribedRef = useRef(false);
     const ptsRef = useRef(0);
     const [status, setStatus] = useState<
@@ -237,6 +241,7 @@ export const H264Player = forwardRef<H264PlayerHandle, H264PlayerProps>(
         }
         decoderRef.current = null;
         decoderConfiguredRef.current = false;
+        waitingKeyFrameRef.current = true; // need keyframe after every (re)configure
       };
 
       const handleDecodedFrame = (frame: VideoFrame) => {
@@ -368,6 +373,13 @@ export const H264Player = forwardRef<H264PlayerHandle, H264PlayerProps>(
           decoderRef.current.state !== "configured"
         ) {
           return; // not ready yet — drop frame until decoder warm
+        }
+
+        // After configure() / reconfigure, WebCodecs MUST receive a keyframe
+        // first — delta frames before that cause DataError.  Drop until IDR.
+        if (waitingKeyFrameRef.current) {
+          if (!payload.isKeyFrame) return;
+          waitingKeyFrameRef.current = false;
         }
 
         // Convert Annex-B (start-code prefixed) → AVCC (length-prefixed) so

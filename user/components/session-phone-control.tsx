@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
-import { Expand, Home, RotateCcw, Square } from "lucide-react";
+import { Expand, Home, PauseCircle, RotateCcw, Square } from "lucide-react";
 import type { Session } from "@/types/session";
 import { H264Player, type H264PlayerHandle } from "@/components/h264-player";
 import { formatDurationThai } from "@boxphon/shared/client/format-duration";
@@ -75,6 +75,22 @@ function TouchOverlay({
   } | null>(null);
   const rippleId = useRef(0);
 
+  // Tap: dist < TAP_PX (generous — small card is ~220px wide)
+  // Swipe: dist >= SWIPE_PX
+  const TAP_PX = 30;
+  const TAP_MS = 600;
+  const SWIPE_PX = 22;
+
+  // Bind touchstart as non-passive so preventDefault() works (stops page scroll)
+  useEffect(() => {
+    const el = divRef.current;
+    if (!el) return;
+    const onTouchStartPassive = (e: TouchEvent) => e.preventDefault();
+    el.addEventListener("touchstart", onTouchPassive, { passive: false });
+    return () => el.removeEventListener("touchstart", onTouchPassive);
+    function onTouchPassive(e: TouchEvent) { e.preventDefault(); }
+  }, []);
+
   const toAndroid = useCallback(
     (clientX: number, clientY: number) => {
       const rect = divRef.current!.getBoundingClientRect();
@@ -109,15 +125,17 @@ function TouchOverlay({
   );
 
   const showRipple = (clientX: number, clientY: number) => {
-    const rect = divRef.current!.getBoundingClientRect();
+    const rect = divRef.current?.getBoundingClientRect();
+    if (!rect) return;
     const id = ++rippleId.current;
     setRipple({ x: clientX - rect.left, y: clientY - rect.top, id });
-    setTimeout(() => setRipple((r) => (r?.id === id ? null : r)), 400);
+    setTimeout(() => setRipple((r) => (r?.id === id ? null : r)), 350);
   };
 
   const handleMouseDown = (e: React.MouseEvent) => {
     touchStartRef.current = { x: e.clientX, y: e.clientY, t: Date.now() };
   };
+  const cancelMouse = () => { touchStartRef.current = null; };
   const handleMouseUp = (e: React.MouseEvent) => {
     if (!touchStartRef.current) return;
     const { x: sx, y: sy, t } = touchStartRef.current;
@@ -127,27 +145,27 @@ function TouchOverlay({
     const dist = Math.hypot(dx, dy);
     const dt = Date.now() - t;
 
-    if (dist < 10 && dt < 400) {
+    if (dist < TAP_PX && dt < TAP_MS) {
       const pos = toAndroid(e.clientX, e.clientY);
       showRipple(e.clientX, e.clientY);
       sendInput(deviceId, "tap", { x: pos.x, y: pos.y }).then(() => onAction());
-    } else if (dist >= 10) {
+    } else if (dist >= SWIPE_PX) {
       const from = toAndroid(sx, sy);
       const to = toAndroid(e.clientX, e.clientY);
       sendInput(deviceId, "swipe", {
-        x1: from.x,
-        y1: from.y,
-        x2: to.x,
-        y2: to.y,
-        duration: Math.min(dt, 600),
+        x1: from.x, y1: from.y,
+        x2: to.x,   y2: to.y,
+        duration: Math.max(80, Math.min(dt, 600)),
       }).then(() => onAction());
     }
   };
 
   const handleTouchStart = (e: React.TouchEvent) => {
+    // preventDefault is handled by the non-passive native listener above
     const t = e.touches[0];
     touchStartRef.current = { x: t.clientX, y: t.clientY, t: Date.now() };
   };
+  const handleTouchCancel = () => { touchStartRef.current = null; };
   const handleTouchEnd = (e: React.TouchEvent) => {
     if (!touchStartRef.current) return;
     const t = e.changedTouches[0];
@@ -159,19 +177,19 @@ function TouchOverlay({
     const dist = Math.hypot(dx, dy);
     const dt = Date.now() - st;
 
-    if (dist < 15 && dt < 500) {
+    if (dist < TAP_PX && dt < TAP_MS) {
       const pos = toAndroid(t.clientX, t.clientY);
       showRipple(t.clientX, t.clientY);
+      // Haptic feedback on mobile if available
+      try { navigator.vibrate?.(8); } catch { /* ignore */ }
       sendInput(deviceId, "tap", { x: pos.x, y: pos.y }).then(() => onAction());
-    } else {
+    } else if (dist >= SWIPE_PX) {
       const from = toAndroid(sx, sy);
       const to = toAndroid(t.clientX, t.clientY);
       sendInput(deviceId, "swipe", {
-        x1: from.x,
-        y1: from.y,
-        x2: to.x,
-        y2: to.y,
-        duration: Math.min(dt, 600),
+        x1: from.x, y1: from.y,
+        x2: to.x,   y2: to.y,
+        duration: Math.max(80, Math.min(dt, 600)),
       }).then(() => onAction());
     }
   };
@@ -182,19 +200,21 @@ function TouchOverlay({
       className="absolute inset-0 cursor-pointer select-none"
       onMouseDown={handleMouseDown}
       onMouseUp={handleMouseUp}
+      onMouseLeave={cancelMouse}
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
-      style={{ touchAction: "none" }}
+      onTouchCancel={handleTouchCancel}
+      style={{ touchAction: "none", WebkitTapHighlightColor: "transparent" }}
     >
       {ripple && (
         <span
           key={ripple.id}
-          className="pointer-events-none absolute rounded-full bg-white/40 animate-ping"
+          className="pointer-events-none absolute rounded-full bg-white/30 animate-ping"
           style={{
-            left: ripple.x - 20,
-            top: ripple.y - 20,
-            width: 40,
-            height: 40,
+            left: ripple.x - 22,
+            top: ripple.y - 22,
+            width: 44,
+            height: 44,
           }}
         />
       )}
@@ -206,12 +226,16 @@ interface SessionPhoneControlProps {
   session: Session;
   variant?: "default" | "expanded";
   onExpand?: () => void;
+  /** When true, don't render the H264Player (use when this card is covered by
+   *  an expanded overlay to avoid two decoders competing for the same stream) */
+  suppressStream?: boolean;
 }
 
 export function SessionPhoneControl({
   session,
   variant = "default",
   onExpand,
+  suppressStream = false,
 }: SessionPhoneControlProps) {
   const [now, setNow] = useState(() => getServerNow());
   const [imgSrc, setImgSrc] = useState<string | null>(null);
@@ -348,19 +372,22 @@ export function SessionPhoneControl({
       session.remaining_seconds - Math.floor((now - base) / 1000),
     );
   }
-  const expired = remaining <= 0;
+  const isPaused = session.status === "PAUSED";
+  const expired = session.status === "EXPIRED" || remaining <= 0;
+  const streamActive = !expired && !isPaused;
   const isExpanded = variant === "expanded";
 
   return (
     <div
       className={`flex shrink-0 flex-col ${isExpanded ? "w-[min(95vw,560px)]" : "w-full max-w-[220px]"}`}
     >
+      {/* ── header bar ── */}
       <div className="mb-3 flex items-center justify-between gap-2 rounded-xl border border-slate-800 bg-slate-900/80 px-3 py-2">
         <span className="truncate text-sm font-semibold text-white">
           {session.device_id?.name || "Device"}
         </span>
         <div className="flex items-center gap-2">
-          {!isExpanded && onExpand && (
+          {!isExpanded && onExpand && streamActive && (
             <button
               type="button"
               onClick={onExpand}
@@ -371,9 +398,12 @@ export function SessionPhoneControl({
               <Expand className="h-4 w-4" />
             </button>
           )}
+          {isPaused && (
+            <PauseCircle className="h-4 w-4 text-amber-400" />
+          )}
           <div
             className={`flex shrink-0 items-center gap-1 text-sm font-bold tabular-nums ${
-              expired ? "text-red-400" : "text-cyan-400"
+              expired ? "text-red-400" : isPaused ? "text-amber-400" : "text-cyan-400"
             }`}
           >
             {formatDurationThai(remaining)}
@@ -381,18 +411,19 @@ export function SessionPhoneControl({
         </div>
       </div>
 
+      {/* ── phone frame ── */}
       <div className="relative mx-auto w-full">
         <div
           className={`relative mx-auto overflow-hidden rounded-[2.25rem] border-4 border-slate-700 bg-slate-900 shadow-2xl shadow-cyan-900/20 ${
-            isExpanded
-              ? "h-[88vh] max-h-[88vh] w-auto max-w-[95vw]"
-              : "aspect-[9/16] w-full"
+            isExpanded ? "w-auto max-w-[95vw]" : "w-full"
           }`}
-          style={
-            isExpanded ? { aspectRatio: String(screenAspectRatio) } : undefined
-          }
+          style={{
+            aspectRatio: String(screenAspectRatio),
+            ...(isExpanded ? { maxHeight: "88vh" } : {}),
+          }}
         >
-          {streamingMode === "scrcpy" && deviceSerial && !expired ? (
+          {/* ── stream layer ── */}
+          {streamingMode === "scrcpy" && deviceSerial && streamActive && !suppressStream ? (
             <H264Player
               ref={h264PlayerRef}
               deviceSerial={deviceSerial}
@@ -403,7 +434,7 @@ export function SessionPhoneControl({
                 }
               }}
             />
-          ) : streamingMode === "screenshot" && imgSrc && !imgError ? (
+          ) : streamingMode === "screenshot" && imgSrc && !imgError && streamActive ? (
             <img
               ref={imgRef}
               src={imgSrc}
@@ -417,7 +448,7 @@ export function SessionPhoneControl({
               }}
               draggable={false}
             />
-          ) : (
+          ) : !isPaused && !expired ? (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-slate-900">
               <div
                 className={`h-10 w-10 rounded-full border-4 border-cyan-500 ${imgError ? "opacity-30" : "border-t-transparent animate-spin"}`}
@@ -430,9 +461,10 @@ export function SessionPhoneControl({
                     : "กำลังโหลดหน้าจอ..."}
               </span>
             </div>
-          )}
+          ) : null}
 
-          {!expired && deviceId && (
+          {/* ── touch overlay (only when actively streaming) ── */}
+          {streamActive && deviceId && (
             <TouchOverlay
               deviceId={deviceId}
               getNaturalSize={getNaturalSize}
@@ -440,6 +472,20 @@ export function SessionPhoneControl({
             />
           )}
 
+          {/* ── paused overlay ── */}
+          {isPaused && (
+            <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-slate-950/90">
+              <PauseCircle className="h-10 w-10 text-amber-400 opacity-80" />
+              <span className="text-sm font-semibold text-amber-300">
+                หยุดชั่วคราว
+              </span>
+              <span className="text-xs text-slate-400">
+                {formatDurationThai(remaining)} คงเหลือ
+              </span>
+            </div>
+          )}
+
+          {/* ── expired overlay ── */}
           {expired && (
             <div className="absolute inset-0 z-10 flex items-center justify-center bg-slate-950/80">
               <span className="text-lg font-bold text-red-400">
@@ -447,37 +493,15 @@ export function SessionPhoneControl({
               </span>
             </div>
           )}
-
-          {!expired &&
-            ((streamingMode === "scrcpy" && deviceSerial) ||
-              (streamingMode === "screenshot" && imgSrc && !imgError)) && (
-              <div className="pointer-events-none absolute right-2 top-2 z-10 flex items-center gap-1 rounded-full bg-black/60 px-2 py-0.5">
-                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-green-400" />
-                <span className="text-[9px] font-semibold text-green-400">
-                  {streamingMode === "scrcpy" ? "LIVE \u2022 H.264" : "LIVE"}
-                </span>
-              </div>
-            )}
         </div>
 
-        {!expired && deviceId && (
+        {/* ── Android nav buttons (Back / Home / Recents) ── */}
+        {streamActive && deviceId && (
           <div className="mt-4 flex justify-around px-2">
             {[
-              {
-                icon: <RotateCcw className="h-5 w-5" />,
-                key: KEY.BACK,
-                label: "Back",
-              },
-              {
-                icon: <Home className="h-5 w-5" />,
-                key: KEY.HOME,
-                label: "Home",
-              },
-              {
-                icon: <Square className="h-5 w-5" />,
-                key: KEY.RECENTS,
-                label: "Recents",
-              },
+              { icon: <RotateCcw className="h-5 w-5" />, key: KEY.BACK,    label: "Back"    },
+              { icon: <Home       className="h-5 w-5" />, key: KEY.HOME,    label: "Home"    },
+              { icon: <Square     className="h-5 w-5" />, key: KEY.RECENTS, label: "Recents" },
             ].map((btn) => (
               <button
                 key={btn.key}

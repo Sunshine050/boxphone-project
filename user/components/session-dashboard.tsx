@@ -124,6 +124,7 @@ export function SessionDashboard({
                 key={s._id}
                 session={s}
                 onExpand={() => setExpandedSessionId(s._id)}
+                suppressStream={expandedSessionId === s._id}
               />
             ))}
           </div>
