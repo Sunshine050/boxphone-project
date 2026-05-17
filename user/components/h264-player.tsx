@@ -258,8 +258,9 @@ export const H264Player = forwardRef<H264PlayerHandle, H264PlayerProps>(
           ) {
             c.width = frame.displayWidth;
             c.height = frame.displayHeight;
-            // First successful decode: also record natural size so touch overlay
-            // maps coordinates correctly even if stream_metadata arrived empty.
+            // First frame: if we never received stream_metadata with native
+            // display size, fall back to video dimensions for touch mapping
+            // (better than nothing, though slightly inaccurate for scaled streams).
             if (
               naturalSizeRef.current.width === 0 ||
               naturalSizeRef.current.height === 0
@@ -274,6 +275,9 @@ export const H264Player = forwardRef<H264PlayerHandle, H264PlayerProps>(
                 deviceName: "",
               });
             }
+            // If naturalSizeRef is already set (from stream_metadata with display
+            // size), don't overwrite it with video dimensions — the display size
+            // is what ADB input tap expects.
           }
           cx.drawImage(frame, 0, 0);
           if (status !== "playing") setStatus("playing");
@@ -328,16 +332,38 @@ export const H264Player = forwardRef<H264PlayerHandle, H264PlayerProps>(
         height: number;
         deviceName: string;
         codec?: string;
+        /** Device's logical display size (portrait-base) — ADB input coordinate space */
+        displayWidth?: number;
+        displayHeight?: number;
       }) => {
         if (payload.deviceSerial !== deviceSerial) return;
-        naturalSizeRef.current = {
-          width: payload.width,
-          height: payload.height,
-        };
+
+        // Canvas renders video at video resolution
         if (canvasRef.current) {
           canvasRef.current.width = payload.width;
           canvasRef.current.height = payload.height;
         }
+
+        // Touch overlay needs NATIVE display coordinates (ADB input space).
+        // `displayWidth/Height` from backend is the portrait-base size from
+        // `adb shell wm size`.  Rotate it to match the current video orientation
+        // (video dims already reflect the device's physical orientation).
+        if (payload.displayWidth && payload.displayHeight) {
+          const isLandscape = payload.width > payload.height;
+          // wm size always portrait-base → smaller side = portrait width, larger = height
+          const portraitW = Math.min(payload.displayWidth, payload.displayHeight);
+          const portraitH = Math.max(payload.displayWidth, payload.displayHeight);
+          naturalSizeRef.current = isLandscape
+            ? { width: portraitH, height: portraitW }   // landscape: swap dims
+            : { width: portraitW, height: portraitH };  // portrait: keep as-is
+        } else {
+          // Fallback: use video resolution (less accurate for scaled streams)
+          naturalSizeRef.current = {
+            width: payload.width,
+            height: payload.height,
+          };
+        }
+
         onMetadata?.({
           width: payload.width,
           height: payload.height,

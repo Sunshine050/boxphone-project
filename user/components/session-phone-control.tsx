@@ -229,6 +229,11 @@ interface SessionPhoneControlProps {
   /** When true, don't render the H264Player (use when this card is covered by
    *  an expanded overlay to avoid two decoders competing for the same stream) */
   suppressStream?: boolean;
+  /** Server-corrected epoch_ms of when session data was last fetched from the
+   *  API.  The backend computes remaining_seconds as-of the response time, so
+   *  we subtract elapsed since fetchedAt (not since start/resume_time which
+   *  would double-count the already-elapsed portion). */
+  fetchedAt?: number;
 }
 
 export function SessionPhoneControl({
@@ -236,6 +241,7 @@ export function SessionPhoneControl({
   variant = "default",
   onExpand,
   suppressStream = false,
+  fetchedAt,
 }: SessionPhoneControlProps) {
   const [now, setNow] = useState(() => getServerNow());
   const [imgSrc, setImgSrc] = useState<string | null>(null);
@@ -364,12 +370,15 @@ export function SessionPhoneControl({
     };
   }, [streamingMode]);
 
+  // The backend computes remaining_seconds as-of the API response time.
+  // We subtract elapsed time since fetchedAt (when we received that response),
+  // NOT since resume_time (which would double-count elapsed seconds already
+  // baked into the server's remaining_seconds value).
   let remaining = session.remaining_seconds;
-  if (session.status === "ACTIVE") {
-    const base = new Date(session.resume_time ?? session.start_time).getTime();
+  if (session.status === "ACTIVE" && fetchedAt) {
     remaining = Math.max(
       0,
-      session.remaining_seconds - Math.floor((now - base) / 1000),
+      session.remaining_seconds - Math.floor((now - fetchedAt) / 1000),
     );
   }
   const isPaused = session.status === "PAUSED";
@@ -379,7 +388,7 @@ export function SessionPhoneControl({
 
   return (
     <div
-      className={`flex shrink-0 flex-col ${isExpanded ? "w-[min(95vw,560px)]" : "w-full max-w-[220px]"}`}
+      className={`flex shrink-0 flex-col ${isExpanded ? "w-auto max-w-[min(90vw,520px)]" : "w-full max-w-[220px]"}`}
     >
       {/* ── header bar ── */}
       <div className="mb-3 flex items-center justify-between gap-2 rounded-xl border border-slate-800 bg-slate-900/80 px-3 py-2">
@@ -415,11 +424,15 @@ export function SessionPhoneControl({
       <div className="relative mx-auto w-full">
         <div
           className={`relative mx-auto overflow-hidden rounded-[2.25rem] border-4 border-slate-700 bg-slate-900 shadow-2xl shadow-cyan-900/20 ${
-            isExpanded ? "w-auto max-w-[95vw]" : "w-full"
+            isExpanded ? "w-auto max-w-[min(90vw,500px)]" : "w-full"
           }`}
           style={{
             aspectRatio: String(screenAspectRatio),
-            ...(isExpanded ? { maxHeight: "88vh" } : {}),
+            // Leave room for header bar (~52px), nav buttons (~76px), close btn
+            // (~44px), overlay padding (~32px) → cap at ~75vh or 680px
+            ...(isExpanded
+              ? { maxHeight: "min(75vh, 680px)", height: "min(75vh, 680px)" }
+              : {}),
           }}
         >
           {/* ── stream layer ── */}

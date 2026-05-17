@@ -27,7 +27,7 @@ interface DashboardProps {
 
 export function SessionDashboard({
   initialSessions,
-  lastSyncTimestamp: _lastSyncTimestamp,
+  lastSyncTimestamp,
   refreshData: _refreshData,
 }: DashboardProps) {
   const [sessions, setSessions] = useState<Session[]>(initialSessions);
@@ -123,6 +123,7 @@ export function SessionDashboard({
               <SessionPhoneControl
                 key={s._id}
                 session={s}
+                fetchedAt={lastSyncTimestamp}
                 onExpand={() => setExpandedSessionId(s._id)}
                 suppressStream={expandedSessionId === s._id}
               />
@@ -132,17 +133,17 @@ export function SessionDashboard({
       </div>
 
       {expandedSession && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 p-4">
+        <div className="fixed inset-0 z-50 flex flex-col items-center justify-start overflow-y-auto bg-slate-950/85 px-4 pt-14 pb-6">
           <button
             type="button"
             aria-label="ปิดโหมดขยาย"
             onClick={() => setExpandedSessionId(null)}
-            className="absolute right-4 top-4 rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-200 transition-colors hover:bg-slate-800"
+            className="fixed right-4 top-4 z-10 rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-200 transition-colors hover:bg-slate-800"
           >
             ปิด
           </button>
 
-          <SessionPhoneControl session={expandedSession} variant="expanded" />
+          <SessionPhoneControl session={expandedSession} variant="expanded" fetchedAt={lastSyncTimestamp} />
         </div>
       )}
     </div>

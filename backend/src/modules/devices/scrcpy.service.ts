@@ -27,6 +27,13 @@ export interface StreamMetadata {
   height: number;
   deviceName: string;
   codec: string;
+  /** Device's logical display size in portrait-base (from `adb shell wm size`).
+   *  This is the coordinate space that `adb input tap` uses.
+   *  width/height above are the scaled *video* resolution (may differ due to
+   *  scrcpy --max-size). Clients must use displayWidth/displayHeight (not
+   *  video width/height) when computing ADB touch coordinates. */
+  displayWidth?: number;
+  displayHeight?: number;
 }
 
 interface ScrcpyStreamState {
@@ -39,6 +46,9 @@ interface ScrcpyStreamState {
   codecId: string;
   width: number;
   height: number;
+  /** Device's logical display size (portrait base) — for ADB input coordinates */
+  displayWidth: number;
+  displayHeight: number;
   configPacket: Buffer | null;
   subscribers: Map<string, FrameListener>;
   idleTimer: NodeJS.Timeout | null;
@@ -349,6 +359,9 @@ export class ScrcpyService implements OnModuleInit, OnModuleDestroy {
       height: stream.height,
       deviceName: stream.deviceName,
       codec: "avc1.42E01E",
+      ...(stream.displayWidth > 0 && stream.displayHeight > 0
+        ? { displayWidth: stream.displayWidth, displayHeight: stream.displayHeight }
+        : {}),
     };
   }
 
@@ -367,6 +380,44 @@ export class ScrcpyService implements OnModuleInit, OnModuleDestroy {
   }
 
   /* ─────────── internals ─────────── */
+
+  /**
+   * Get the device's logical display size (what `adb input tap` uses as its
+   * coordinate space).  `adb shell wm size` always returns the portrait-base
+   * size regardless of current orientation.  We cache the result per serial
+   * since it never changes during a session.
+   */
+  private displaySizeCache = new Map<string, { w: number; h: number }>();
+
+  private async getDisplaySize(
+    serial: string,
+  ): Promise<{ w: number; h: number } | null> {
+    if (this.displaySizeCache.has(serial)) {
+      return this.displaySizeCache.get(serial)!;
+    }
+    try {
+      const { stdout } = await execFileAsync(
+        this.adbPath,
+        ["-s", serial, "shell", "wm", "size"],
+        { timeout: 4000, windowsHide: true },
+      );
+      // Prefer "Override size" (user-set custom resolution); fallback to "Physical size"
+      const m =
+        stdout.match(/Override size:\s*(\d+)x(\d+)/) ||
+        stdout.match(/Physical size:\s*(\d+)x(\d+)/);
+      if (m) {
+        const size = { w: parseInt(m[1], 10), h: parseInt(m[2], 10) };
+        this.displaySizeCache.set(serial, size);
+        this.logger.log(
+          `Display size for ${serial}: ${size.w}×${size.h} (ADB input space)`,
+        );
+        return size;
+      }
+    } catch (e: any) {
+      this.logger.warn(`getDisplaySize(${serial}) failed: ${e.message}`);
+    }
+    return null;
+  }
 
   private allocatePort(): number {
     for (let i = 0; i < this.portPoolSize; i++) {
@@ -399,6 +450,10 @@ export class ScrcpyService implements OnModuleInit, OnModuleDestroy {
       .toString(16)
       .padStart(8, "0");
 
+    // Fetch device's logical display size early — needed for ADB touch coordinates.
+    // `adb input tap` uses this coordinate space, NOT the scaled video resolution.
+    const displaySize = await this.getDisplaySize(serial);
+
     const state: ScrcpyStreamState = {
       serial,
       port,
@@ -409,6 +464,8 @@ export class ScrcpyService implements OnModuleInit, OnModuleDestroy {
       codecId: "",
       width: 0,
       height: 0,
+      displayWidth: displaySize?.w ?? 0,
+      displayHeight: displaySize?.h ?? 0,
       configPacket: null,
       subscribers: new Map(),
       idleTimer: null,

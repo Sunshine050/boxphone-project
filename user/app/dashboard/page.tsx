@@ -9,7 +9,7 @@ import { toast } from "sonner";
 import { SessionDashboard } from "@/components/session-dashboard";
 import type { Session } from "@/types/session";
 import { getApiBaseUrl } from "@boxphon/shared/client/api-base-url";
-import { syncServerTime } from "@boxphon/shared/client/server-time";
+import { syncServerTime, getServerNow } from "@boxphon/shared/client/server-time";
 
 export type { Session };
 
@@ -25,7 +25,9 @@ export default function DashboardPage() {
     try {
       const data = await apiFetch<Session[] | null>("/sessions/me");
       setSessions(data ?? []);
-      setLastSyncTimestamp(Date.now());
+      // Use server-corrected clock so the countdown baseline matches
+      // the server's own clock (avoids user-side timer running fast/slow).
+      setLastSyncTimestamp(getServerNow());
       setLoading(false);
     } catch {
       router.push("/login");
