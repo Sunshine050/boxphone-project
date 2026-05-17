@@ -98,6 +98,62 @@ function codecFromConfig(config: Uint8Array): string {
   return FALLBACK_CODEC;
 }
 
+/**
+ * Build AVCDecoderConfigurationRecord (ISO 14496-15) from a scrcpy config
+ * packet (SPS + PPS in Annex-B format).  The record is required by Chrome's
+ * WebCodecs VideoDecoder as the `description` field when the stream is in
+ * AVC/AVCC format.
+ */
+function buildAVCConfig(config: Uint8Array): Uint8Array | null {
+  const nals = splitNalUnits(config);
+  let sps: Uint8Array | null = null;
+  let pps: Uint8Array | null = null;
+  for (const nal of nals) {
+    const t = nal[0] & 0x1f;
+    if (t === 7 && !sps) sps = nal;
+    if (t === 8 && !pps) pps = nal;
+  }
+  if (!sps || !pps) return null;
+
+  const buf = new Uint8Array(11 + sps.length + pps.length);
+  let i = 0;
+  buf[i++] = 0x01;                         // configurationVersion
+  buf[i++] = sps[1];                        // AVCProfileIndication
+  buf[i++] = sps[2];                        // profile_compatibility
+  buf[i++] = sps[3];                        // AVCLevelIndication
+  buf[i++] = 0xff;                          // reserved(6) | lengthSizeMinusOne(2)=3 → 4-byte lengths
+  buf[i++] = 0xe1;                          // reserved(3) | numSPS(5)=1
+  buf[i++] = (sps.length >> 8) & 0xff;
+  buf[i++] = sps.length & 0xff;
+  buf.set(sps, i); i += sps.length;
+  buf[i++] = 0x01;                          // numPPS=1
+  buf[i++] = (pps.length >> 8) & 0xff;
+  buf[i++] = pps.length & 0xff;
+  buf.set(pps, i);
+  return buf;
+}
+
+/**
+ * Convert Annex-B NAL units (start-code prefixed) to AVCC format
+ * (4-byte big-endian length prefix per NAL unit) required by WebCodecs
+ * when a `description` is present in the VideoDecoderConfig.
+ */
+function annexBtoAvcc(annexB: Uint8Array): Uint8Array {
+  const nals = splitNalUnits(annexB);
+  if (nals.length === 0) return annexB;
+  const total = nals.reduce((s, n) => s + 4 + n.length, 0);
+  const avcc = new Uint8Array(total);
+  const view = new DataView(avcc.buffer);
+  let off = 0;
+  for (const nal of nals) {
+    view.setUint32(off, nal.length, false); // big-endian
+    off += 4;
+    avcc.set(nal, off);
+    off += nal.length;
+  }
+  return avcc;
+}
+
 function toUint8(data: ArrayBuffer | Uint8Array | unknown): Uint8Array {
   if (data instanceof Uint8Array) return data;
   if (data instanceof ArrayBuffer) return new Uint8Array(data);
@@ -227,6 +283,7 @@ export const H264Player = forwardRef<H264PlayerHandle, H264PlayerProps>(
       const ensureDecoderConfigured = (config: Uint8Array) => {
         if (decoderConfiguredRef.current) return;
         const codec = codecFromConfig(config);
+        const description = buildAVCConfig(config);
         try {
           decoderRef.current = new VideoDecoder({
             output: handleDecodedFrame,
@@ -240,11 +297,18 @@ export const H264Player = forwardRef<H264PlayerHandle, H264PlayerProps>(
           });
           decoderRef.current.configure({
             codec,
+            // AVCDecoderConfigurationRecord is required by Chrome WebCodecs
+            // when receiving AVC/AVCC-format H.264 chunks.
+            ...(description ? { description } : {}),
             optimizeForLatency: true,
             hardwareAcceleration: "prefer-hardware",
           });
           decoderConfiguredRef.current = true;
-          console.log("[H264Player] decoder configured", codec);
+          console.log(
+            "[H264Player] decoder configured",
+            codec,
+            description ? "(with description)" : "(no description — fallback)",
+          );
         } catch (e: any) {
           const err = new Error(`VideoDecoder configure failed: ${e?.message || e}`);
           onError?.(err);
@@ -287,25 +351,15 @@ export const H264Player = forwardRef<H264PlayerHandle, H264PlayerProps>(
           return;
         }
         if (payload.isConfig) {
+          // Config packet = SPS + PPS from scrcpy.
+          // Use it to (re)configure the VideoDecoder — do NOT feed it to decode().
           configPacketRef.current = bytes;
+          closeDecoder(); // reset so ensureDecoderConfigured runs fresh
           ensureDecoderConfigured(bytes);
-          // Also feed config NAL into decoder so it has SPS/PPS in its bitstream
-          if (decoderRef.current?.state === "configured") {
-            try {
-              decoderRef.current.decode(
-                new EncodedVideoChunk({
-                  type: "key",
-                  timestamp: ptsRef.current++,
-                  data: bytes,
-                }),
-              );
-            } catch (e: any) {
-              console.warn("[H264Player] decode config failed", e);
-            }
-          }
           return;
         }
-        // Regular frame — must have decoder configured
+
+        // Regular video frame — must have decoder configured
         if (!decoderConfiguredRef.current && configPacketRef.current) {
           ensureDecoderConfigured(configPacketRef.current);
         }
@@ -315,12 +369,16 @@ export const H264Player = forwardRef<H264PlayerHandle, H264PlayerProps>(
         ) {
           return; // not ready yet — drop frame until decoder warm
         }
+
+        // Convert Annex-B (start-code prefixed) → AVCC (length-prefixed) so
+        // Chrome WebCodecs can decode it together with the AVCDecoderConfigRecord.
+        const avccData = annexBtoAvcc(bytes);
         try {
           decoderRef.current.decode(
             new EncodedVideoChunk({
               type: payload.isKeyFrame ? "key" : "delta",
               timestamp: ptsRef.current++,
-              data: bytes,
+              data: avccData,
             }),
           );
         } catch (e: any) {
