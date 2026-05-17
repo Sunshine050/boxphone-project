@@ -50,6 +50,9 @@ interface ScrcpyStreamState {
   displayWidth: number;
   displayHeight: number;
   configPacket: Buffer | null;
+  /** Latest IDR frame — replayed to new subscribers so they decode immediately */
+  lastKeyFramePacket: Buffer | null;
+  lastKeyFramePts: bigint;
   subscribers: Map<string, FrameListener>;
   idleTimer: NodeJS.Timeout | null;
   status: "starting" | "running" | "stopping" | "stopped";
@@ -290,17 +293,40 @@ export class ScrcpyService implements OnModuleInit, OnModuleDestroy {
       }
     }
 
+    // Replay last keyframe so the client can paint immediately without waiting
+    // for the next GOP (often 1–2 s, sometimes longer).
+    if (stream.lastKeyFramePacket) {
+      try {
+        listener(stream.lastKeyFramePacket, {
+          isConfig: false,
+          isKeyFrame: true,
+          pts: stream.lastKeyFramePts,
+        });
+      } catch (e: any) {
+        this.logger.warn(
+          `replay keyframe to ${subscriberId} failed: ${e.message}`,
+        );
+      }
+    }
+
+    // Ensure display size is available before sending metadata to the client.
+    if (stream.displayWidth <= 0 || stream.displayHeight <= 0) {
+      const size = await this.getDisplaySize(serial);
+      if (size) {
+        stream.displayWidth = size.w;
+        stream.displayHeight = size.h;
+      }
+    }
+
     this.logger.log(
-      `Subscribed ${subscriberId} → ${serial} (total subscribers: ${stream.subscribers.size})`,
+      `Subscribed ${subscriberId} → ${serial} (total subscribers: ${stream.subscribers.size})` +
+        (stream.displayWidth > 0
+          ? ` touch=${stream.displayWidth}×${stream.displayHeight}`
+          : " touch=UNKNOWN (wm size failed)"),
     );
 
     return {
-      metadata: {
-        width: stream.width,
-        height: stream.height,
-        deviceName: stream.deviceName,
-        codec: "avc1.42E01E",
-      },
+      metadata: this.buildStreamMetadata(stream),
       unsubscribe: () => this.unsubscribe(serial, subscriberId),
     };
   }
@@ -354,13 +380,20 @@ export class ScrcpyService implements OnModuleInit, OnModuleDestroy {
   getStreamMetadata(serial: string): StreamMetadata | null {
     const stream = this.streams.get(serial);
     if (!stream || !stream.videoHeaderReceived) return null;
+    return this.buildStreamMetadata(stream);
+  }
+
+  private buildStreamMetadata(stream: ScrcpyStreamState): StreamMetadata {
     return {
       width: stream.width,
       height: stream.height,
       deviceName: stream.deviceName,
       codec: "avc1.42E01E",
       ...(stream.displayWidth > 0 && stream.displayHeight > 0
-        ? { displayWidth: stream.displayWidth, displayHeight: stream.displayHeight }
+        ? {
+            displayWidth: stream.displayWidth,
+            displayHeight: stream.displayHeight,
+          }
         : {}),
     };
   }
@@ -467,6 +500,8 @@ export class ScrcpyService implements OnModuleInit, OnModuleDestroy {
       displayWidth: displaySize?.w ?? 0,
       displayHeight: displaySize?.h ?? 0,
       configPacket: null,
+      lastKeyFramePacket: null,
+      lastKeyFramePts: BigInt(0),
       subscribers: new Map(),
       idleTimer: null,
       status: "starting",
@@ -703,6 +738,10 @@ export class ScrcpyService implements OnModuleInit, OnModuleDestroy {
 
       // Cache SPS/PPS so late subscribers can initialize their decoder
       if (isConfig) state.configPacket = payload;
+      if (isKeyFrame && !isConfig) {
+        state.lastKeyFramePacket = payload;
+        state.lastKeyFramePts = pts;
+      }
 
       state.subscribers.forEach((listener) => {
         try {

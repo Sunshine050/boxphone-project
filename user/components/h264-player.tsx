@@ -10,9 +10,11 @@ export interface H264PlayerMeta {
 }
 
 export interface H264PlayerHandle {
-  /** จอ Android จริงเป็นกี่ pixel — ใช้แทน img.naturalWidth/Height สำหรับ touch overlay */
+  /** ADB input coordinate space (device native, orientation-corrected) */
   getNaturalSize: () => { width: number; height: number };
-  /** Canvas element หากต้อง measure ขนาดบนจอ */
+  /** Encoded video frame size from scrcpy (may be scaled by max-size) */
+  getVideoSize: () => { width: number; height: number };
+  /** Canvas element — use getBoundingClientRect() for precise touch mapping */
   getCanvas: () => HTMLCanvasElement | null;
 }
 
@@ -177,6 +179,7 @@ export const H264Player = forwardRef<H264PlayerHandle, H264PlayerProps>(
     const decoderRef = useRef<VideoDecoder | null>(null);
     const configPacketRef = useRef<Uint8Array | null>(null);
     const naturalSizeRef = useRef({ width: 0, height: 0 });
+    const videoSizeRef = useRef({ width: 0, height: 0 });
     const decoderConfiguredRef = useRef(false);
     // After configure() or a reconfigure triggered by a new config packet,
     // WebCodecs requires the very first chunk to be a keyframe.  Drop all
@@ -191,6 +194,7 @@ export const H264Player = forwardRef<H264PlayerHandle, H264PlayerProps>(
 
     useImperativeHandle(ref, () => ({
       getNaturalSize: () => naturalSizeRef.current,
+      getVideoSize: () => videoSizeRef.current,
       getCanvas: () => canvasRef.current,
     }));
 
@@ -210,26 +214,23 @@ export const H264Player = forwardRef<H264PlayerHandle, H264PlayerProps>(
       const socket = getStreamSocket(token);
       let cancelled = false;
       let watchdog: ReturnType<typeof setTimeout> | null = null;
+      let subscribeRetryCount = 0;
       const canvas = canvasRef.current;
       const ctx = canvas?.getContext("2d");
 
-      const STREAM_TIMEOUT_MS = 15000;
-      const armWatchdog = () => {
-        if (watchdog) clearTimeout(watchdog);
-        watchdog = setTimeout(() => {
-          if (cancelled) return;
-          console.warn(
-            "[H264Player] no frame received within",
-            STREAM_TIMEOUT_MS,
-            "ms",
-          );
-          setStatus("error");
-          setErrorMessage(
-            "ไม่ได้รับวิดีโอจากเครื่อง — ลองรีเฟรชหรือเชื่อมต่อใหม่",
-          );
-          onError?.(new Error("stream timeout"));
-        }, STREAM_TIMEOUT_MS);
+      // Cold start (adb push + scrcpy boot + first keyframe) can exceed 15 s on
+      // refresh; reset the timer whenever we receive metadata or any frame.
+      const STREAM_TIMEOUT_MS = 35000;
+      const MAX_SUBSCRIBE_RETRIES = 1;
+
+      const clearWatchdog = () => {
+        if (watchdog) {
+          clearTimeout(watchdog);
+          watchdog = null;
+        }
       };
+
+      const isPlayingRef = { current: false };
 
       const closeDecoder = () => {
         if (decoderRef.current && decoderRef.current.state !== "closed") {
@@ -258,6 +259,10 @@ export const H264Player = forwardRef<H264PlayerHandle, H264PlayerProps>(
           ) {
             c.width = frame.displayWidth;
             c.height = frame.displayHeight;
+            videoSizeRef.current = {
+              width: frame.displayWidth,
+              height: frame.displayHeight,
+            };
             // First frame: if we never received stream_metadata with native
             // display size, fall back to video dimensions for touch mapping
             // (better than nothing, though slightly inaccurate for scaled streams).
@@ -280,13 +285,62 @@ export const H264Player = forwardRef<H264PlayerHandle, H264PlayerProps>(
             // is what ADB input tap expects.
           }
           cx.drawImage(frame, 0, 0);
-          if (status !== "playing") setStatus("playing");
-          if (watchdog) {
-            clearTimeout(watchdog);
-            watchdog = null;
-          }
+          isPlayingRef.current = true;
+          setStatus("playing");
+          setErrorMessage(null);
+          clearWatchdog();
         }
         frame.close();
+      };
+
+      const armWatchdog = () => {
+        clearWatchdog();
+        watchdog = setTimeout(() => {
+          if (cancelled) return;
+          if (retrySubscribe()) {
+            armWatchdog();
+            return;
+          }
+          console.warn(
+            "[H264Player] no frame received within",
+            STREAM_TIMEOUT_MS,
+            "ms",
+          );
+          setStatus("error");
+          setErrorMessage(
+            "ไม่ได้รับวิดีโอจากเครื่อง — ลองรีเฟรชหรือเชื่อมต่อใหม่",
+          );
+          onError?.(new Error("stream timeout"));
+        }, STREAM_TIMEOUT_MS);
+      };
+
+      const retrySubscribe = () => {
+        if (cancelled || subscribeRetryCount >= MAX_SUBSCRIBE_RETRIES) {
+          return false;
+        }
+        subscribeRetryCount += 1;
+        console.warn("[H264Player] stream slow — retrying subscribe");
+        subscribedRef.current = false;
+        isPlayingRef.current = false;
+        try {
+          socket.emit("stream_unsubscribe", { deviceSerial });
+        } catch {
+          /* ignore */
+        }
+        closeDecoder();
+        configPacketRef.current = null;
+        waitingKeyFrameRef.current = true;
+        setStatus("waiting");
+        setErrorMessage(null);
+        window.setTimeout(() => {
+          if (!cancelled) subscribe();
+        }, 400);
+        return true;
+      };
+
+      const bumpWatchdog = () => {
+        if (isPlayingRef.current) return;
+        armWatchdog();
       };
 
       const ensureDecoderConfigured = (config: Uint8Array) => {
@@ -338,6 +392,11 @@ export const H264Player = forwardRef<H264PlayerHandle, H264PlayerProps>(
       }) => {
         if (payload.deviceSerial !== deviceSerial) return;
 
+        videoSizeRef.current = {
+          width: payload.width,
+          height: payload.height,
+        };
+
         // Canvas renders video at video resolution
         if (canvasRef.current) {
           canvasRef.current.width = payload.width;
@@ -370,10 +429,12 @@ export const H264Player = forwardRef<H264PlayerHandle, H264PlayerProps>(
           deviceName: payload.deviceName,
         });
         setStatus("waiting");
+        bumpWatchdog();
       };
 
       const onFrame = (payload: FramePayload) => {
         if (payload.deviceSerial !== deviceSerial) return;
+        bumpWatchdog();
         let bytes: Uint8Array;
         try {
           bytes = toUint8(payload.data);
@@ -435,14 +496,15 @@ export const H264Player = forwardRef<H264PlayerHandle, H264PlayerProps>(
         onError?.(new Error(payload.message));
       };
 
-      const subscribe = () => {
+      function subscribe() {
         if (subscribedRef.current) return;
         subscribedRef.current = true;
+        isPlayingRef.current = false;
         socket.emit("stream_subscribe", { deviceSerial });
         setStatus("waiting");
         armWatchdog();
         onConnected?.();
-      };
+      }
 
       const onConnect = () => {
         console.log("[H264Player] stream socket connected");
@@ -454,7 +516,9 @@ export const H264Player = forwardRef<H264PlayerHandle, H264PlayerProps>(
       const onDisconnect = () => {
         console.warn("[H264Player] stream socket disconnected");
         subscribedRef.current = false;
+        isPlayingRef.current = false;
         decoderConfiguredRef.current = false;
+        clearWatchdog();
         setStatus("connecting");
       };
 
@@ -472,10 +536,7 @@ export const H264Player = forwardRef<H264PlayerHandle, H264PlayerProps>(
 
       return () => {
         cancelled = true;
-        if (watchdog) {
-          clearTimeout(watchdog);
-          watchdog = null;
-        }
+        clearWatchdog();
         try {
           socket.emit("stream_unsubscribe", { deviceSerial });
         } catch {

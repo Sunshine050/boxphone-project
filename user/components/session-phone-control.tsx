@@ -54,116 +54,122 @@ async function sendInput(
   });
 }
 
+/** Map browser client coords → ADB tap coords using the visible video/canvas rect. */
+function clientToDevice(
+  clientX: number,
+  clientY: number,
+  videoEl: HTMLElement | null,
+  deviceSize: { width: number; height: number },
+): { x: number; y: number } | null {
+  const rect = videoEl?.getBoundingClientRect();
+  if (!rect || rect.width < 2 || rect.height < 2) return null;
+
+  const nx = (clientX - rect.left) / rect.width;
+  const ny = (clientY - rect.top) / rect.height;
+  if (nx < 0 || nx > 1 || ny < 0 || ny > 1) return null;
+
+  const dw = deviceSize.width > 0 ? deviceSize.width : 1080;
+  const dh = deviceSize.height > 0 ? deviceSize.height : 2340;
+
+  return {
+    x: Math.round(Math.max(0, Math.min(1, nx)) * dw),
+    y: Math.round(Math.max(0, Math.min(1, ny)) * dh),
+  };
+}
+
 function TouchOverlay({
   deviceId,
   getNaturalSize,
+  getVideoElement,
   onAction,
 }: {
   deviceId: string;
-  /** คืนค่า dimensions ของจอ Android จริง (px). 0 = ยังไม่ทราบ → fallback 1080x2340 */
   getNaturalSize: () => { width: number; height: number };
+  getVideoElement: () => HTMLElement | null;
   onAction: () => void;
 }) {
-  const divRef = useRef<HTMLDivElement>(null);
+  const overlayRef = useRef<HTMLDivElement>(null);
   const touchStartRef = useRef<{ x: number; y: number; t: number } | null>(
     null,
   );
-  const [ripple, setRipple] = useState<{
-    x: number;
-    y: number;
-    id: number;
-  } | null>(null);
-  const rippleId = useRef(0);
+  const [pointer, setPointer] = useState<{ x: number; y: number } | null>(null);
+  const pointerTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Tap: dist < TAP_PX (generous — small card is ~220px wide)
-  // Swipe: dist >= SWIPE_PX
-  const TAP_PX = 30;
-  const TAP_MS = 600;
-  const SWIPE_PX = 22;
+  const TAP_MOVE_PX = 14;
+  const TAP_MS = 450;
+  const SWIPE_PX = 28;
 
-  // Bind touchstart as non-passive so preventDefault() works (stops page scroll)
   useEffect(() => {
-    const el = divRef.current;
+    const el = overlayRef.current;
     if (!el) return;
-    const onTouchStartPassive = (e: TouchEvent) => e.preventDefault();
-    el.addEventListener("touchstart", onTouchPassive, { passive: false });
-    return () => el.removeEventListener("touchstart", onTouchPassive);
-    function onTouchPassive(e: TouchEvent) { e.preventDefault(); }
+    const blockScroll = (e: TouchEvent) => e.preventDefault();
+    el.addEventListener("touchstart", blockScroll, { passive: false });
+    return () => el.removeEventListener("touchstart", blockScroll);
   }, []);
 
-  const toAndroid = useCallback(
-    (clientX: number, clientY: number) => {
-      const rect = divRef.current!.getBoundingClientRect();
-      const size = getNaturalSize();
-      const nW = size.width > 0 ? size.width : 1080;
-      const nH = size.height > 0 ? size.height : 2340;
-      const containerAspect = rect.width / rect.height;
-      const imageAspect = nW / nH;
+  const showPointer = (clientX: number, clientY: number) => {
+    const rect = overlayRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    setPointer({ x: clientX - rect.left, y: clientY - rect.top });
+    if (pointerTimer.current) clearTimeout(pointerTimer.current);
+    pointerTimer.current = setTimeout(() => setPointer(null), 500);
+  };
 
-      let displayedWidth = rect.width;
-      let displayedHeight = rect.height;
-      let offsetX = 0;
-      let offsetY = 0;
-
-      if (imageAspect > containerAspect) {
-        displayedHeight = rect.width / imageAspect;
-        offsetY = (rect.height - displayedHeight) / 2;
-      } else {
-        displayedWidth = rect.height * imageAspect;
-        offsetX = (rect.width - displayedWidth) / 2;
-      }
-
-      const normalizedX = (clientX - rect.left - offsetX) / displayedWidth;
-      const normalizedY = (clientY - rect.top - offsetY) / displayedHeight;
-
-      return {
-        x: Math.max(0, Math.min(1, normalizedX)) * nW,
-        y: Math.max(0, Math.min(1, normalizedY)) * nH,
-      };
-    },
-    [getNaturalSize],
+  const toDevice = useCallback(
+    (clientX: number, clientY: number) =>
+      clientToDevice(clientX, clientY, getVideoElement(), getNaturalSize()),
+    [getNaturalSize, getVideoElement],
   );
 
-  const showRipple = (clientX: number, clientY: number) => {
-    const rect = divRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    const id = ++rippleId.current;
-    setRipple({ x: clientX - rect.left, y: clientY - rect.top, id });
-    setTimeout(() => setRipple((r) => (r?.id === id ? null : r)), 350);
+  const fireTap = (clientX: number, clientY: number) => {
+    const pos = toDevice(clientX, clientY);
+    if (!pos) return;
+    showPointer(clientX, clientY);
+    sendInput(deviceId, "tap", { x: pos.x, y: pos.y }).then(() => onAction());
+  };
+
+  const fireSwipe = (
+    sx: number,
+    sy: number,
+    ex: number,
+    ey: number,
+    dt: number,
+  ) => {
+    const from = toDevice(sx, sy);
+    const to = toDevice(ex, ey);
+    if (!from || !to) return;
+    sendInput(deviceId, "swipe", {
+      x1: from.x,
+      y1: from.y,
+      x2: to.x,
+      y2: to.y,
+      duration: Math.max(80, Math.min(dt, 600)),
+    }).then(() => onAction());
   };
 
   const handleMouseDown = (e: React.MouseEvent) => {
     touchStartRef.current = { x: e.clientX, y: e.clientY, t: Date.now() };
+    showPointer(e.clientX, e.clientY);
   };
   const cancelMouse = () => { touchStartRef.current = null; };
   const handleMouseUp = (e: React.MouseEvent) => {
     if (!touchStartRef.current) return;
     const { x: sx, y: sy, t } = touchStartRef.current;
     touchStartRef.current = null;
-    const dx = e.clientX - sx;
-    const dy = e.clientY - sy;
-    const dist = Math.hypot(dx, dy);
+    const dist = Math.hypot(e.clientX - sx, e.clientY - sy);
     const dt = Date.now() - t;
 
-    if (dist < TAP_PX && dt < TAP_MS) {
-      const pos = toAndroid(e.clientX, e.clientY);
-      showRipple(e.clientX, e.clientY);
-      sendInput(deviceId, "tap", { x: pos.x, y: pos.y }).then(() => onAction());
+    if (dist < TAP_MOVE_PX && dt < TAP_MS) {
+      fireTap(sx, sy);
     } else if (dist >= SWIPE_PX) {
-      const from = toAndroid(sx, sy);
-      const to = toAndroid(e.clientX, e.clientY);
-      sendInput(deviceId, "swipe", {
-        x1: from.x, y1: from.y,
-        x2: to.x,   y2: to.y,
-        duration: Math.max(80, Math.min(dt, 600)),
-      }).then(() => onAction());
+      fireSwipe(sx, sy, e.clientX, e.clientY, dt);
     }
   };
 
   const handleTouchStart = (e: React.TouchEvent) => {
-    // preventDefault is handled by the non-passive native listener above
     const t = e.touches[0];
     touchStartRef.current = { x: t.clientX, y: t.clientY, t: Date.now() };
+    showPointer(t.clientX, t.clientY);
   };
   const handleTouchCancel = () => { touchStartRef.current = null; };
   const handleTouchEnd = (e: React.TouchEvent) => {
@@ -172,32 +178,25 @@ function TouchOverlay({
     const { x: sx, y: sy, t: st } = touchStartRef.current;
     touchStartRef.current = null;
 
-    const dx = t.clientX - sx;
-    const dy = t.clientY - sy;
-    const dist = Math.hypot(dx, dy);
+    const dist = Math.hypot(t.clientX - sx, t.clientY - sy);
     const dt = Date.now() - st;
 
-    if (dist < TAP_PX && dt < TAP_MS) {
-      const pos = toAndroid(t.clientX, t.clientY);
-      showRipple(t.clientX, t.clientY);
-      // Haptic feedback on mobile if available
-      try { navigator.vibrate?.(8); } catch { /* ignore */ }
-      sendInput(deviceId, "tap", { x: pos.x, y: pos.y }).then(() => onAction());
+    if (dist < TAP_MOVE_PX && dt < TAP_MS) {
+      try {
+        navigator.vibrate?.(8);
+      } catch {
+        /* ignore */
+      }
+      fireTap(sx, sy);
     } else if (dist >= SWIPE_PX) {
-      const from = toAndroid(sx, sy);
-      const to = toAndroid(t.clientX, t.clientY);
-      sendInput(deviceId, "swipe", {
-        x1: from.x, y1: from.y,
-        x2: to.x,   y2: to.y,
-        duration: Math.max(80, Math.min(dt, 600)),
-      }).then(() => onAction());
+      fireSwipe(sx, sy, t.clientX, t.clientY, dt);
     }
   };
 
   return (
     <div
-      ref={divRef}
-      className="absolute inset-0 cursor-pointer select-none"
+      ref={overlayRef}
+      className="absolute inset-0 cursor-crosshair select-none"
       onMouseDown={handleMouseDown}
       onMouseUp={handleMouseUp}
       onMouseLeave={cancelMouse}
@@ -206,17 +205,17 @@ function TouchOverlay({
       onTouchCancel={handleTouchCancel}
       style={{ touchAction: "none", WebkitTapHighlightColor: "transparent" }}
     >
-      {ripple && (
+      {pointer && (
         <span
-          key={ripple.id}
-          className="pointer-events-none absolute rounded-full bg-white/30 animate-ping"
-          style={{
-            left: ripple.x - 22,
-            top: ripple.y - 22,
-            width: 44,
-            height: 44,
-          }}
-        />
+          className="pointer-events-none absolute z-20"
+          style={{ left: pointer.x, top: pointer.y }}
+        >
+          <span className="absolute -left-3 -top-3 h-6 w-6 rounded-full border-2 border-cyan-400/90 bg-cyan-400/25" />
+          <span className="absolute left-0 top-0 h-px w-3 -translate-x-full bg-cyan-400/70" />
+          <span className="absolute left-0 top-0 h-3 w-px -translate-y-full bg-cyan-400/70" />
+          <span className="absolute left-0 top-0 h-px w-3 bg-cyan-400/70" />
+          <span className="absolute left-0 top-0 h-3 w-px bg-cyan-400/70" />
+        </span>
       )}
     </div>
   );
@@ -370,6 +369,13 @@ export function SessionPhoneControl({
     };
   }, [streamingMode]);
 
+  const getVideoElement = useCallback((): HTMLElement | null => {
+    if (streamingMode === "scrcpy" && h264PlayerRef.current) {
+      return h264PlayerRef.current.getCanvas();
+    }
+    return imgRef.current;
+  }, [streamingMode]);
+
   // The backend computes remaining_seconds as-of the API response time.
   // We subtract elapsed time since fetchedAt (when we received that response),
   // NOT since resume_time (which would double-count elapsed seconds already
@@ -481,6 +487,7 @@ export function SessionPhoneControl({
             <TouchOverlay
               deviceId={deviceId}
               getNaturalSize={getNaturalSize}
+              getVideoElement={getVideoElement}
               onAction={handleActionRefresh}
             />
           )}
