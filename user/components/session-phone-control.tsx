@@ -89,15 +89,20 @@ function TouchOverlay({
   onAction: () => void;
 }) {
   const overlayRef = useRef<HTMLDivElement>(null);
-  const touchStartRef = useRef<{ x: number; y: number; t: number } | null>(
-    null,
-  );
-  const [pointer, setPointer] = useState<{ x: number; y: number } | null>(null);
-  const pointerTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const activePtr = useRef<{
+    id: number;
+    startX: number; startY: number;
+    lastX: number;  lastY: number;
+    t: number;
+    longPressTimer: ReturnType<typeof setTimeout> | null;
+    isSwiping: boolean;
+  } | null>(null);
+  const [crosshair, setCrosshair] = useState<{ x: number; y: number } | null>(null);
+  const crosshairTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const TAP_MOVE_PX = 14;
-  const TAP_MS = 450;
-  const SWIPE_PX = 28;
+  const TAP_MOVE_PX = 12;
+  const TAP_MS = 420;
+  const LONG_PRESS_MS = 500;
 
   useEffect(() => {
     const el = overlayRef.current;
@@ -107,108 +112,111 @@ function TouchOverlay({
     return () => el.removeEventListener("touchstart", blockScroll);
   }, []);
 
-  const showPointer = (clientX: number, clientY: number) => {
-    const rect = overlayRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    setPointer({ x: clientX - rect.left, y: clientY - rect.top });
-    if (pointerTimer.current) clearTimeout(pointerTimer.current);
-    pointerTimer.current = setTimeout(() => setPointer(null), 500);
-  };
-
   const toDevice = useCallback(
     (clientX: number, clientY: number) =>
       clientToDevice(clientX, clientY, getVideoElement(), getNaturalSize()),
     [getNaturalSize, getVideoElement],
   );
 
-  const fireTap = (clientX: number, clientY: number) => {
-    const pos = toDevice(clientX, clientY);
-    if (!pos) return;
-    showPointer(clientX, clientY);
-    sendInput(deviceId, "tap", { x: pos.x, y: pos.y }).then(() => onAction());
+  const showCrosshair = (clientX: number, clientY: number) => {
+    const rect = overlayRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    setCrosshair({ x: clientX - rect.left, y: clientY - rect.top });
+    if (crosshairTimer.current) clearTimeout(crosshairTimer.current);
+    crosshairTimer.current = setTimeout(() => setCrosshair(null), 600);
   };
 
-  const fireSwipe = (
-    sx: number,
-    sy: number,
-    ex: number,
-    ey: number,
-    dt: number,
-  ) => {
-    const from = toDevice(sx, sy);
-    const to = toDevice(ex, ey);
-    if (!from || !to) return;
-    sendInput(deviceId, "swipe", {
-      x1: from.x,
-      y1: from.y,
-      x2: to.x,
-      y2: to.y,
-      duration: Math.max(80, Math.min(dt, 600)),
-    }).then(() => onAction());
-  };
+  const onPointerDown = (e: React.PointerEvent) => {
+    if (activePtr.current) return;
+    e.currentTarget.setPointerCapture(e.pointerId);
+    showCrosshair(e.clientX, e.clientY);
 
-  const handleMouseDown = (e: React.MouseEvent) => {
-    touchStartRef.current = { x: e.clientX, y: e.clientY, t: Date.now() };
-    showPointer(e.clientX, e.clientY);
-  };
-  const cancelMouse = () => { touchStartRef.current = null; };
-  const handleMouseUp = (e: React.MouseEvent) => {
-    if (!touchStartRef.current) return;
-    const { x: sx, y: sy, t } = touchStartRef.current;
-    touchStartRef.current = null;
-    const dist = Math.hypot(e.clientX - sx, e.clientY - sy);
-    const dt = Date.now() - t;
-
-    if (dist < TAP_MOVE_PX && dt < TAP_MS) {
-      fireTap(sx, sy);
-    } else if (dist >= SWIPE_PX) {
-      fireSwipe(sx, sy, e.clientX, e.clientY, dt);
-    }
-  };
-
-  const handleTouchStart = (e: React.TouchEvent) => {
-    const t = e.touches[0];
-    touchStartRef.current = { x: t.clientX, y: t.clientY, t: Date.now() };
-    showPointer(t.clientX, t.clientY);
-  };
-  const handleTouchCancel = () => { touchStartRef.current = null; };
-  const handleTouchEnd = (e: React.TouchEvent) => {
-    if (!touchStartRef.current) return;
-    const t = e.changedTouches[0];
-    const { x: sx, y: sy, t: st } = touchStartRef.current;
-    touchStartRef.current = null;
-
-    const dist = Math.hypot(t.clientX - sx, t.clientY - sy);
-    const dt = Date.now() - st;
-
-    if (dist < TAP_MOVE_PX && dt < TAP_MS) {
-      try {
-        navigator.vibrate?.(8);
-      } catch {
-        /* ignore */
+    const longPressTimer = setTimeout(() => {
+      const p = activePtr.current;
+      if (!p) return;
+      const dist = Math.hypot(p.lastX - p.startX, p.lastY - p.startY);
+      if (dist < TAP_MOVE_PX) {
+        const pos = toDevice(p.startX, p.startY);
+        if (pos) {
+          try { navigator.vibrate?.(30); } catch { /* ignore */ }
+          sendInput(deviceId, "swipe", {
+            x1: pos.x, y1: pos.y, x2: pos.x, y2: pos.y, duration: 600,
+          }).then(() => onAction());
+        }
       }
-      fireTap(sx, sy);
-    } else if (dist >= SWIPE_PX) {
-      fireSwipe(sx, sy, t.clientX, t.clientY, dt);
+    }, LONG_PRESS_MS);
+
+    activePtr.current = {
+      id: e.pointerId,
+      startX: e.clientX, startY: e.clientY,
+      lastX: e.clientX,  lastY: e.clientY,
+      t: Date.now(),
+      longPressTimer,
+      isSwiping: false,
+    };
+  };
+
+  const onPointerMove = (e: React.PointerEvent) => {
+    const p = activePtr.current;
+    if (!p || p.id !== e.pointerId) return;
+    const dist = Math.hypot(e.clientX - p.startX, e.clientY - p.startY);
+    if (!p.isSwiping && dist >= TAP_MOVE_PX) {
+      if (p.longPressTimer) { clearTimeout(p.longPressTimer); p.longPressTimer = null; }
+      p.isSwiping = true;
     }
+    p.lastX = e.clientX;
+    p.lastY = e.clientY;
+    showCrosshair(e.clientX, e.clientY);
+  };
+
+  const onPointerUp = (e: React.PointerEvent) => {
+    const p = activePtr.current;
+    if (!p || p.id !== e.pointerId) return;
+    if (p.longPressTimer) { clearTimeout(p.longPressTimer); p.longPressTimer = null; }
+    activePtr.current = null;
+
+    const dist = Math.hypot(e.clientX - p.startX, e.clientY - p.startY);
+    const dt = Date.now() - p.t;
+
+    if (!p.isSwiping && dist < TAP_MOVE_PX && dt < TAP_MS) {
+      const pos = toDevice(p.startX, p.startY);
+      if (pos) {
+        showCrosshair(p.startX, p.startY);
+        try { navigator.vibrate?.(8); } catch { /* ignore */ }
+        sendInput(deviceId, "tap", { x: pos.x, y: pos.y }).then(() => onAction());
+      }
+    } else if (p.isSwiping) {
+      const from = toDevice(p.startX, p.startY);
+      const to = toDevice(e.clientX, e.clientY);
+      if (from && to) {
+        sendInput(deviceId, "swipe", {
+          x1: from.x, y1: from.y,
+          x2: to.x,   y2: to.y,
+          duration: Math.max(60, Math.min(dt, 600)),
+        }).then(() => onAction());
+      }
+    }
+  };
+
+  const onPointerCancel = () => {
+    if (activePtr.current?.longPressTimer) clearTimeout(activePtr.current.longPressTimer);
+    activePtr.current = null;
   };
 
   return (
     <div
       ref={overlayRef}
       className="absolute inset-0 cursor-crosshair select-none"
-      onMouseDown={handleMouseDown}
-      onMouseUp={handleMouseUp}
-      onMouseLeave={cancelMouse}
-      onTouchStart={handleTouchStart}
-      onTouchEnd={handleTouchEnd}
-      onTouchCancel={handleTouchCancel}
-      style={{ touchAction: "none", WebkitTapHighlightColor: "transparent" }}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onPointerCancel={onPointerCancel}
+      style={{ touchAction: "none", WebkitTapHighlightColor: "transparent" } as React.CSSProperties}
     >
-      {pointer && (
+      {crosshair && (
         <span
           className="pointer-events-none absolute z-20"
-          style={{ left: pointer.x, top: pointer.y }}
+          style={{ left: crosshair.x, top: crosshair.y }}
         >
           <span className="absolute -left-3 -top-3 h-6 w-6 rounded-full border-2 border-cyan-400/90 bg-cyan-400/25" />
           <span className="absolute left-0 top-0 h-px w-3 -translate-x-full bg-cyan-400/70" />
@@ -434,12 +442,15 @@ export function SessionPhoneControl({
           }`}
           style={{
             aspectRatio: String(screenAspectRatio),
+            isolation: "isolate",
+            userSelect: "none",
+            WebkitUserSelect: "none",
             // Leave room for header bar (~52px), nav buttons (~76px), close btn
             // (~44px), overlay padding (~32px) → cap at ~75vh or 680px
             ...(isExpanded
               ? { maxHeight: "min(75vh, 680px)", height: "min(75vh, 680px)" }
               : {}),
-          }}
+          } as React.CSSProperties}
         >
           {/* ── stream layer ── */}
           {streamingMode === "scrcpy" && deviceSerial && streamActive && !suppressStream ? (
