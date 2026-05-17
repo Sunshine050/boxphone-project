@@ -24,6 +24,7 @@ import { UserRole } from "../users/user.schema";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import { XiaoweiWebSocketService } from "./xiaowei-websocket.service";
 import { AdbScreenshotService } from "./adb-screenshot.service";
+import { ScrcpyService } from "./scrcpy.service";
 import { isPngImageBuffer } from "./utils/screenshot-buffer.util";
 import { LogService } from "../log/log.service";
 
@@ -36,8 +37,25 @@ export class DevicesController {
     private readonly devicesService: DevicesService,
     private readonly xiaoweiWsService: XiaoweiWebSocketService,
     private readonly adbScreenshotService: AdbScreenshotService,
+    private readonly scrcpyService: ScrcpyService,
     private readonly logService: LogService,
   ) {}
+
+  /**
+   * Detect streaming capability (feature flag).
+   * Frontend calls once on mount → render H264Player or ImagePoller accordingly.
+   * GET /devices/streaming-mode
+   */
+  @Get("streaming-mode")
+  @SkipThrottle()
+  getStreamingMode() {
+    const enabled = this.scrcpyService.isEnabled();
+    return {
+      mode: enabled ? "scrcpy" : "screenshot",
+      codec: enabled ? "avc1.42E01E" : null,
+      activeStreams: enabled ? this.scrcpyService.listActiveStreams() : [],
+    };
+  }
 
   @Get()
   async findAll(@CurrentUser() currentUser: any): Promise<Device[]> {

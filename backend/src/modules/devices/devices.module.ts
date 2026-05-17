@@ -6,6 +6,7 @@ import { Device, DeviceSchema } from './device.schema';
 import { XiaoweiService } from './xiaowei.service';
 import { XiaoweiWebSocketService } from './xiaowei-websocket.service';
 import { AdbScreenshotService } from './adb-screenshot.service';
+import { ScrcpyService } from './scrcpy.service';
 import { User, UserSchema } from '../users/user.schema';
 
 @Module({
@@ -14,7 +15,7 @@ import { User, UserSchema } from '../users/user.schema';
         MongooseModule.forFeature([{ name: User.name, schema: UserSchema }]),
     ],
     controllers: [DevicesController],
-    providers: [DevicesService, XiaoweiService, XiaoweiWebSocketService, AdbScreenshotService],
-    exports: [DevicesService, XiaoweiService, XiaoweiWebSocketService, AdbScreenshotService],
+    providers: [DevicesService, XiaoweiService, XiaoweiWebSocketService, AdbScreenshotService, ScrcpyService],
+    exports: [DevicesService, XiaoweiService, XiaoweiWebSocketService, AdbScreenshotService, ScrcpyService],
 })
 export class DevicesModule { }

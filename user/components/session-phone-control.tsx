@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { Expand, Home, RotateCcw, Square } from "lucide-react";
 import type { Session } from "@/types/session";
+import { H264Player, type H264PlayerHandle } from "@/components/h264-player";
 
 const BASE_URL = (
   process.env.NEXT_PUBLIC_API_BASE_URL ||
@@ -12,10 +13,20 @@ const BASE_URL = (
 
 const KEY = { BACK: 4, HOME: 3, RECENTS: 187 };
 
+type StreamingMode = "scrcpy" | "screenshot";
+
 function getCsrfToken() {
   if (typeof document === "undefined") return null;
   const m = document.cookie.match(/(^|\s)csrf_token=([^;]+)/);
   return m ? decodeURIComponent(m[2].trim()) : null;
+}
+
+function getAccessToken() {
+  if (typeof document === "undefined") return null;
+  const tokenMatch = document.cookie
+    .split("; ")
+    .find((row) => row.startsWith("access_token="));
+  return tokenMatch ? decodeURIComponent(tokenMatch.split("=")[1]) : null;
 }
 
 async function sendInput(
@@ -51,11 +62,12 @@ async function sendInput(
 
 function TouchOverlay({
   deviceId,
-  imgRef,
+  getNaturalSize,
   onAction,
 }: {
   deviceId: string;
-  imgRef: React.RefObject<HTMLImageElement | null>;
+  /** คืนค่า dimensions ของจอ Android จริง (px). 0 = ยังไม่ทราบ → fallback 1080x2340 */
+  getNaturalSize: () => { width: number; height: number };
   onAction: () => void;
 }) {
   const divRef = useRef<HTMLDivElement>(null);
@@ -72,9 +84,9 @@ function TouchOverlay({
   const toAndroid = useCallback(
     (clientX: number, clientY: number) => {
       const rect = divRef.current!.getBoundingClientRect();
-      const img = imgRef.current;
-      const nW = img && img.naturalWidth > 0 ? img.naturalWidth : 1080;
-      const nH = img && img.naturalHeight > 0 ? img.naturalHeight : 2340;
+      const size = getNaturalSize();
+      const nW = size.width > 0 ? size.width : 1080;
+      const nH = size.height > 0 ? size.height : 2340;
       const containerAspect = rect.width / rect.height;
       const imageAspect = nW / nH;
 
@@ -99,7 +111,7 @@ function TouchOverlay({
         y: Math.max(0, Math.min(1, normalizedY)) * nH,
       };
     },
-    [imgRef],
+    [getNaturalSize],
   );
 
   const showRipple = (clientX: number, clientY: number) => {
@@ -211,7 +223,12 @@ export function SessionPhoneControl({
   const [imgSrc, setImgSrc] = useState<string | null>(null);
   const [imgError, setImgError] = useState(false);
   const [screenAspectRatio, setScreenAspectRatio] = useState(1080 / 2340);
+  const [streamingMode, setStreamingMode] = useState<"unknown" | StreamingMode>(
+    "unknown",
+  );
+  const [accessToken, setAccessToken] = useState<string | null>(null);
   const imgRef = useRef<HTMLImageElement | null>(null);
+  const h264PlayerRef = useRef<H264PlayerHandle>(null);
   const imgTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const imgSrcRef = useRef<string | null>(null);
   const refreshSeqRef = useRef(0);
@@ -223,7 +240,32 @@ export function SessionPhoneControl({
     return () => clearInterval(timer);
   }, []);
 
+  // Detect streaming capability (feature flag) — fetched once on mount.
+  useEffect(() => {
+    setAccessToken(getAccessToken());
+    let cancelled = false;
+    fetch(`${BASE_URL}/devices/streaming-mode`, { credentials: "include" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (cancelled) return;
+        const supportsWebCodecs =
+          typeof window !== "undefined" && "VideoDecoder" in window;
+        if (data?.mode === "scrcpy" && supportsWebCodecs) {
+          setStreamingMode("scrcpy");
+        } else {
+          setStreamingMode("screenshot");
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setStreamingMode("screenshot");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const deviceId = session.device_id?._id;
+  const deviceSerial = session.device_id?.serial_number;
   const refreshScreenshot = useCallback(() => {
     if (!deviceId) return;
     const seq = ++refreshSeqRef.current;
@@ -263,6 +305,9 @@ export function SessionPhoneControl({
 
   useEffect(() => {
     if (!deviceId) return;
+    // Skip legacy polling when scrcpy stream takes over the display.
+    if (streamingMode === "scrcpy") return;
+    if (streamingMode === "unknown") return;
     setImgError(false);
     consecutiveFailureRef.current = 0;
     refreshScreenshot();
@@ -271,7 +316,7 @@ export function SessionPhoneControl({
       if (imgTimerRef.current) clearInterval(imgTimerRef.current);
       refreshAbortRef.current?.abort();
     };
-  }, [deviceId, refreshScreenshot]);
+  }, [deviceId, refreshScreenshot, streamingMode]);
 
   useEffect(() => {
     imgSrcRef.current = imgSrc;
@@ -287,8 +332,21 @@ export function SessionPhoneControl({
   }, []);
 
   const handleActionRefresh = useCallback(() => {
+    // scrcpy stream auto-updates; no need to force a refresh after touch input.
+    if (streamingMode === "scrcpy") return;
     setTimeout(() => refreshScreenshot(), 400);
-  }, [refreshScreenshot]);
+  }, [refreshScreenshot, streamingMode]);
+
+  const getNaturalSize = useCallback(() => {
+    if (streamingMode === "scrcpy" && h264PlayerRef.current) {
+      return h264PlayerRef.current.getNaturalSize();
+    }
+    const img = imgRef.current;
+    return {
+      width: img && img.naturalWidth > 0 ? img.naturalWidth : 0,
+      height: img && img.naturalHeight > 0 ? img.naturalHeight : 0,
+    };
+  }, [streamingMode]);
 
   let remaining = session.remaining_seconds;
   if (session.status === "ACTIVE") {
@@ -346,7 +404,19 @@ export function SessionPhoneControl({
             isExpanded ? { aspectRatio: String(screenAspectRatio) } : undefined
           }
         >
-          {imgSrc && !imgError ? (
+          {streamingMode === "scrcpy" && accessToken && deviceSerial ? (
+            <H264Player
+              ref={h264PlayerRef}
+              deviceSerial={deviceSerial}
+              token={accessToken}
+              className="absolute inset-0"
+              onMetadata={(m) => {
+                if (m.width > 0 && m.height > 0) {
+                  setScreenAspectRatio(m.width / m.height);
+                }
+              }}
+            />
+          ) : streamingMode === "screenshot" && imgSrc && !imgError ? (
             <img
               ref={imgRef}
               src={imgSrc}
@@ -366,7 +436,11 @@ export function SessionPhoneControl({
                 className={`h-10 w-10 rounded-full border-4 border-cyan-500 ${imgError ? "opacity-30" : "border-t-transparent animate-spin"}`}
               />
               <span className="text-xs text-slate-400">
-                {imgError ? "ไม่สามารถโหลดภาพได้" : "กำลังโหลดหน้าจอ..."}
+                {imgError
+                  ? "ไม่สามารถโหลดภาพได้"
+                  : streamingMode === "unknown"
+                    ? "กำลังตรวจสอบโหมด..."
+                    : "กำลังโหลดหน้าจอ..."}
               </span>
             </div>
           )}
@@ -374,7 +448,7 @@ export function SessionPhoneControl({
           {!expired && deviceId && (
             <TouchOverlay
               deviceId={deviceId}
-              imgRef={imgRef}
+              getNaturalSize={getNaturalSize}
               onAction={handleActionRefresh}
             />
           )}
@@ -387,14 +461,16 @@ export function SessionPhoneControl({
             </div>
           )}
 
-          {!expired && imgSrc && !imgError && (
-            <div className="pointer-events-none absolute right-2 top-2 z-10 flex items-center gap-1 rounded-full bg-black/60 px-2 py-0.5">
-              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-green-400" />
-              <span className="text-[9px] font-semibold text-green-400">
-                LIVE
-              </span>
-            </div>
-          )}
+          {!expired &&
+            ((streamingMode === "scrcpy" && accessToken && deviceSerial) ||
+              (streamingMode === "screenshot" && imgSrc && !imgError)) && (
+              <div className="pointer-events-none absolute right-2 top-2 z-10 flex items-center gap-1 rounded-full bg-black/60 px-2 py-0.5">
+                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-green-400" />
+                <span className="text-[9px] font-semibold text-green-400">
+                  {streamingMode === "scrcpy" ? "LIVE • H.264" : "LIVE"}
+                </span>
+              </div>
+            )}
         </div>
 
         {!expired && deviceId && (

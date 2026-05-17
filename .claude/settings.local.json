@@ -83,7 +83,17 @@
       "PowerShell(Get-Content \"C:\\\\boxphone-project\\\\backend\\\\logs\\\\backend-out.log\" | Select-String -NotMatch \"XiaoweiWebSocketService|Reconnecting|Connecting to Xiaowei|ECONNREFUSED 127.0.0.1:22222|Xiaowei WS closed\" | Select-Object -Last 20 | ForEach-Object { $_.Line })",
       "PowerShell(Get-Content \"C:\\\\boxphone-project\\\\backend\\\\logs\\\\backend-out.log\" | Select-String -Pattern \"ready|listen|port|3031|seed|MongoDB|ADMIN|Bootstrap\" | Select-Object -Last 20 | ForEach-Object { $_.Line })",
       "PowerShell(Get-Content \"C:\\\\boxphone-project\\\\backend\\\\logs\\\\backend-err.log\" | Select-String -Pattern \"2026-05-16 03:\" | ForEach-Object { $_.Line })",
-      "PowerShell(Get-Content \"C:\\\\boxphone-project\\\\backend\\\\logs\\\\backend-out.log\" | Select-String -Pattern \"Server ready|NestApplication|Nest application successfully\" | ForEach-Object { $_.Line })"
+      "PowerShell(Get-Content \"C:\\\\boxphone-project\\\\backend\\\\logs\\\\backend-out.log\" | Select-String -Pattern \"Server ready|NestApplication|Nest application successfully\" | ForEach-Object { $_.Line })",
+      "WebFetch(domain:www.xiaowei.xin)",
+      "WebSearch",
+      "Bash(git checkout *)",
+      "Bash(curl -sL -o /Users/kiattisakdeeprasert/Documents/GitHub/boxphone-project/backend/assets/scrcpy-server-v2.4 \"https://github.com/Genymobile/scrcpy/releases/download/v2.4/scrcpy-server-v2.4\")",
+      "Bash(shasum *)",
+      "Bash(node *)",
+      "Bash(npx tsc *)",
+      "Bash(echo \"EXIT=$?\")",
+      "Bash(echo \"BACKEND_EXIT=$?\")",
+      "Bash(echo \"USER_EXIT=$?\")"
     ]
   }
 }

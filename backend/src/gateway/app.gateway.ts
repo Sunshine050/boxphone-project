@@ -16,6 +16,10 @@ import { DeviceStatus } from "../modules/devices/device.schema";
 import { SessionStatus } from "../modules/sessions/session.schema";
 import { UserRole } from "../modules/users/user.schema";
 import { UsersService } from "../modules/users/users.service";
+import {
+  ScrcpyService,
+  FrameMeta,
+} from "../modules/devices/scrcpy.service";
 
 type AuthenticatedSocket = Socket & {
   data: {
@@ -41,10 +45,14 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect {
     private readonly configService: ConfigService,
     private readonly jwtService: JwtService,
     private readonly usersService: UsersService,
+    private readonly scrcpyService: ScrcpyService,
   ) {}
 
   // Map device_id -> socket_id
   private devices: Map<string, string> = new Map();
+
+  // socket.id -> serial -> unsubscribe fn (scrcpy stream subscriptions per socket)
+  private streamSubscriptions: Map<string, Map<string, () => void>> = new Map();
 
   async handleConnection(client: AuthenticatedSocket) {
     try {
@@ -67,6 +75,21 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   async handleDisconnect(client: AuthenticatedSocket) {
     this.logger.log(`Client disconnected: ${client.id}`);
+
+    // Cleanup scrcpy stream subscriptions for this socket (if user)
+    const subs = this.streamSubscriptions.get(client.id);
+    if (subs) {
+      subs.forEach((unsub) => {
+        try {
+          unsub();
+        } catch (e: any) {
+          this.logger.warn(
+            `scrcpy unsubscribe on disconnect failed: ${e.message}`,
+          );
+        }
+      });
+      this.streamSubscriptions.delete(client.id);
+    }
 
     // Cleanup if it was a device
     for (const [deviceId, socketId] of this.devices.entries()) {
@@ -298,6 +321,112 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect {
     const deviceSocketId = this.devices.get(payload.deviceId);
     if (deviceSocketId) {
       this.server.to(deviceSocketId).emit("perform_action", payload);
+    }
+  }
+
+  /* ════════════════ scrcpy H.264 streaming ════════════════ */
+
+  /**
+   * Subscribe to a device's H.264 stream.
+   * Server starts scrcpy if not already running. Frames are pushed back as
+   * `stream_frame` (binary Buffer + meta). Initial config (SPS/PPS) replays
+   * immediately so the client's WebCodecs decoder can initialize.
+   */
+  @SubscribeMessage("stream_subscribe")
+  async handleStreamSubscribe(
+    client: AuthenticatedSocket,
+    payload: { deviceSerial: string },
+  ) {
+    const serial = payload?.deviceSerial?.trim();
+    if (!serial) {
+      client.emit("stream_error", { message: "deviceSerial required" });
+      return;
+    }
+
+    try {
+      await this.assertUserCanAccessDevice(client, serial);
+    } catch (error: any) {
+      client.emit("stream_error", {
+        deviceSerial: serial,
+        message: error?.message || "Forbidden",
+      });
+      return;
+    }
+
+    if (!this.scrcpyService.isEnabled()) {
+      client.emit("stream_error", {
+        deviceSerial: serial,
+        message: "scrcpy streaming is disabled (STREAMING_MODE!=scrcpy)",
+      });
+      return;
+    }
+
+    // Don't double-subscribe the same socket to the same device
+    const existing = this.streamSubscriptions.get(client.id);
+    if (existing?.has(serial)) {
+      this.logger.debug(
+        `${client.id} already subscribed to ${serial}, ignoring`,
+      );
+      return;
+    }
+
+    try {
+      const { metadata, unsubscribe } = await this.scrcpyService.subscribe(
+        serial,
+        client.id,
+        (nalUnit: Buffer, meta: FrameMeta) => {
+          // socket.io passes Buffer as binary frame automatically
+          client.emit("stream_frame", {
+            deviceSerial: serial,
+            data: nalUnit,
+            isConfig: meta.isConfig,
+            isKeyFrame: meta.isKeyFrame,
+            pts: meta.pts.toString(),
+          });
+        },
+      );
+
+      let subs = this.streamSubscriptions.get(client.id);
+      if (!subs) {
+        subs = new Map();
+        this.streamSubscriptions.set(client.id, subs);
+      }
+      subs.set(serial, unsubscribe);
+
+      client.emit("stream_metadata", {
+        deviceSerial: serial,
+        ...metadata,
+      });
+      this.logger.log(`stream_subscribe ${client.id} → ${serial}`);
+    } catch (error: any) {
+      this.logger.warn(
+        `stream_subscribe failed for ${serial}: ${error.message}`,
+      );
+      client.emit("stream_error", {
+        deviceSerial: serial,
+        message: error.message || "Failed to subscribe",
+      });
+    }
+  }
+
+  @SubscribeMessage("stream_unsubscribe")
+  async handleStreamUnsubscribe(
+    client: AuthenticatedSocket,
+    payload: { deviceSerial: string },
+  ) {
+    const serial = payload?.deviceSerial?.trim();
+    if (!serial) return;
+    const subs = this.streamSubscriptions.get(client.id);
+    const unsub = subs?.get(serial);
+    if (unsub) {
+      try {
+        unsub();
+      } catch (e: any) {
+        this.logger.warn(`stream_unsubscribe failed: ${e.message}`);
+      }
+      subs!.delete(serial);
+      if (subs!.size === 0) this.streamSubscriptions.delete(client.id);
+      this.logger.log(`stream_unsubscribe ${client.id} ← ${serial}`);
     }
   }
 }
