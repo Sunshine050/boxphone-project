@@ -13,8 +13,10 @@ import {
 } from "lucide-react";
 import type { Session } from "@/types/session";
 import { H264Player, type H264PlayerHandle } from "@/components/h264-player";
+import { DeviceTouchOverlay } from "@boxphon/shared/client/device-touch-overlay";
 import { formatDurationThai } from "@boxphon/shared/client/format-duration";
 import { getServerNow } from "@boxphon/shared/client/server-time";
+import { sendDeviceInput } from "@boxphon/shared/client/send-device-input";
 import {
   type ScreenOrientationMode,
   loadOrientationMode,
@@ -47,218 +49,6 @@ function formatDurationHeaderCompact(totalSeconds: number): string {
   const h = Math.floor(sec / 3600);
   const m = Math.floor((sec % 3600) / 60);
   return m > 0 ? `${h}ชม.${m}น` : `${h}ชม.`;
-}
-
-function getCsrfToken() {
-  if (typeof document === "undefined") return null;
-  const m = document.cookie.match(/(^|\s)csrf_token=([^;]+)/);
-  return m ? decodeURIComponent(m[2].trim()) : null;
-}
-
-async function sendInput(
-  deviceId: string,
-  type: string,
-  payload: Record<string, unknown>,
-) {
-  const csrf = getCsrfToken();
-  return fetch(`${BASE_URL}/devices/${deviceId}/input`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...(csrf && { "X-CSRF-Token": csrf }),
-    },
-    credentials: "include",
-    body: JSON.stringify({ type, payload }),
-  }).then(async (res) => {
-    if (!res.ok) {
-      let message = `Input failed (${res.status})`;
-      try {
-        const data = await res.json();
-        if (data?.message) {
-          message = String(data.message);
-        }
-      } catch {
-        // ignore non-JSON response
-      }
-      throw new Error(message);
-    }
-    return res;
-  });
-}
-
-/** Map browser client coords → ADB tap coords using the visible video/canvas rect. */
-function clientToDevice(
-  clientX: number,
-  clientY: number,
-  videoEl: HTMLElement | null,
-  deviceSize: { width: number; height: number },
-): { x: number; y: number } | null {
-  const rect = videoEl?.getBoundingClientRect();
-  if (!rect || rect.width < 2 || rect.height < 2) return null;
-
-  const nx = (clientX - rect.left) / rect.width;
-  const ny = (clientY - rect.top) / rect.height;
-  if (nx < 0 || nx > 1 || ny < 0 || ny > 1) return null;
-
-  const dw = deviceSize.width > 0 ? deviceSize.width : 1080;
-  const dh = deviceSize.height > 0 ? deviceSize.height : 2340;
-
-  return {
-    x: Math.round(Math.max(0, Math.min(1, nx)) * dw),
-    y: Math.round(Math.max(0, Math.min(1, ny)) * dh),
-  };
-}
-
-function TouchOverlay({
-  deviceId,
-  getNaturalSize,
-  getVideoElement,
-  onAction,
-}: {
-  deviceId: string;
-  getNaturalSize: () => { width: number; height: number };
-  getVideoElement: () => HTMLElement | null;
-  onAction: () => void;
-}) {
-  const overlayRef = useRef<HTMLDivElement>(null);
-  const activePtr = useRef<{
-    id: number;
-    startX: number; startY: number;
-    lastX: number;  lastY: number;
-    t: number;
-    longPressTimer: ReturnType<typeof setTimeout> | null;
-    isSwiping: boolean;
-  } | null>(null);
-  const [crosshair, setCrosshair] = useState<{ x: number; y: number } | null>(null);
-  const crosshairTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const TAP_MOVE_PX = 12;
-  const TAP_MS = 420;
-  const LONG_PRESS_MS = 500;
-
-  useEffect(() => {
-    const el = overlayRef.current;
-    if (!el) return;
-    const blockScroll = (e: TouchEvent) => e.preventDefault();
-    el.addEventListener("touchstart", blockScroll, { passive: false });
-    return () => el.removeEventListener("touchstart", blockScroll);
-  }, []);
-
-  const toDevice = useCallback(
-    (clientX: number, clientY: number) =>
-      clientToDevice(clientX, clientY, getVideoElement(), getNaturalSize()),
-    [getNaturalSize, getVideoElement],
-  );
-
-  const showCrosshair = (clientX: number, clientY: number) => {
-    const rect = overlayRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    setCrosshair({ x: clientX - rect.left, y: clientY - rect.top });
-    if (crosshairTimer.current) clearTimeout(crosshairTimer.current);
-    crosshairTimer.current = setTimeout(() => setCrosshair(null), 600);
-  };
-
-  const onPointerDown = (e: React.PointerEvent) => {
-    if (activePtr.current) return;
-    e.currentTarget.setPointerCapture(e.pointerId);
-    showCrosshair(e.clientX, e.clientY);
-
-    const longPressTimer = setTimeout(() => {
-      const p = activePtr.current;
-      if (!p) return;
-      const dist = Math.hypot(p.lastX - p.startX, p.lastY - p.startY);
-      if (dist < TAP_MOVE_PX) {
-        const pos = toDevice(p.startX, p.startY);
-        if (pos) {
-          try { navigator.vibrate?.(30); } catch { /* ignore */ }
-          sendInput(deviceId, "swipe", {
-            x1: pos.x, y1: pos.y, x2: pos.x, y2: pos.y, duration: 600,
-          }).then(() => onAction());
-        }
-      }
-    }, LONG_PRESS_MS);
-
-    activePtr.current = {
-      id: e.pointerId,
-      startX: e.clientX, startY: e.clientY,
-      lastX: e.clientX,  lastY: e.clientY,
-      t: Date.now(),
-      longPressTimer,
-      isSwiping: false,
-    };
-  };
-
-  const onPointerMove = (e: React.PointerEvent) => {
-    const p = activePtr.current;
-    if (!p || p.id !== e.pointerId) return;
-    const dist = Math.hypot(e.clientX - p.startX, e.clientY - p.startY);
-    if (!p.isSwiping && dist >= TAP_MOVE_PX) {
-      if (p.longPressTimer) { clearTimeout(p.longPressTimer); p.longPressTimer = null; }
-      p.isSwiping = true;
-    }
-    p.lastX = e.clientX;
-    p.lastY = e.clientY;
-    showCrosshair(e.clientX, e.clientY);
-  };
-
-  const onPointerUp = (e: React.PointerEvent) => {
-    const p = activePtr.current;
-    if (!p || p.id !== e.pointerId) return;
-    if (p.longPressTimer) { clearTimeout(p.longPressTimer); p.longPressTimer = null; }
-    activePtr.current = null;
-
-    const dist = Math.hypot(e.clientX - p.startX, e.clientY - p.startY);
-    const dt = Date.now() - p.t;
-
-    if (!p.isSwiping && dist < TAP_MOVE_PX && dt < TAP_MS) {
-      const pos = toDevice(p.startX, p.startY);
-      if (pos) {
-        showCrosshair(p.startX, p.startY);
-        try { navigator.vibrate?.(8); } catch { /* ignore */ }
-        sendInput(deviceId, "tap", { x: pos.x, y: pos.y }).then(() => onAction());
-      }
-    } else if (p.isSwiping) {
-      const from = toDevice(p.startX, p.startY);
-      const to = toDevice(e.clientX, e.clientY);
-      if (from && to) {
-        sendInput(deviceId, "swipe", {
-          x1: from.x, y1: from.y,
-          x2: to.x,   y2: to.y,
-          duration: Math.max(60, Math.min(dt, 600)),
-        }).then(() => onAction());
-      }
-    }
-  };
-
-  const onPointerCancel = () => {
-    if (activePtr.current?.longPressTimer) clearTimeout(activePtr.current.longPressTimer);
-    activePtr.current = null;
-  };
-
-  return (
-    <div
-      ref={overlayRef}
-      className="absolute inset-0 cursor-crosshair select-none"
-      onPointerDown={onPointerDown}
-      onPointerMove={onPointerMove}
-      onPointerUp={onPointerUp}
-      onPointerCancel={onPointerCancel}
-      style={{ touchAction: "none", WebkitTapHighlightColor: "transparent" } as React.CSSProperties}
-    >
-      {crosshair && (
-        <span
-          className="pointer-events-none absolute z-20"
-          style={{ left: crosshair.x, top: crosshair.y }}
-        >
-          <span className="absolute -left-3 -top-3 h-6 w-6 rounded-full border-2 border-cyan-400/90 bg-cyan-400/25" />
-          <span className="absolute left-0 top-0 h-px w-3 -translate-x-full bg-cyan-400/70" />
-          <span className="absolute left-0 top-0 h-3 w-px -translate-y-full bg-cyan-400/70" />
-          <span className="absolute left-0 top-0 h-px w-3 bg-cyan-400/70" />
-          <span className="absolute left-0 top-0 h-3 w-px bg-cyan-400/70" />
-        </span>
-      )}
-    </div>
-  );
 }
 
 interface SessionPhoneControlProps {
@@ -452,6 +242,14 @@ export function SessionPhoneControl({
     return imgRef.current;
   }, [streamingMode]);
 
+  const getVideoSize = useCallback(() => {
+    if (streamingMode === "scrcpy" && h264PlayerRef.current) {
+      const vs = h264PlayerRef.current.getVideoSize();
+      if (vs.width > 0 && vs.height > 0) return vs;
+    }
+    return streamSize;
+  }, [streamingMode, streamSize]);
+
   // The backend computes remaining_seconds as-of the API response time.
   // We subtract elapsed time since fetchedAt (when we received that response),
   // NOT since resume_time (which would double-count elapsed seconds already
@@ -614,10 +412,12 @@ export function SessionPhoneControl({
 
           {/* ── touch overlay (only when actively streaming) ── */}
           {streamActive && deviceId && (
-            <TouchOverlay
+            <DeviceTouchOverlay
               deviceId={deviceId}
+              apiBaseUrl={BASE_URL}
               getNaturalSize={getNaturalSize}
               getVideoElement={getVideoElement}
+              getVideoSize={getVideoSize}
               onAction={handleActionRefresh}
             />
           )}
@@ -658,9 +458,13 @@ export function SessionPhoneControl({
                 type="button"
                 aria-label={btn.label}
                 onClick={() => {
-                  sendInput(deviceId, "key", { keycode: btn.key }).then(() =>
-                    handleActionRefresh(),
-                  );
+                  void sendDeviceInput(
+                    BASE_URL,
+                    deviceId,
+                    "key",
+                    { keycode: btn.key },
+                    { awaitResponse: true },
+                  )?.then(() => handleActionRefresh());
                 }}
                 className="flex min-w-0 flex-1 max-w-[5.5rem] flex-col items-center gap-0.5 rounded-lg bg-slate-800 px-2 py-1.5 text-slate-300 transition-colors hover:bg-slate-700 hover:text-white active:bg-slate-600 sm:max-w-none sm:rounded-xl sm:px-4 sm:py-2 md:px-5"
               >

@@ -327,14 +327,17 @@ export class DevicesController {
   @SkipThrottle()
   async sendInput(
     @Param("id") id: string,
-    @Body() body: { type?: "tap" | "swipe" | "key" | "text"; payload?: any },
+    @Body() body: {
+      type?: "tap" | "swipe" | "touch" | "key" | "text";
+      payload?: any;
+    },
     @CurrentUser() currentUser: any,
   ) {
     const type = body?.type;
     const payload = body?.payload ?? {};
-    if (!type || !["tap", "swipe", "key", "text"].includes(type)) {
+    if (!type || !["tap", "swipe", "touch", "key", "text"].includes(type)) {
       throw new BadRequestException(
-        "type must be one of: tap, swipe, key, text",
+        "type must be one of: tap, swipe, touch, key, text",
       );
     }
 
@@ -352,8 +355,20 @@ export class DevicesController {
       throw new BadRequestException("Device serial not found");
     }
 
+    if (type === "touch") {
+      void this.adbScreenshotService
+        .sendInput(serialToUse, { type, payload })
+        .catch(() => {
+          /* touch stream is fire-and-forget; client retries on next move */
+        });
+      return { ok: true };
+    }
+
     await this.adbScreenshotService.sendInput(serialToUse, { type, payload });
-    this.adbScreenshotService.clearCacheForSerial(serialToUse);
+
+    if (type === "tap" || type === "key" || type === "text") {
+      this.adbScreenshotService.clearCacheForSerial(serialToUse);
+    }
 
     return { ok: true };
   }

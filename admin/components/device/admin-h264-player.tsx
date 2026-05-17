@@ -20,6 +20,7 @@ export interface AdminH264PlayerMeta {
 
 export interface AdminH264PlayerHandle {
   getNaturalSize: () => { width: number; height: number };
+  getVideoSize: () => { width: number; height: number };
   getCanvas: () => HTMLCanvasElement | null;
 }
 
@@ -123,6 +124,7 @@ export const AdminH264Player = forwardRef<AdminH264PlayerHandle, Props>(
     const decoderRef = useRef<VideoDecoder | null>(null);
     const configPacketRef = useRef<Uint8Array | null>(null);
     const naturalSizeRef = useRef({ width: 0, height: 0 });
+    const videoSizeRef = useRef({ width: 0, height: 0 });
     const decoderConfiguredRef = useRef(false);
     const waitingKeyRef = useRef(true);
     const subscribedRef = useRef(false);
@@ -134,6 +136,7 @@ export const AdminH264Player = forwardRef<AdminH264PlayerHandle, Props>(
 
     useImperativeHandle(ref, () => ({
       getNaturalSize: () => naturalSizeRef.current,
+      getVideoSize: () => videoSizeRef.current,
       getCanvas: () => canvasRef.current,
     }));
 
@@ -170,9 +173,20 @@ export const AdminH264Player = forwardRef<AdminH264PlayerHandle, Props>(
           if (c.width !== frame.displayWidth || c.height !== frame.displayHeight) {
             c.width = frame.displayWidth;
             c.height = frame.displayHeight;
+            videoSizeRef.current = {
+              width: frame.displayWidth,
+              height: frame.displayHeight,
+            };
             if (!naturalSizeRef.current.width) {
-              naturalSizeRef.current = { width: frame.displayWidth, height: frame.displayHeight };
-              onMetadata?.({ width: frame.displayWidth, height: frame.displayHeight, deviceName: "" });
+              naturalSizeRef.current = {
+                width: frame.displayWidth,
+                height: frame.displayHeight,
+              };
+              onMetadata?.({
+                width: frame.displayWidth,
+                height: frame.displayHeight,
+                deviceName: "",
+              });
             }
           }
           cx.drawImage(frame, 0, 0);
@@ -243,6 +257,7 @@ export const AdminH264Player = forwardRef<AdminH264PlayerHandle, Props>(
         displayWidth?: number; displayHeight?: number;
       }) => {
         if (p.deviceSerial !== deviceSerial) return;
+        videoSizeRef.current = { width: p.width, height: p.height };
         if (p.displayWidth && p.displayHeight) {
           const isLandscape = p.width > p.height;
           const pw = Math.min(p.displayWidth, p.displayHeight);

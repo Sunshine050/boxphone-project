@@ -12,10 +12,16 @@ const execFileAsync = promisify(execFile);
 const execAsync = promisify(exec);
 
 export interface AdbInputCommand {
-  type: "tap" | "swipe" | "key" | "text";
-  /** tap: {x, y}  swipe: {x1,y1,x2,y2,duration?}  key: {keycode}  text: {value} */
+  type: "tap" | "swipe" | "touch" | "key" | "text";
+  /** tap: {x,y} swipe: {x1,y1,x2,y2,duration?} touch: {action,x,y} key: {keycode} text: {value} */
   payload: Record<string, any>;
 }
+
+type TouchGestureState = {
+  active: boolean;
+  lastX: number;
+  lastY: number;
+};
 
 /** Re-export สำหรับ module อื่นที่ต้องการเทียบ placeholder */
 export { PLACEHOLDER_PNG };
@@ -28,6 +34,12 @@ export class AdbScreenshotService {
     { buffer: Buffer; at: number }
   >();
   private screenshotRunning = 0;
+  private readonly inputChains = new Map<string, Promise<void>>();
+  private readonly touchGestures = new Map<string, TouchGestureState>();
+  private readonly touchMovePending = new Map<
+    string,
+    { x: number; y: number; timer: ReturnType<typeof setTimeout> }
+  >();
   private readonly screenshotQueue: Array<() => void> = [];
 
   constructor(private readonly configService: ConfigService) {}
@@ -199,10 +211,53 @@ export class AdbScreenshotService {
    * type: 'tap' | 'swipe' | 'key' | 'text'
    */
   async sendInput(serial: string, cmd: AdbInputCommand): Promise<void> {
+    if (cmd.type === "touch" && cmd.payload?.action === "move") {
+      this.scheduleTouchMove(serial, cmd);
+      return;
+    }
+
+    const run = () => this.execInput(serial, cmd);
+    const prev = this.inputChains.get(serial) ?? Promise.resolve();
+    const next = prev.then(run, run);
+    this.inputChains.set(
+      serial,
+      next.catch(() => {
+        /* keep chain alive after errors */
+      }),
+    );
+    await next;
+  }
+
+  private scheduleTouchMove(serial: string, cmd: AdbInputCommand): void {
+    const x = Math.round(Number(cmd.payload.x));
+    const y = Math.round(Number(cmd.payload.y));
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+
+    const existing = this.touchMovePending.get(serial);
+    if (existing) {
+      clearTimeout(existing.timer);
+    }
+
+    const timer = setTimeout(() => {
+      this.touchMovePending.delete(serial);
+      const moveCmd: AdbInputCommand = {
+        type: "touch",
+        payload: { action: "move", x, y },
+      };
+      const run = () => this.execInput(serial, moveCmd);
+      const prev = this.inputChains.get(serial) ?? Promise.resolve();
+      const next = prev.then(run, run);
+      this.inputChains.set(serial, next.catch(() => {}));
+    }, 10);
+
+    this.touchMovePending.set(serial, { x, y, timer });
+  }
+
+  private async execInput(serial: string, cmd: AdbInputCommand): Promise<void> {
     const effective = await this.resolveSerialForScreencap(serial);
     const adbPath = this.configService.get<string>("ADB_PATH") || "adb";
     const base = ["-s", effective, "shell", "input"];
-    let args: string[];
+    let args: string[] | null = null;
 
     switch (cmd.type) {
       case "tap": {
@@ -219,17 +274,50 @@ export class AdbScreenshotService {
           String(Math.round(y1)),
           String(Math.round(x2)),
           String(Math.round(y2)),
-          String(duration),
+          String(Math.max(1, Math.round(duration))),
         ];
         break;
       }
+      case "touch": {
+        const action = String(cmd.payload?.action || "");
+        const x = Math.round(Number(cmd.payload.x));
+        const y = Math.round(Number(cmd.payload.y));
+        if (!Number.isFinite(x) || !Number.isFinite(y)) {
+          throw new Error("touch requires numeric x,y");
+        }
+        const gesture = this.touchGestures.get(effective) ?? {
+          active: false,
+          lastX: x,
+          lastY: y,
+        };
+
+        if (action === "down") {
+          gesture.active = true;
+          gesture.lastX = x;
+          gesture.lastY = y;
+          this.touchGestures.set(effective, gesture);
+          args = [...base, "motionevent", "DOWN", String(x), String(y)];
+        } else if (action === "move") {
+          if (!gesture.active) return;
+          if (gesture.lastX === x && gesture.lastY === y) return;
+          gesture.lastX = x;
+          gesture.lastY = y;
+          this.touchGestures.set(effective, gesture);
+          args = [...base, "motionevent", "MOVE", String(x), String(y)];
+        } else if (action === "up") {
+          gesture.active = false;
+          this.touchGestures.set(effective, gesture);
+          args = [...base, "motionevent", "UP", String(x), String(y)];
+        } else {
+          throw new Error(`Unknown touch action: ${action}`);
+        }
+        break;
+      }
       case "key": {
-        // keycode: number (KEYCODE_BACK=4, KEYCODE_HOME=3, KEYCODE_APP_SWITCH=187)
         args = [...base, "keyevent", String(cmd.payload.keycode)];
         break;
       }
       case "text": {
-        // escape spaces with %s
         const escaped = String(cmd.payload.value).replace(/ /g, "%s");
         args = [...base, "text", escaped];
         break;
@@ -238,9 +326,68 @@ export class AdbScreenshotService {
         throw new Error(`Unknown input type: ${(cmd as any).type}`);
     }
 
+    if (!args) return;
+
     this.logger.debug(`[INPUT] adb ${args.join(" ")}`);
-    const opts = { timeout: 8000, windowsHide: true };
-    const { stderr } = await execFileAsync(adbPath, args, opts as any);
-    if (stderr) this.logger.warn(`[INPUT] stderr: ${stderr}`);
+    const timeoutMs = cmd.type === "touch" ? 2500 : 8000;
+    const opts = { timeout: timeoutMs, windowsHide: true };
+
+    try {
+      const { stderr } = await execFileAsync(adbPath, args, opts as any);
+      if (stderr) this.logger.warn(`[INPUT] stderr: ${stderr}`);
+    } catch (err: any) {
+      if (cmd.type === "touch") {
+        await this.execTouchFallback(
+          adbPath,
+          effective,
+          cmd,
+          base,
+          opts as any,
+        );
+        return;
+      }
+      throw err;
+    }
+  }
+
+  /** Fallback when `input motionevent` is unavailable on older Android builds. */
+  private async execTouchFallback(
+    adbPath: string,
+    effective: string,
+    cmd: AdbInputCommand,
+    base: string[],
+    opts: { timeout: number; windowsHide: boolean },
+  ): Promise<void> {
+    const action = String(cmd.payload?.action || "");
+    const x = Math.round(Number(cmd.payload.x));
+    const y = Math.round(Number(cmd.payload.y));
+    const gesture = this.touchGestures.get(effective);
+
+    if (action === "down") {
+      const args = [...base, "swipe", String(x), String(y), String(x), String(y), "1"];
+      await execFileAsync(adbPath, args, opts);
+      return;
+    }
+
+    if (action === "move" && gesture?.active) {
+      const args = [
+        ...base,
+        "swipe",
+        String(gesture.lastX),
+        String(gesture.lastY),
+        String(x),
+        String(y),
+        "1",
+      ];
+      gesture.lastX = x;
+      gesture.lastY = y;
+      await execFileAsync(adbPath, args, opts);
+      return;
+    }
+
+    if (action === "up") {
+      const args = [...base, "swipe", String(x), String(y), String(x), String(y), "1"];
+      await execFileAsync(adbPath, args, opts);
+    }
   }
 }
