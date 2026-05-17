@@ -215,6 +215,18 @@ export class ScrcpyService implements OnModuleInit, OnModuleDestroy {
     // so the metadata we return is correct. Bounded to 5s to avoid hangs.
     await this.waitForVideoHeader(stream, 5000);
 
+    // Stream may have died (socket closed / process crashed) during the wait.
+    // Don't accept subscribers against a dead stream — caller should retry.
+    if (
+      stream.status === "stopped" ||
+      stream.status === "stopping" ||
+      !this.streams.has(serial)
+    ) {
+      throw new Error(
+        "scrcpy stream died during startup — likely scrcpy-server crashed on the device. Check backend logs for 'stderr:' lines.",
+      );
+    }
+
     stream.subscribers.set(subscriberId, listener);
 
     if (stream.configPacket) {
@@ -253,9 +265,16 @@ export class ScrcpyService implements OnModuleInit, OnModuleDestroy {
       const startedAt = Date.now();
       const tick = () => {
         if (state.videoHeaderReceived) return resolve();
+        // Bail early if stream died — no point waiting full timeout
+        if (state.status === "stopped" || state.status === "stopping") {
+          this.logger.warn(
+            `[scrcpy/${state.serial}] stream died before video header arrived`,
+          );
+          return resolve();
+        }
         if (Date.now() - startedAt >= timeoutMs) {
           this.logger.warn(
-            `[scrcpy/${state.serial}] video header not received within ${timeoutMs}ms — returning zero metadata`,
+            `[scrcpy/${state.serial}] video header not received within ${timeoutMs}ms`,
           );
           return resolve();
         }
@@ -359,6 +378,26 @@ export class ScrcpyService implements OnModuleInit, OnModuleDestroy {
     this.streams.set(serial, state);
 
     try {
+      // 0) Kill any orphan scrcpy server still running on the device from a
+      // previous crashed/restarted backend. Ignore exit code (pkill returns 1
+      // if no match — that's normal).
+      try {
+        await execFileAsync(
+          this.adbPath,
+          [
+            "-s",
+            serial,
+            "shell",
+            "pkill",
+            "-f",
+            "com.genymobile.scrcpy.Server",
+          ],
+          { timeout: 3000, windowsHide: true },
+        );
+      } catch {
+        // no orphan — fine
+      }
+
       // 1) push scrcpy-server.jar to device
       await execFileAsync(
         this.adbPath,
@@ -398,6 +437,7 @@ export class ScrcpyService implements OnModuleInit, OnModuleDestroy {
         this.serverVersion,
         `scid=${scid}`,
         "tunnel_forward=true",
+        "video=true",
         "audio=false",
         "control=false",
         "cleanup=true",
@@ -408,22 +448,25 @@ export class ScrcpyService implements OnModuleInit, OnModuleDestroy {
         "send_device_meta=true",
         "send_frame_meta=true",
         "send_dummy_byte=true",
+        "send_codec_meta=true",
       ];
+
+      this.logger.log(
+        `[scrcpy/${serial}] launching: adb ${scrcpyArgs.slice(0, 3).join(" ")} ... scid=${scid}`,
+      );
 
       state.shellProcess = spawn(this.adbPath, scrcpyArgs, {
         windowsHide: true,
       });
 
-      state.shellProcess.stdout?.on("data", (d: Buffer) =>
-        this.logger.debug(
-          `[scrcpy/${serial}] ${d.toString("utf8").trim()}`,
-        ),
-      );
-      state.shellProcess.stderr?.on("data", (d: Buffer) =>
-        this.logger.debug(
-          `[scrcpy/${serial}] err: ${d.toString("utf8").trim()}`,
-        ),
-      );
+      state.shellProcess.stdout?.on("data", (d: Buffer) => {
+        const msg = d.toString("utf8").trim();
+        if (msg) this.logger.log(`[scrcpy/${serial}] stdout: ${msg}`);
+      });
+      state.shellProcess.stderr?.on("data", (d: Buffer) => {
+        const msg = d.toString("utf8").trim();
+        if (msg) this.logger.warn(`[scrcpy/${serial}] stderr: ${msg}`);
+      });
       state.shellProcess.on("exit", (code, sig) => {
         this.logger.warn(
           `[scrcpy/${serial}] server process exited code=${code} sig=${sig}`,
@@ -433,8 +476,10 @@ export class ScrcpyService implements OnModuleInit, OnModuleDestroy {
         }
       });
 
-      // 4) give server a moment to bind socket before we connect
-      await new Promise((r) => setTimeout(r, 800));
+      // 4) give server a moment to bind socket before we connect.
+      // Phones with slower app_process startup (or first run after push) can
+      // take >1s, so be generous here. connectSocket retries internally too.
+      await new Promise((r) => setTimeout(r, 1500));
 
       // 5) connect TCP to forwarded port
       state.socket = await this.connectSocket(port);
