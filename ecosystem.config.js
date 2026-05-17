@@ -25,11 +25,18 @@ module.exports = {
       env_production: {
         NODE_ENV: 'production',
         PORT: 3031,
-        ALLOW_ADMIN_SEED_IN_PRODUCTION: 'true',
+        ALLOW_ADMIN_SEED_IN_PRODUCTION: 'false',
         COOKIE_DOMAIN: '.myrealphone.cloud',
         ADB_PATH: ADB_PATH_WIN,
-        // Production ใช้ screenshot polling เดิม
-        STREAMING_MODE: 'screenshot',
+        STREAMING_MODE: 'scrcpy',
+        SCRCPY_SERVER_VERSION: '2.4',
+        SCRCPY_VIDEO_BITRATE: '3000000',
+        SCRCPY_MAX_FPS: '30',
+        SCRCPY_MAX_SIZE: '1280',
+        SCRCPY_PORT_POOL_START: '27183',
+        SCRCPY_PORT_POOL_SIZE: '100',
+        SCRCPY_IDLE_TIMEOUT_MS: '30000',
+        MAX_CONCURRENT_STREAMS: '20',
       },
     },
 
