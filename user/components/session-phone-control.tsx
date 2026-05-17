@@ -1,11 +1,29 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
-import { Expand, Home, PauseCircle, RotateCcw, Square } from "lucide-react";
+import { useEffect, useRef, useState, useCallback, useMemo } from "react";
+import { motion } from "framer-motion";
+import {
+  Expand,
+  Home,
+  Monitor,
+  PauseCircle,
+  RotateCcw,
+  Smartphone,
+  Square,
+} from "lucide-react";
 import type { Session } from "@/types/session";
 import { H264Player, type H264PlayerHandle } from "@/components/h264-player";
 import { formatDurationThai } from "@boxphon/shared/client/format-duration";
 import { getServerNow } from "@boxphon/shared/client/server-time";
+import {
+  type ScreenOrientationMode,
+  loadOrientationMode,
+  saveOrientationMode,
+  cycleOrientationMode,
+  orientationLabel,
+  computeFrameAspectRatio,
+  isLandscapeFrame,
+} from "@/lib/screen-orientation";
 
 const BASE_URL = (
   process.env.NEXT_PUBLIC_API_BASE_URL ||
@@ -253,10 +271,39 @@ export function SessionPhoneControl({
   const [now, setNow] = useState(() => getServerNow());
   const [imgSrc, setImgSrc] = useState<string | null>(null);
   const [imgError, setImgError] = useState(false);
-  const [screenAspectRatio, setScreenAspectRatio] = useState(1080 / 2340);
+  const [streamSize, setStreamSize] = useState({ width: 1080, height: 2340 });
+  const [orientationMode, setOrientationMode] = useState<ScreenOrientationMode>(
+    () => loadOrientationMode(session._id),
+  );
   const [streamingMode, setStreamingMode] = useState<"unknown" | StreamingMode>(
     "unknown",
   );
+
+  const screenAspectRatio = useMemo(
+    () =>
+      computeFrameAspectRatio(
+        streamSize.width,
+        streamSize.height,
+        orientationMode,
+      ),
+    [streamSize.width, streamSize.height, orientationMode],
+  );
+
+  const landscapeFrame = isLandscapeFrame(screenAspectRatio);
+
+  const applyStreamDimensions = useCallback((width: number, height: number) => {
+    if (width > 0 && height > 0) {
+      setStreamSize({ width, height });
+    }
+  }, []);
+
+  const cycleOrientation = () => {
+    setOrientationMode((prev) => {
+      const next = cycleOrientationMode(prev);
+      saveOrientationMode(session._id, next);
+      return next;
+    });
+  };
   const imgRef = useRef<HTMLImageElement | null>(null);
   const h264PlayerRef = useRef<H264PlayerHandle>(null);
   const imgTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -400,16 +447,62 @@ export function SessionPhoneControl({
   const streamActive = !expired && !isPaused;
   const isExpanded = variant === "expanded";
 
+  const containerMaxClass = isExpanded
+    ? landscapeFrame
+      ? "w-full max-w-[min(95vw,920px)]"
+      : "w-auto max-w-[min(90vw,520px)]"
+    : landscapeFrame
+      ? "w-full max-w-[min(100%,380px)]"
+      : "w-full max-w-[220px]";
+
+  const orientationIcon =
+    orientationMode === "auto" ? (
+      <RotateCcw className="h-3.5 w-3.5" />
+    ) : orientationMode === "portrait" ? (
+      <Smartphone className="h-3.5 w-3.5" />
+    ) : (
+      <Monitor className="h-3.5 w-3.5" />
+    );
+
+  const expandedFrameStyle: React.CSSProperties = isExpanded
+    ? landscapeFrame
+      ? {
+          width: "100%",
+          maxWidth: "min(95vw, 920px)",
+          maxHeight: "min(80vh, 520px)",
+        }
+      : {
+          maxHeight: "min(75vh, 680px)",
+          height: "min(75vh, 680px)",
+          maxWidth: "min(90vw, 500px)",
+        }
+    : {};
+
   return (
-    <div
-      className={`flex shrink-0 flex-col ${isExpanded ? "w-auto max-w-[min(90vw,520px)]" : "w-full max-w-[220px]"}`}
+    <motion.div
+      layout
+      className={`flex shrink-0 flex-col ${containerMaxClass}`}
     >
       {/* ── header bar ── */}
       <div className="mb-3 flex items-center justify-between gap-2 rounded-xl border border-slate-800 bg-slate-900/80 px-3 py-2">
         <span className="truncate text-sm font-semibold text-white">
           {session.device_id?.name || "Device"}
         </span>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 sm:gap-2">
+          {streamActive && (
+            <button
+              type="button"
+              onClick={cycleOrientation}
+              className="inline-flex h-7 items-center gap-1 rounded-md border border-slate-700 bg-slate-800/70 px-1.5 text-slate-200 transition-colors hover:bg-slate-700 hover:text-white"
+              aria-label={`สลับแนวจอ: ${orientationLabel(orientationMode)}`}
+              title={`แนวจอ: ${orientationLabel(orientationMode)} (แตะเพื่อสลับ)`}
+            >
+              {orientationIcon}
+              <span className="hidden text-[10px] sm:inline">
+                {orientationLabel(orientationMode)}
+              </span>
+            </button>
+          )}
           {!isExpanded && onExpand && streamActive && (
             <button
               type="button"
@@ -435,22 +528,18 @@ export function SessionPhoneControl({
       </div>
 
       {/* ── phone frame ── */}
-      <div className="relative mx-auto w-full">
-        <div
-          className={`relative mx-auto overflow-hidden rounded-[2.25rem] border-4 border-slate-700 bg-slate-900 shadow-2xl shadow-cyan-900/20 ${
-            isExpanded ? "w-auto max-w-[min(90vw,500px)]" : "w-full"
-          }`}
+      <motion.div layout className="relative mx-auto w-full">
+        <motion.div
+          layout
+          transition={{ type: "spring", stiffness: 320, damping: 32 }}
+          className="relative mx-auto w-full overflow-hidden rounded-[2.25rem] border-4 border-slate-700 bg-slate-900 shadow-2xl shadow-cyan-900/20"
           style={{
             aspectRatio: String(screenAspectRatio),
             isolation: "isolate",
             userSelect: "none",
             WebkitUserSelect: "none",
-            // Leave room for header bar (~52px), nav buttons (~76px), close btn
-            // (~44px), overlay padding (~32px) → cap at ~75vh or 680px
-            ...(isExpanded
-              ? { maxHeight: "min(75vh, 680px)", height: "min(75vh, 680px)" }
-              : {}),
-          } as React.CSSProperties}
+            ...expandedFrameStyle,
+          }}
         >
           {/* ── stream layer ── */}
           {streamingMode === "scrcpy" && deviceSerial && streamActive && !suppressStream ? (
@@ -459,9 +548,7 @@ export function SessionPhoneControl({
               deviceSerial={deviceSerial}
               className="absolute inset-0"
               onMetadata={(m) => {
-                if (m.width > 0 && m.height > 0) {
-                  setScreenAspectRatio(m.width / m.height);
-                }
+                applyStreamDimensions(m.width, m.height);
               }}
             />
           ) : streamingMode === "screenshot" && imgSrc && !imgError && streamActive ? (
@@ -472,9 +559,7 @@ export function SessionPhoneControl({
               className="pointer-events-none absolute inset-0 h-full w-full object-contain"
               onLoad={(e) => {
                 const { naturalWidth, naturalHeight } = e.currentTarget;
-                if (naturalWidth > 0 && naturalHeight > 0) {
-                  setScreenAspectRatio(naturalWidth / naturalHeight);
-                }
+                applyStreamDimensions(naturalWidth, naturalHeight);
               }}
               draggable={false}
             />
@@ -524,7 +609,7 @@ export function SessionPhoneControl({
               </span>
             </div>
           )}
-        </div>
+        </motion.div>
 
         {/* ── Android nav buttons (Back / Home / Recents) ── */}
         {streamActive && deviceId && (
@@ -551,7 +636,7 @@ export function SessionPhoneControl({
             ))}
           </div>
         )}
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   );
 }

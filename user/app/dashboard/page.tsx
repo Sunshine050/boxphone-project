@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 import { getNotificationSocket } from "@/lib/socket-client";
@@ -105,9 +106,25 @@ export default function DashboardPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center text-white">
-        Loading...
-      </div>
+      <motion.div
+        className="min-h-screen bg-gradient-to-br from-slate-950 via-blue-950 to-slate-900 flex flex-col items-center justify-center gap-4 text-white"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+      >
+        <motion.div
+          className="h-12 w-12 rounded-full border-4 border-cyan-500 border-t-transparent"
+          animate={{ rotate: 360 }}
+          transition={{ repeat: Infinity, duration: 0.9, ease: "linear" }}
+        />
+        <motion.p
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.15 }}
+          className="text-sm text-slate-400"
+        >
+          กำลังโหลดอุปกรณ์...
+        </motion.p>
+      </motion.div>
     );
   }
 
