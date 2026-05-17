@@ -36,28 +36,50 @@ export function orientationLabel(mode: ScreenOrientationMode): string {
   return ORIENTATION_LABELS[mode];
 }
 
-/**
- * Frame aspect ratio (width/height) for CSS aspect-ratio.
- * Uses stream dimensions — object-contain keeps video undistorted.
- */
+/** Logical frame size (CSS px) from encoded stream + user orientation lock. */
+export function getFrameDimensions(
+  streamWidth: number,
+  streamHeight: number,
+  mode: ScreenOrientationMode,
+): { width: number; height: number } {
+  const sw = Math.max(1, Math.round(streamWidth));
+  const sh = Math.max(1, Math.round(streamHeight));
+  const streamIsLandscape = sw >= sh;
+
+  if (mode === "auto") {
+    return { width: sw, height: sh };
+  }
+
+  if (mode === "portrait") {
+    return streamIsLandscape
+      ? { width: Math.min(sw, sh), height: Math.max(sw, sh) }
+      : { width: sw, height: sh };
+  }
+
+  // landscape — swap so width is always the long edge
+  return streamIsLandscape
+    ? { width: sw, height: sh }
+    : { width: sh, height: sw };
+}
+
+/** Frame aspect ratio (width/height) for CSS `aspect-ratio`. */
 export function computeFrameAspectRatio(
   streamWidth: number,
   streamHeight: number,
   mode: ScreenOrientationMode,
 ): number {
-  if (streamWidth <= 0 || streamHeight <= 0) return 9 / 16;
-  const streamRatio = streamWidth / streamHeight;
-  const streamIsLandscape = streamRatio >= 1;
+  const { width, height } = getFrameDimensions(streamWidth, streamHeight, mode);
+  return width / height;
+}
 
-  if (mode === "auto") return streamRatio;
-
-  // Portrait frame: width/height < 1
-  if (mode === "portrait") {
-    return streamIsLandscape ? streamHeight / streamWidth : streamRatio;
-  }
-
-  // Landscape frame: width/height >= 1 (swap when stream is portrait)
-  return streamIsLandscape ? streamRatio : streamHeight / streamWidth;
+/** CSS aspect-ratio value, e.g. `"2340 / 1080"`. */
+export function frameAspectRatioCss(
+  streamWidth: number,
+  streamHeight: number,
+  mode: ScreenOrientationMode,
+): string {
+  const { width, height } = getFrameDimensions(streamWidth, streamHeight, mode);
+  return `${width} / ${height}`;
 }
 
 export function isLandscapeFrame(aspectRatio: number): boolean {
