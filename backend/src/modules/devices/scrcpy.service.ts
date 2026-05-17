@@ -156,14 +156,47 @@ export class ScrcpyService implements OnModuleInit, OnModuleDestroy {
         `scrcpy-server.jar missing at ${this.jarPath} — run: node scripts/download-scrcpy-server.js`,
       );
     }
-    // Cleanup any orphan adb forwards from a previous crashed run.
+    // Cleanup orphan adb forwards from a previous crashed run.
+    // Some adb builds reject the global "adb forward --remove-all" when
+    // multiple devices are connected ("more than one device/emulator"),
+    // so iterate and clean up per-device using `adb devices` output.
     try {
-      await execFileAsync(this.adbPath, ["forward", "--remove-all"], {
+      const { stdout } = await execFileAsync(this.adbPath, ["devices"], {
         timeout: 5000,
         windowsHide: true,
       });
+      const serials = stdout
+        .split(/\r?\n/)
+        .slice(1) // skip header "List of devices attached"
+        .map((line) => line.trim())
+        .filter((line) => line.endsWith("\tdevice"))
+        .map((line) => line.split("\t")[0])
+        .filter(Boolean);
+
+      for (const s of serials) {
+        try {
+          await execFileAsync(
+            this.adbPath,
+            ["-s", s, "forward", "--remove-all"],
+            { timeout: 5000, windowsHide: true },
+          );
+        } catch (e: any) {
+          this.logger.warn(
+            `adb forward cleanup failed for ${s}: ${e.message}`,
+          );
+        }
+      }
+      if (serials.length === 0) {
+        this.logger.warn(
+          "no adb devices found at startup — connect device and try again",
+        );
+      } else {
+        this.logger.log(
+          `adb cleanup done for ${serials.length} device(s): ${serials.join(", ")}`,
+        );
+      }
     } catch (e: any) {
-      this.logger.warn(`adb forward cleanup failed: ${e.message}`);
+      this.logger.warn(`adb devices listing failed: ${e.message}`);
     }
   }
 
