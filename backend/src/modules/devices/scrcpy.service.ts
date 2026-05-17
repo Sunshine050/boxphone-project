@@ -387,7 +387,11 @@ export class ScrcpyService implements OnModuleInit, OnModuleDestroy {
     }
 
     const port = this.allocatePort();
-    const scid = crypto.randomBytes(4).toString("hex");
+    // scrcpy-server parses scid as Integer.parseInt(value, 16), so it must
+    // be a 31-bit non-negative value (≤ 0x7FFFFFFF). Mask the top bit.
+    const scid = (crypto.randomBytes(4).readUInt32BE(0) & 0x7fffffff)
+      .toString(16)
+      .padStart(8, "0");
 
     const state: ScrcpyStreamState = {
       serial,
