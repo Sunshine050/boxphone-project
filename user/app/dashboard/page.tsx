@@ -8,6 +8,8 @@ import { playNotificationSound } from "@/lib/notification-sound";
 import { toast } from "sonner";
 import { SessionDashboard } from "@/components/session-dashboard";
 import type { Session } from "@/types/session";
+import { getApiBaseUrl } from "@boxphon/shared/client/api-base-url";
+import { syncServerTime } from "@boxphon/shared/client/server-time";
 
 export type { Session };
 
@@ -33,6 +35,14 @@ export default function DashboardPage() {
   useEffect(() => {
     loadSessions();
 
+    // Sync client clock against server clock so countdowns don't drift if the
+    // user's machine clock is wrong. Re-syncs every 10 minutes.
+    const apiBase = getApiBaseUrl();
+    syncServerTime(apiBase);
+    const syncTimer = setInterval(() => {
+      syncServerTime(apiBase);
+    }, 10 * 60 * 1000);
+
     let cancelled = false;
     let socket: ReturnType<typeof getNotificationSocket> | null = null;
 
@@ -41,13 +51,11 @@ export default function DashboardPage() {
     )
       .then((res) => {
         if (cancelled || !res.user?.id) return;
-        const tokenMatch = document.cookie
-          .split("; ")
-          .find((row) => row.startsWith("access_token="));
-        const token = tokenMatch?.split("=")[1];
-        if (!token) return;
 
-        socket = getNotificationSocket(token);
+        // Backend authenticates the socket from the HttpOnly access_token cookie
+        // (withCredentials is set inside getNotificationSocket). No need to
+        // surface the JWT to JS.
+        socket = getNotificationSocket();
 
         socket.on("new_notification", (data: any) => {
           playNotificationSound();
@@ -71,6 +79,7 @@ export default function DashboardPage() {
 
     return () => {
       cancelled = true;
+      clearInterval(syncTimer);
       if (socket) {
         socket.off("new_notification");
         socket.off("session_updated");

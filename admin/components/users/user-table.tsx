@@ -44,13 +44,9 @@ const STATUS_MAP: Record<string, { label: string; className: string }> = {
   INACTIVE: { label: "ไม่ใช้งาน", className: "bg-gray-500/10 text-gray-500 border-gray-500/30" },
 };
 
-function formatHMS(sec: number) {
-  if (!sec || sec <= 0) return "00:00:00";
-  const h = Math.floor(sec / 3600);
-  const m = Math.floor((sec % 3600) / 60);
-  const s = Math.floor(sec % 60);
-  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
-}
+import { formatDurationThai } from "@boxphon/shared/client/format-duration";
+import { getServerNow } from "@boxphon/shared/client/server-time";
+const formatHMS = formatDurationThai;
 
 /* ================= MOBILE CARD ================= */
 function UserMobileCard({
@@ -304,14 +300,14 @@ export function UsersTable({
   const [sessionsRefreshKey, setSessionsRefreshKey] = useState(0);
   const [loadingPauseAll, setLoadingPauseAll] = useState(false);
   const [loadingResumeAll, setLoadingResumeAll] = useState(false);
-  const [now, setNow] = useState(() => Date.now());
+  const [now, setNow] = useState(() => getServerNow());
 
   useEffect(() => {
     if (externalRefreshKey > 0) setSessionsRefreshKey((k) => k + 1);
   }, [externalRefreshKey]);
 
   useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), 1000);
+    const t = setInterval(() => setNow(getServerNow()), 1000);
     return () => clearInterval(t);
   }, []);
 

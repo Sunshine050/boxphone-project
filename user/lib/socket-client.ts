@@ -6,10 +6,13 @@ let notificationSocket: Socket | null = null;
 let streamSocket: Socket | null = null;
 
 /**
- * สร้าง/คืนค่า notification socket โดยส่ง JWT เข้าไปใน handshake
- * token ต้องเป็น access_token ที่ได้จาก /auth/login
+ * Notification socket.
+ * Auth: backend reads the HttpOnly access_token cookie from the socket handshake
+ * (because the socket opens with withCredentials: true). A legacy `token` arg is
+ * still accepted in case the cookie is unavailable (e.g. cross-origin without a
+ * matching COOKIE_DOMAIN).
  */
-export const getNotificationSocket = (token: string) => {
+export const getNotificationSocket = (token?: string) => {
   if (notificationSocket?.connected) {
     return notificationSocket;
   }
@@ -21,9 +24,8 @@ export const getNotificationSocket = (token: string) => {
     reconnectionDelay: 2000,
     forceNew: false,
     autoConnect: true,
-    auth: {
-      token,
-    },
+    withCredentials: true,
+    ...(token ? { auth: { token } } : {}),
   });
 
   notificationSocket.on("disconnect", () => {
@@ -36,8 +38,9 @@ export const getNotificationSocket = (token: string) => {
 /**
  * Stream socket — แยกจาก notification เพื่อหลีกเลี่ยง head-of-line blocking
  * ใช้สำหรับ H.264 video stream (binary heavy)
+ * Auth: same cookie-based mechanism as notification socket.
  */
-export const getStreamSocket = (token: string): Socket => {
+export const getStreamSocket = (token?: string): Socket => {
   if (streamSocket?.connected) {
     return streamSocket;
   }
@@ -47,9 +50,10 @@ export const getStreamSocket = (token: string): Socket => {
     reconnection: true,
     reconnectionAttempts: Infinity,
     reconnectionDelay: 2000,
-    forceNew: true, // แยก connection จาก notification
+    forceNew: true,
     autoConnect: true,
-    auth: { token },
+    withCredentials: true,
+    ...(token ? { auth: { token } } : {}),
   });
 
   streamSocket.on("disconnect", () => {
@@ -64,4 +68,17 @@ export const closeStreamSocket = () => {
     streamSocket.disconnect();
     streamSocket = null;
   }
+};
+
+export const closeNotificationSocket = () => {
+  if (notificationSocket) {
+    notificationSocket.disconnect();
+    notificationSocket = null;
+  }
+};
+
+/** Disconnect every persistent socket — call on logout before redirect */
+export const closeAllSockets = () => {
+  closeNotificationSocket();
+  closeStreamSocket();
 };

@@ -1,9 +1,12 @@
 "use client"
 
 import type React from "react"
+import { useEffect } from "react"
 import { cn } from "@/lib/utils"
 import { useSidebar } from "@/components/layout/admin-sidebar-context"
 import { Menu } from "lucide-react"
+import { getApiBaseUrl } from "@boxphon/shared/client/api-base-url"
+import { syncServerTime } from "@boxphon/shared/client/server-time"
 
 export function AdminLayoutClient({
   children,
@@ -11,6 +14,15 @@ export function AdminLayoutClient({
   children: React.ReactNode
 }) {
   const { collapsed, toggleMobile } = useSidebar()
+
+  // Keep admin client clock aligned with server so session countdowns shown
+  // across the admin UI don't drift if the operator's machine clock is wrong.
+  useEffect(() => {
+    const apiBase = getApiBaseUrl()
+    syncServerTime(apiBase)
+    const t = setInterval(() => syncServerTime(apiBase), 10 * 60 * 1000)
+    return () => clearInterval(t)
+  }, [])
 
   return (
     <div className="flex min-h-screen bg-background">

@@ -9,6 +9,7 @@ import { UsersModule } from './modules/users/users.module';
 import { SessionsModule } from './modules/sessions/sessions.module';
 import { NotificationModule } from './modules/notification/notification.module';
 import { LogModule } from './modules/log/log.module';
+import { SystemModule } from './modules/system/system.module';
 
 @Module({
   imports: [
@@ -47,6 +48,7 @@ import { LogModule } from './modules/log/log.module';
     DevicesModule,
     NotificationModule,
     SessionsModule,
+    SystemModule,
   ],
   providers: [AppGateway],
 })

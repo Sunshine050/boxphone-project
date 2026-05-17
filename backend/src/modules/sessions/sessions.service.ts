@@ -778,6 +778,12 @@ export class SessionsService {
       await s.save();
     }
 
+    // Notify the user's open clients so the timer reflects the new total without
+    // requiring a page refresh. (Other session mutations already emit this.)
+    if (sessions.length > 0) {
+      this.notificationService.notifySessionUpdate(userId);
+    }
+
     return sessions.length;
   }
 }

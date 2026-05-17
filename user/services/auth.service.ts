@@ -1,5 +1,6 @@
 import { apiFetch } from '@/lib/api';
 import { clearAuthCookies } from '@/lib/cookies';
+import { closeAllSockets } from '@/lib/socket-client';
 
 export const AuthService = {
   async login(username: string, password: string) {
@@ -21,12 +22,19 @@ export const AuthService = {
   },
 
   async logout() {
+    // Tear down sockets first so the backend doesn't keep a stale stream open
+    // after the user's session is invalidated.
+    try {
+      closeAllSockets();
+    } catch {
+      // ignore — socket may already be disconnected
+    }
     try {
       await apiFetch<{ message: string }>('/auth/logout', {
         method: 'POST',
       });
     } catch {
-      // even if backend call fails, clear client state
+      // backend may be unreachable — proceed with client cleanup regardless
     }
     clearAuthCookies();
   },

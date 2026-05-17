@@ -49,16 +49,9 @@ const statusMap: Record<string, any> = {
 
 /* ================= TIME FORMAT ================= */
 
-function formatHMS(sec: number) {
-  if (!sec || sec <= 0) return "00:00:00";
-  const h = Math.floor(sec / 3600);
-  const m = Math.floor((sec % 3600) / 60);
-  const s = Math.floor(sec % 60);
-  return `${String(h).padStart(2, "0")}:${String(m).padStart(
-    2,
-    "0"
-  )}:${String(s).padStart(2, "0")}`;
-}
+import { formatDurationThai } from "@boxphon/shared/client/format-duration";
+import { getServerNow } from "@boxphon/shared/client/server-time";
+const formatHMS = formatDurationThai;
 
 /* ===================================================== */
 
@@ -87,7 +80,7 @@ export function UserRow({
   const [moveOpen, setMoveOpen] = useState(false);
   const [reduceSession, setReduceSession] = useState<any | null>(null);
   const [sessions, setSessions] = useState<any[]>([]);
-  const [now, setNow] = useState(() => Date.now());
+  const [now, setNow] = useState(() => getServerNow());
   const [loadingAction, setLoadingAction] = useState<Record<string, boolean>>({});
 
   /* ================= LOAD SESSIONS ================= */
@@ -115,7 +108,7 @@ export function UserRow({
   /* ================= REALTIME CLOCK ================= */
 
   useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), 1000);
+    const t = setInterval(() => setNow(getServerNow()), 1000);
     return () => clearInterval(t);
   }, []);
 

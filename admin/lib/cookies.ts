@@ -1,7 +1,8 @@
 /**
  * Cookie helpers for admin panel.
- * access_token is now HttpOnly (set by backend) — JS cannot read it.
- * Only the CSRF token is accessible from JS for the double-submit pattern.
+ * access_token is HttpOnly (set by backend) — JS cannot read it but the backend
+ * clears it via Set-Cookie on /auth/logout. This file handles client-readable
+ * cookies and defensive cleanup in case the backend call fails.
  */
 
 export function getCsrfToken(): string | null {
@@ -16,10 +17,35 @@ export function hasAuthCookie(): boolean {
   return document.cookie.includes('csrf_token=');
 }
 
-/** Clear client-readable cookies on logout (backend clears HttpOnly ones via /auth/logout) */
+/**
+ * Best-effort clear a cookie from JS across every domain/path combo the backend
+ * might have used (no domain, current host, every parent host). HttpOnly cookies
+ * will resist — those rely on the backend's clearCookie response.
+ */
+function clearCookieAllVariants(name: string): void {
+  if (typeof document === 'undefined' || typeof window === 'undefined') return;
+  const host = window.location.hostname;
+  const parts = host.split('.');
+  const domains: string[] = ['', host];
+  for (let i = 1; i < parts.length - 1; i++) {
+    domains.push('.' + parts.slice(i).join('.'));
+  }
+  const expires = 'Thu, 01 Jan 1970 00:00:00 GMT';
+  for (const domain of domains) {
+    const suffix = domain ? `; domain=${domain}` : '';
+    document.cookie = `${name}=; path=/; expires=${expires}${suffix}`;
+  }
+}
+
+/**
+ * Defensive cleanup of auth-related cookies on the client.
+ * The authoritative clear happens via backend /auth/logout (which sets clearCookie
+ * headers for the HttpOnly access_token). This is a safety net for the case where
+ * the backend call fails or the cookie was set with a different domain.
+ */
 export function clearAuthCookies(): void {
-  if (typeof document === 'undefined') return;
-  document.cookie = 'csrf_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+  clearCookieAllVariants('csrf_token');
+  clearCookieAllVariants('access_token');
 }
 
 // ---- Legacy aliases (kept temporarily so existing imports don't break during migration) ----

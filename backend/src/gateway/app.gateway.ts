@@ -9,6 +9,7 @@ import { Server, Socket } from "socket.io";
 import { ForbiddenException, Logger, UnauthorizedException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { JwtService } from "@nestjs/jwt";
+import * as cookie from "cookie";
 
 import { DevicesService } from "../modules/devices/devices.service";
 import { SessionsService } from "../modules/sessions/sessions.service";
@@ -157,6 +158,22 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect {
     if (typeof authHeader === "string" && authHeader.startsWith("Bearer ")) {
       const token = authHeader.slice("Bearer ".length).trim();
       if (token) return token;
+    }
+
+    // HttpOnly access_token cookie — sent automatically when client uses
+    // withCredentials: true on socket.io connection. Allows browser sockets to
+    // authenticate without exposing the JWT to JavaScript.
+    const cookieHeader = client.handshake.headers?.cookie;
+    if (typeof cookieHeader === "string" && cookieHeader.length > 0) {
+      try {
+        const parsed = cookie.parse(cookieHeader);
+        const fromCookie = parsed.access_token;
+        if (typeof fromCookie === "string" && fromCookie.trim()) {
+          return fromCookie.trim();
+        }
+      } catch {
+        // malformed cookie header — fall through
+      }
     }
 
     return null;

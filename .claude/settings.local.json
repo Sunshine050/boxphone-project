@@ -93,7 +93,11 @@
       "Bash(npx tsc *)",
       "Bash(echo \"EXIT=$?\")",
       "Bash(echo \"BACKEND_EXIT=$?\")",
-      "Bash(echo \"USER_EXIT=$?\")"
+      "Bash(echo \"USER_EXIT=$?\")",
+      "Bash(echo \"ADMIN_EXIT=$?\")",
+      "Bash(echo \"BE=$?\")",
+      "Bash(echo \"USER=$?\")",
+      "Bash(echo \"ADMIN=$?\")"
     ]
   }
 }

@@ -66,16 +66,10 @@ export function NotificationBell() {
       .then((res) => {
         if (cancelled || !res.user?.id) return
 
-        // ใช้ JWT จาก cookie โดยดึงจาก /auth/me ไม่ได้โดยตรง
-        // ส่วนนี้สมมติว่ามีตัวช่วยอ่าน cookie access_token ถ้าไม่มี ให้คุณเปลี่ยนมาใช้วิธีที่โปรเจกต์ใช้ดึง token อยู่แล้ว
-        const tokenMatch = document.cookie
-          .split("; ")
-          .find((row) => row.startsWith("access_token="))
-        const token = tokenMatch?.split("=")[1]
-        if (!token) return
-
+        // Auth via the HttpOnly access_token cookie (handled by withCredentials
+        // inside getNotificationSocket) — no need to read the JWT from JS.
         if (!socketRef.current) {
-          socketRef.current = getNotificationSocket(token)
+          socketRef.current = getNotificationSocket()
         }
 
         const socket = socketRef.current

@@ -18,7 +18,8 @@ export interface H264PlayerHandle {
 
 interface H264PlayerProps {
   deviceSerial: string;
-  token: string;
+  /** Optional — socket authenticates via HttpOnly cookie when omitted */
+  token?: string;
   className?: string;
   onMetadata?: (meta: H264PlayerMeta) => void;
   onError?: (err: Error) => void;
@@ -144,7 +145,7 @@ export const H264Player = forwardRef<H264PlayerHandle, H264PlayerProps>(
         onError?.(err);
         return;
       }
-      if (!token || !deviceSerial) return;
+      if (!deviceSerial) return;
 
       const socket = getStreamSocket(token);
       let cancelled = false;

@@ -8,6 +8,7 @@ import { Server, Socket } from "socket.io";
 import { Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { JwtService } from "@nestjs/jwt";
+import * as cookie from "cookie";
 
 @WebSocketGateway({
   pingInterval: 25000,
@@ -27,13 +28,7 @@ export class NotificationGateway
   server: Server;
 
   async handleConnection(client: Socket) {
-    const token =
-      (typeof client.handshake.auth?.token === "string" && client.handshake.auth.token) ||
-      (typeof client.handshake.query?.token === "string" && client.handshake.query.token) ||
-      (typeof client.handshake.headers?.authorization === "string" &&
-      client.handshake.headers.authorization.startsWith("Bearer ")
-        ? client.handshake.headers.authorization.slice("Bearer ".length)
-        : null);
+    const token = this.extractToken(client);
 
     if (!token) {
       client.disconnect(true);
@@ -60,6 +55,34 @@ export class NotificationGateway
 
   handleDisconnect(client: Socket) {
     this.logger.log(`Notification socket disconnected: ${client.id}`);
+  }
+
+  private extractToken(client: Socket): string | null {
+    const authToken = client.handshake.auth?.token;
+    if (typeof authToken === "string" && authToken.trim()) return authToken.trim();
+
+    const queryToken = client.handshake.query?.token;
+    if (typeof queryToken === "string" && queryToken.trim()) return queryToken.trim();
+
+    const authHeader = client.handshake.headers?.authorization;
+    if (typeof authHeader === "string" && authHeader.startsWith("Bearer ")) {
+      const t = authHeader.slice("Bearer ".length).trim();
+      if (t) return t;
+    }
+
+    const cookieHeader = client.handshake.headers?.cookie;
+    if (typeof cookieHeader === "string" && cookieHeader.length > 0) {
+      try {
+        const parsed = cookie.parse(cookieHeader);
+        if (typeof parsed.access_token === "string" && parsed.access_token.trim()) {
+          return parsed.access_token.trim();
+        }
+      } catch {
+        // ignore malformed cookie header
+      }
+    }
+
+    return null;
   }
 
   sendToUser(userId: string, payload: any) {

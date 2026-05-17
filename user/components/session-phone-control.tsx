@@ -4,6 +4,8 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { Expand, Home, RotateCcw, Square } from "lucide-react";
 import type { Session } from "@/types/session";
 import { H264Player, type H264PlayerHandle } from "@/components/h264-player";
+import { formatDurationThai } from "@boxphon/shared/client/format-duration";
+import { getServerNow } from "@boxphon/shared/client/server-time";
 
 const BASE_URL = (
   process.env.NEXT_PUBLIC_API_BASE_URL ||
@@ -19,14 +21,6 @@ function getCsrfToken() {
   if (typeof document === "undefined") return null;
   const m = document.cookie.match(/(^|\s)csrf_token=([^;]+)/);
   return m ? decodeURIComponent(m[2].trim()) : null;
-}
-
-function getAccessToken() {
-  if (typeof document === "undefined") return null;
-  const tokenMatch = document.cookie
-    .split("; ")
-    .find((row) => row.startsWith("access_token="));
-  return tokenMatch ? decodeURIComponent(tokenMatch.split("=")[1]) : null;
 }
 
 async function sendInput(
@@ -219,14 +213,13 @@ export function SessionPhoneControl({
   variant = "default",
   onExpand,
 }: SessionPhoneControlProps) {
-  const [now, setNow] = useState(Date.now());
+  const [now, setNow] = useState(() => getServerNow());
   const [imgSrc, setImgSrc] = useState<string | null>(null);
   const [imgError, setImgError] = useState(false);
   const [screenAspectRatio, setScreenAspectRatio] = useState(1080 / 2340);
   const [streamingMode, setStreamingMode] = useState<"unknown" | StreamingMode>(
     "unknown",
   );
-  const [accessToken, setAccessToken] = useState<string | null>(null);
   const imgRef = useRef<HTMLImageElement | null>(null);
   const h264PlayerRef = useRef<H264PlayerHandle>(null);
   const imgTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -236,13 +229,12 @@ export function SessionPhoneControl({
   const consecutiveFailureRef = useRef(0);
 
   useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), 1000);
+    const timer = setInterval(() => setNow(getServerNow()), 1000);
     return () => clearInterval(timer);
   }, []);
 
   // Detect streaming capability (feature flag) — fetched once on mount.
   useEffect(() => {
-    setAccessToken(getAccessToken());
     let cancelled = false;
     fetch(`${BASE_URL}/devices/streaming-mode`, { credentials: "include" })
       .then((r) => (r.ok ? r.json() : null))
@@ -356,8 +348,6 @@ export function SessionPhoneControl({
       session.remaining_seconds - Math.floor((now - base) / 1000),
     );
   }
-  const minutes = Math.floor(remaining / 60);
-  const seconds = remaining % 60;
   const expired = remaining <= 0;
   const isExpanded = variant === "expanded";
 
@@ -382,13 +372,11 @@ export function SessionPhoneControl({
             </button>
           )}
           <div
-            className={`flex shrink-0 items-center gap-1 font-mono text-sm font-bold tabular-nums ${
+            className={`flex shrink-0 items-center gap-1 text-sm font-bold tabular-nums ${
               expired ? "text-red-400" : "text-cyan-400"
             }`}
           >
-            {expired
-              ? "หมดเวลา"
-              : `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`}
+            {formatDurationThai(remaining)}
           </div>
         </div>
       </div>
@@ -404,11 +392,10 @@ export function SessionPhoneControl({
             isExpanded ? { aspectRatio: String(screenAspectRatio) } : undefined
           }
         >
-          {streamingMode === "scrcpy" && accessToken && deviceSerial ? (
+          {streamingMode === "scrcpy" && deviceSerial ? (
             <H264Player
               ref={h264PlayerRef}
               deviceSerial={deviceSerial}
-              token={accessToken}
               className="absolute inset-0"
               onMetadata={(m) => {
                 if (m.width > 0 && m.height > 0) {
@@ -462,7 +449,7 @@ export function SessionPhoneControl({
           )}
 
           {!expired &&
-            ((streamingMode === "scrcpy" && accessToken && deviceSerial) ||
+            ((streamingMode === "scrcpy" && deviceSerial) ||
               (streamingMode === "screenshot" && imgSrc && !imgError)) && (
               <div className="pointer-events-none absolute right-2 top-2 z-10 flex items-center gap-1 rounded-full bg-black/60 px-2 py-0.5">
                 <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-green-400" />
