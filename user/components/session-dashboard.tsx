@@ -164,7 +164,7 @@ export function SessionDashboard({
                 key={s._id}
                 variants={cardVariants}
                 layout
-                className="w-full flex justify-center"
+                className="flex w-full min-w-0 justify-center"
               >
                 <SessionPhoneControl
                   session={s}

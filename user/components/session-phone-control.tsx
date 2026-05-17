@@ -35,6 +35,20 @@ const KEY = { BACK: 4, HOME: 3, RECENTS: 187 };
 
 type StreamingMode = "scrcpy" | "screenshot";
 
+/** Compact timer for narrow card headers (mobile). */
+function formatDurationHeaderCompact(totalSeconds: number): string {
+  const sec = Math.max(0, Math.floor(totalSeconds));
+  if (sec === 0) return "หมด";
+  if (sec < 3600) {
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    return `${m}:${String(s).padStart(2, "0")}`;
+  }
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  return m > 0 ? `${h}ชม.${m}น` : `${h}ชม.`;
+}
+
 function getCsrfToken() {
   if (typeof document === "undefined") return null;
   const m = document.cookie.match(/(^|\s)csrf_token=([^;]+)/);
@@ -447,13 +461,13 @@ export function SessionPhoneControl({
   const streamActive = !expired && !isPaused;
   const isExpanded = variant === "expanded";
 
-  const containerMaxClass = isExpanded
+  const shellMaxClass = isExpanded
     ? landscapeFrame
-      ? "w-full max-w-[min(95vw,920px)]"
-      : "w-auto max-w-[min(90vw,520px)]"
+      ? "max-w-[min(96vw,920px)]"
+      : "max-w-[min(92vw,420px)] sm:max-w-[min(90vw,480px)] md:max-w-[520px]"
     : landscapeFrame
-      ? "w-full max-w-[min(100%,380px)]"
-      : "w-full max-w-[220px]";
+      ? "max-w-[min(calc(100vw-1.5rem),420px)] sm:max-w-[min(100%,480px)] md:max-w-[540px] lg:max-w-[600px]"
+      : "max-w-[min(calc(100vw-1.5rem),240px)] sm:max-w-[260px] md:max-w-[280px]";
 
   const orientationIcon =
     orientationMode === "auto" ? (
@@ -464,41 +478,44 @@ export function SessionPhoneControl({
       <Monitor className="h-3.5 w-3.5" />
     );
 
-  const expandedFrameStyle: React.CSSProperties = isExpanded
+  const frameSizeStyle: React.CSSProperties = isExpanded
     ? landscapeFrame
-      ? {
-          width: "100%",
-          maxWidth: "min(95vw, 920px)",
-          maxHeight: "min(80vh, 520px)",
-        }
-      : {
-          maxHeight: "min(75vh, 680px)",
-          height: "min(75vh, 680px)",
-          maxWidth: "min(90vw, 500px)",
-        }
-    : {};
+      ? { width: "100%", maxHeight: "min(78vh, 520px)" }
+      : { width: "100%", maxHeight: "min(82vh, 720px)" }
+    : { width: "100%" };
+
+  const deviceName = session.device_id?.name || "Device";
 
   return (
     <motion.div
       layout
-      className={`flex shrink-0 flex-col ${containerMaxClass}`}
+      className={`flex w-full min-w-0 shrink-0 flex-col ${shellMaxClass}`}
     >
-      {/* ── header bar ── */}
-      <div className="mb-3 flex items-center justify-between gap-2 rounded-xl border border-slate-800 bg-slate-900/80 px-3 py-2">
-        <span className="truncate text-sm font-semibold text-white">
-          {session.device_id?.name || "Device"}
-        </span>
-        <div className="flex items-center gap-1.5 sm:gap-2">
+      <motion.div
+        layout
+        className="flex w-full min-w-0 flex-col overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/50 p-2 shadow-lg shadow-black/20 sm:rounded-3xl sm:p-3 md:p-3.5"
+      >
+        <motion.div
+          layout
+          className="mb-2 flex min-w-0 items-center gap-1 border-b border-slate-800/90 pb-2 sm:mb-3 sm:gap-1.5 sm:pb-2.5"
+        >
+          <span
+            className="min-w-0 flex-1 truncate text-xs font-semibold text-white sm:text-sm"
+            title={deviceName}
+          >
+            {deviceName}
+          </span>
+          <motion.div className="flex shrink-0 items-center gap-0.5 sm:gap-1">
           {streamActive && (
             <button
               type="button"
               onClick={cycleOrientation}
-              className="inline-flex h-7 items-center gap-1 rounded-md border border-slate-700 bg-slate-800/70 px-1.5 text-slate-200 transition-colors hover:bg-slate-700 hover:text-white"
+              className="inline-flex h-7 max-w-[5.5rem] items-center gap-0.5 overflow-hidden rounded-md border border-slate-700 bg-slate-800/70 px-1.5 text-slate-200 transition-colors hover:bg-slate-700 hover:text-white sm:max-w-none sm:gap-1 sm:px-2"
               aria-label={`สลับแนวจอ: ${orientationLabel(orientationMode)}`}
               title={`แนวจอ: ${orientationLabel(orientationMode)} (แตะเพื่อสลับ)`}
             >
               {orientationIcon}
-              <span className="hidden text-[10px] sm:inline">
+              <span className="truncate text-[9px] sm:text-[10px]">
                 {orientationLabel(orientationMode)}
               </span>
             </button>
@@ -507,38 +524,46 @@ export function SessionPhoneControl({
             <button
               type="button"
               onClick={onExpand}
-              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-700 bg-slate-800/70 text-slate-200 transition-colors hover:bg-slate-700 hover:text-white"
+              className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-slate-700 bg-slate-800/70 text-slate-200 transition-colors hover:bg-slate-700 hover:text-white"
               aria-label="ขยายจอ"
               title="ขยายจอ"
             >
-              <Expand className="h-4 w-4" />
+              <Expand className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
             </button>
           )}
           {isPaused && (
-            <PauseCircle className="h-4 w-4 text-amber-400" />
+            <PauseCircle className="h-4 w-4 shrink-0 text-amber-400" />
           )}
           <div
-            className={`flex shrink-0 items-center gap-1 text-sm font-bold tabular-nums ${
-              expired ? "text-red-400" : isPaused ? "text-amber-400" : "text-cyan-400"
+            className={`flex shrink-0 items-center font-bold tabular-nums leading-none ${
+              expired
+                ? "text-red-400"
+                : isPaused
+                  ? "text-amber-400"
+                  : "text-cyan-400"
             }`}
           >
-            {formatDurationThai(remaining)}
+            <span className="text-[10px] sm:hidden">
+              {formatDurationHeaderCompact(remaining)}
+            </span>
+            <span className="hidden whitespace-nowrap text-xs sm:inline md:text-sm">
+              {formatDurationThai(remaining)}
+            </span>
           </div>
-        </div>
-      </div>
+        </motion.div>
+        </motion.div>
 
-      {/* ── phone frame ── */}
-      <motion.div layout className="relative mx-auto w-full">
+        <motion.div layout className="relative mx-auto w-full min-w-0">
         <motion.div
           layout
           transition={{ type: "spring", stiffness: 320, damping: 32 }}
-          className="relative mx-auto w-full overflow-hidden rounded-[2.25rem] border-4 border-slate-700 bg-slate-900 shadow-2xl shadow-cyan-900/20"
+          className="relative mx-auto w-full min-w-0 overflow-hidden rounded-[1.75rem] border-[3px] border-slate-700 bg-slate-900 shadow-xl shadow-cyan-900/20 sm:rounded-[2rem] sm:border-4 md:rounded-[2.25rem]"
           style={{
             aspectRatio: String(screenAspectRatio),
             isolation: "isolate",
             userSelect: "none",
             WebkitUserSelect: "none",
-            ...expandedFrameStyle,
+            ...frameSizeStyle,
           }}
         >
           {/* ── stream layer ── */}
@@ -613,11 +638,14 @@ export function SessionPhoneControl({
 
         {/* ── Android nav buttons (Back / Home / Recents) ── */}
         {streamActive && deviceId && (
-          <div className="mt-4 flex justify-around px-2">
+          <motion.div
+            layout
+            className="mt-3 flex min-w-0 justify-around gap-1 px-0.5 sm:mt-4 sm:gap-2 sm:px-1"
+          >
             {[
-              { icon: <RotateCcw className="h-5 w-5" />, key: KEY.BACK,    label: "Back"    },
-              { icon: <Home       className="h-5 w-5" />, key: KEY.HOME,    label: "Home"    },
-              { icon: <Square     className="h-5 w-5" />, key: KEY.RECENTS, label: "Recents" },
+              { icon: <RotateCcw className="h-4 w-4 sm:h-5 sm:w-5" />, key: KEY.BACK,    label: "Back"    },
+              { icon: <Home       className="h-4 w-4 sm:h-5 sm:w-5" />, key: KEY.HOME,    label: "Home"    },
+              { icon: <Square     className="h-4 w-4 sm:h-5 sm:w-5" />, key: KEY.RECENTS, label: "Recents" },
             ].map((btn) => (
               <button
                 key={btn.key}
@@ -628,14 +656,15 @@ export function SessionPhoneControl({
                     handleActionRefresh(),
                   );
                 }}
-                className="flex flex-col items-center gap-1 rounded-xl bg-slate-800 px-4 py-2 text-slate-300 transition-colors hover:bg-slate-700 hover:text-white active:bg-slate-600"
+                className="flex min-w-0 flex-1 max-w-[5.5rem] flex-col items-center gap-0.5 rounded-lg bg-slate-800 px-2 py-1.5 text-slate-300 transition-colors hover:bg-slate-700 hover:text-white active:bg-slate-600 sm:max-w-none sm:rounded-xl sm:px-4 sm:py-2 md:px-5"
               >
                 {btn.icon}
-                <span className="text-[9px] text-slate-500">{btn.label}</span>
+                <span className="text-[8px] text-slate-500 sm:text-[9px]">{btn.label}</span>
               </button>
             ))}
-          </div>
+          </motion.div>
         )}
+        </motion.div>
       </motion.div>
     </motion.div>
   );

@@ -47,14 +47,17 @@ export function computeFrameAspectRatio(
 ): number {
   if (streamWidth <= 0 || streamHeight <= 0) return 9 / 16;
   const streamRatio = streamWidth / streamHeight;
+  const streamIsLandscape = streamRatio >= 1;
 
   if (mode === "auto") return streamRatio;
 
+  // Portrait frame: width/height < 1
   if (mode === "portrait") {
-    return streamRatio >= 1 ? streamHeight / streamWidth : streamRatio;
+    return streamIsLandscape ? streamHeight / streamWidth : streamRatio;
   }
 
-  return streamRatio >= 1 ? streamRatio : streamWidth / streamHeight;
+  // Landscape frame: width/height >= 1 (swap when stream is portrait)
+  return streamIsLandscape ? streamRatio : streamHeight / streamWidth;
 }
 
 export function isLandscapeFrame(aspectRatio: number): boolean {
