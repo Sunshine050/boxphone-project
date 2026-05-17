@@ -356,10 +356,18 @@ export class DevicesController {
     }
 
     if (type === "touch") {
+      const action = String(payload?.action || "");
+      if (action === "down" || action === "up") {
+        await this.adbScreenshotService.sendInput(serialToUse, {
+          type,
+          payload,
+        });
+        return { ok: true };
+      }
       void this.adbScreenshotService
         .sendInput(serialToUse, { type, payload })
         .catch(() => {
-          /* touch stream is fire-and-forget; client retries on next move */
+          /* move stream is best-effort */
         });
       return { ok: true };
     }

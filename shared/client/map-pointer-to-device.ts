@@ -30,15 +30,16 @@ export function mapClientToDevice(
   const localX = clientX - rect.left - offsetX;
   const localY = clientY - rect.top - offsetY;
 
-  if (localX < 0 || localY < 0 || localX > contentW || localY > contentH) {
-    return null;
-  }
+  // Snap to nearest edge when tapping letterbox padding (common on phones / iPad).
+  const clampedX = Math.max(0, Math.min(contentW, localX));
+  const clampedY = Math.max(0, Math.min(contentH, localY));
 
-  const nx = localX / contentW;
-  const ny = localY / contentH;
+  const nx = contentW > 0 ? clampedX / contentW : 0;
+  const ny = contentH > 0 ? clampedY / contentH : 0;
 
+  // Use (dw-1)/(dh-1) — matches Android input coordinate space on Samsung / most devices.
   return {
-    x: Math.round(Math.max(0, Math.min(1, nx)) * dw),
-    y: Math.round(Math.max(0, Math.min(1, ny)) * dh),
+    x: Math.round(Math.max(0, Math.min(1, nx)) * Math.max(0, dw - 1)),
+    y: Math.round(Math.max(0, Math.min(1, ny)) * Math.max(0, dh - 1)),
   };
 }

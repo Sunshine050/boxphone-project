@@ -14,14 +14,17 @@ export type DeviceTouchOverlayProps = {
   onAction?: () => void;
 };
 
-/** Tuned for phone / iPad — larger threshold reduces accidental swipes while scrolling. */
-const TAP_MOVE_PX = 10;
-const TAP_MS = 380;
-const LONG_PRESS_MS = 480;
-/** Min interval between live touch MOVE events (~60fps cap). */
-const MOVE_INTERVAL_MS = 16;
-/** Start live drag after this movement (px). */
-const SWIPE_START_PX = 8;
+/** Tap vs drag thresholds — tuned for Galaxy Note / Samsung touchscreens. */
+const TAP_MOVE_PX = 12;
+const TAP_MS = 420;
+const LONG_PRESS_MS = 450;
+const MOVE_INTERVAL_MS = 12;
+const SWIPE_START_PX = 4;
+
+function isCoarsePointer(): boolean {
+  if (typeof window === "undefined") return true;
+  return window.matchMedia("(pointer: coarse)").matches;
+}
 
 export function DeviceTouchOverlay({
   deviceId,
@@ -45,12 +48,16 @@ export function DeviceTouchOverlay({
     lastSentX: number;
     lastSentY: number;
     lastMoveSentAt: number;
+    downAck: boolean;
   } | null>(null);
   const moveRafRef = useRef<number | null>(null);
+  const pendingMoveRef = useRef<{ x: number; y: number } | null>(null);
   const [crosshair, setCrosshair] = useState<{ x: number; y: number } | null>(
     null,
   );
   const crosshairTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const swipeStartPx = isCoarsePointer() ? SWIPE_START_PX : 6;
 
   useEffect(() => {
     const el = overlayRef.current;
@@ -58,9 +65,11 @@ export function DeviceTouchOverlay({
     const prevent = (e: TouchEvent) => e.preventDefault();
     el.addEventListener("touchstart", prevent, { passive: false });
     el.addEventListener("touchmove", prevent, { passive: false });
+    el.addEventListener("touchend", prevent, { passive: false });
     return () => {
       el.removeEventListener("touchstart", prevent);
       el.removeEventListener("touchmove", prevent);
+      el.removeEventListener("touchend", prevent);
     };
   }, []);
 
@@ -94,13 +103,13 @@ export function DeviceTouchOverlay({
     if (!rect) return;
     setCrosshair({ x: clientX - rect.left, y: clientY - rect.top });
     if (crosshairTimer.current) clearTimeout(crosshairTimer.current);
-    crosshairTimer.current = setTimeout(() => setCrosshair(null), 450);
+    crosshairTimer.current = setTimeout(() => setCrosshair(null), 400);
   }, []);
 
   const flushTouchMove = useCallback(
     (clientX: number, clientY: number, force = false) => {
       const p = pointerRef.current;
-      if (!p?.touchActive) return;
+      if (!p?.touchActive || !p.downAck) return;
 
       const pos = toDevice(clientX, clientY);
       if (!pos) return;
@@ -109,7 +118,7 @@ export function DeviceTouchOverlay({
       if (
         !force &&
         now - p.lastMoveSentAt < MOVE_INTERVAL_MS &&
-        Math.hypot(pos.x - p.lastSentX, pos.y - p.lastSentY) < 2
+        Math.hypot(pos.x - p.lastSentX, pos.y - p.lastSentY) < 1
       ) {
         return;
       }
@@ -127,19 +136,26 @@ export function DeviceTouchOverlay({
     [apiBaseUrl, deviceId, toDevice],
   );
 
+  const runMoveRaf = useCallback(() => {
+    moveRafRef.current = null;
+    const pending = pendingMoveRef.current;
+    if (!pending) return;
+    pendingMoveRef.current = null;
+    flushTouchMove(pending.x, pending.y);
+  }, [flushTouchMove]);
+
   const scheduleTouchMove = useCallback(
     (clientX: number, clientY: number) => {
-      if (moveRafRef.current != null) return;
-      moveRafRef.current = requestAnimationFrame(() => {
-        moveRafRef.current = null;
-        flushTouchMove(clientX, clientY);
-      });
+      pendingMoveRef.current = { x: clientX, y: clientY };
+      if (moveRafRef.current == null) {
+        moveRafRef.current = requestAnimationFrame(runMoveRaf);
+      }
     },
-    [flushTouchMove],
+    [runMoveRaf],
   );
 
   const beginTouchDrag = useCallback(
-    (clientX: number, clientY: number) => {
+    async (clientX: number, clientY: number) => {
       const p = pointerRef.current;
       if (!p || p.touchActive) return;
 
@@ -151,18 +167,25 @@ export function DeviceTouchOverlay({
       p.lastSentX = start.x;
       p.lastSentY = start.y;
       p.lastMoveSentAt = 0;
+      p.downAck = false;
 
-      sendDeviceInput(apiBaseUrl, deviceId, "touch", {
-        action: "down",
-        x: start.x,
-        y: start.y,
-      });
+      try {
+        await sendDeviceInput(
+          apiBaseUrl,
+          deviceId,
+          "touch",
+          { action: "down", x: start.x, y: start.y },
+          { awaitResponse: true },
+        );
+        p.downAck = true;
+      } catch {
+        p.touchActive = false;
+        p.isSwiping = false;
+        return;
+      }
 
       const current = toDevice(clientX, clientY);
-      if (
-        current &&
-        (current.x !== start.x || current.y !== start.y)
-      ) {
+      if (current && (current.x !== start.x || current.y !== start.y)) {
         flushTouchMove(clientX, clientY, true);
       }
     },
@@ -170,22 +193,56 @@ export function DeviceTouchOverlay({
   );
 
   const endTouch = useCallback(
-    (clientX: number, clientY: number) => {
+    async (clientX: number, clientY: number) => {
       const p = pointerRef.current;
       if (!p?.touchActive) return;
 
       flushTouchMove(clientX, clientY, true);
       const end = toDevice(clientX, clientY);
-      if (end) {
-        sendDeviceInput(apiBaseUrl, deviceId, "touch", {
-          action: "up",
-          x: end.x,
-          y: end.y,
-        });
+      if (end && p.downAck) {
+        try {
+          await sendDeviceInput(
+            apiBaseUrl,
+            deviceId,
+            "touch",
+            { action: "up", x: end.x, y: end.y },
+            { awaitResponse: true },
+          );
+        } catch {
+          /* best-effort UP */
+        }
       }
       p.touchActive = false;
+      p.downAck = false;
     },
     [apiBaseUrl, deviceId, toDevice, flushTouchMove],
+  );
+
+  const processPointerMove = useCallback(
+    (clientX: number, clientY: number) => {
+      const p = pointerRef.current;
+      if (!p) return;
+
+      p.lastX = clientX;
+      p.lastY = clientY;
+
+      const dist = Math.hypot(clientX - p.startX, clientY - p.startY);
+
+      if (!p.isSwiping && dist >= swipeStartPx) {
+        if (p.longPressTimer) {
+          clearTimeout(p.longPressTimer);
+          p.longPressTimer = null;
+        }
+        void beginTouchDrag(clientX, clientY);
+      }
+
+      if (p.touchActive && p.downAck) {
+        scheduleTouchMove(clientX, clientY);
+      }
+
+      showCrosshair(clientX, clientY);
+    },
+    [beginTouchDrag, scheduleTouchMove, showCrosshair, swipeStartPx],
   );
 
   const onPointerDown = (e: React.PointerEvent) => {
@@ -193,6 +250,7 @@ export function DeviceTouchOverlay({
     if (e.button !== 0) return;
 
     e.preventDefault();
+    e.stopPropagation();
     e.currentTarget.setPointerCapture(e.pointerId);
     showCrosshair(e.clientX, e.clientY);
 
@@ -213,7 +271,7 @@ export function DeviceTouchOverlay({
             y1: pos.y,
             x2: pos.x,
             y2: pos.y,
-            duration: 550,
+            duration: 500,
           });
           onAction?.();
         }
@@ -233,6 +291,7 @@ export function DeviceTouchOverlay({
       lastSentX: 0,
       lastSentY: 0,
       lastMoveSentAt: 0,
+      downAck: false,
     };
   };
 
@@ -241,27 +300,18 @@ export function DeviceTouchOverlay({
     if (!p || p.id !== e.pointerId) return;
 
     e.preventDefault();
-    p.lastX = e.clientX;
-    p.lastY = e.clientY;
 
-    const dist = Math.hypot(e.clientX - p.startX, e.clientY - p.startY);
+    const coalesced =
+      typeof e.getCoalescedEvents === "function"
+        ? e.getCoalescedEvents()
+        : [e];
 
-    if (!p.isSwiping && dist >= SWIPE_START_PX) {
-      if (p.longPressTimer) {
-        clearTimeout(p.longPressTimer);
-        p.longPressTimer = null;
-      }
-      beginTouchDrag(e.clientX, e.clientY);
+    for (const ev of coalesced) {
+      processPointerMove(ev.clientX, ev.clientY);
     }
-
-    if (p.touchActive) {
-      scheduleTouchMove(e.clientX, e.clientY);
-    }
-
-    showCrosshair(e.clientX, e.clientY);
   };
 
-  const onPointerUp = (e: React.PointerEvent) => {
+  const onPointerUp = async (e: React.PointerEvent) => {
     const p = pointerRef.current;
     if (!p || p.id !== e.pointerId) return;
 
@@ -275,7 +325,7 @@ export function DeviceTouchOverlay({
     const dt = performance.now() - p.t;
 
     if (p.touchActive) {
-      endTouch(e.clientX, e.clientY);
+      await endTouch(e.clientX, e.clientY);
     } else if (!p.isSwiping && dist < TAP_MOVE_PX && dt < TAP_MS) {
       const pos = toDevice(p.startX, p.startY);
       if (pos) {
@@ -285,13 +335,18 @@ export function DeviceTouchOverlay({
         } catch {
           /* ignore */
         }
-        void sendDeviceInput(
-          apiBaseUrl,
-          deviceId,
-          "tap",
-          { x: pos.x, y: pos.y },
-          { awaitResponse: true },
-        )?.then(() => onAction?.());
+        try {
+          await sendDeviceInput(
+            apiBaseUrl,
+            deviceId,
+            "tap",
+            { x: pos.x, y: pos.y },
+            { awaitResponse: true },
+          );
+          onAction?.();
+        } catch {
+          /* tap failed */
+        }
       }
     } else if (p.isSwiping && !p.touchActive) {
       const from = toDevice(p.startX, p.startY);
@@ -302,34 +357,42 @@ export function DeviceTouchOverlay({
           y1: from.y,
           x2: to.x,
           y2: to.y,
-          duration: Math.max(40, Math.min(Math.round(dt), 400)),
+          duration: Math.max(50, Math.min(Math.round(dt), 350)),
         });
         onAction?.();
       }
     }
 
     pointerRef.current = null;
+    pendingMoveRef.current = null;
     if (moveRafRef.current != null) {
       cancelAnimationFrame(moveRafRef.current);
       moveRafRef.current = null;
     }
   };
 
-  const onPointerCancel = (e: React.PointerEvent) => {
+  const onPointerCancel = async (e: React.PointerEvent) => {
     const p = pointerRef.current;
     if (!p) return;
     if (p.longPressTimer) clearTimeout(p.longPressTimer);
-    if (p.touchActive) {
+    if (p.touchActive && p.downAck) {
       const pos = toDevice(p.lastX, p.lastY);
       if (pos) {
-        sendDeviceInput(apiBaseUrl, deviceId, "touch", {
-          action: "up",
-          x: pos.x,
-          y: pos.y,
-        });
+        try {
+          await sendDeviceInput(
+            apiBaseUrl,
+            deviceId,
+            "touch",
+            { action: "up", x: pos.x, y: pos.y },
+            { awaitResponse: true },
+          );
+        } catch {
+          /* ignore */
+        }
       }
     }
     pointerRef.current = null;
+    pendingMoveRef.current = null;
     if (moveRafRef.current != null) {
       cancelAnimationFrame(moveRafRef.current);
       moveRafRef.current = null;

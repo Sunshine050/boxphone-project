@@ -29,12 +29,24 @@ export function sendDeviceInput(
       ...(csrf ? { "X-CSRF-Token": csrf } : {}),
     },
     credentials: "include",
-    keepalive: type === "touch",
+    keepalive: type === "touch" || type === "tap",
     body: JSON.stringify({ type, payload }),
   });
 
   if (options?.awaitResponse) {
-    return promise;
+    return promise.then(async (res) => {
+      if (!res.ok) {
+        let message = `Input failed (${res.status})`;
+        try {
+          const data = await res.json();
+          if (data?.message) message = String(data.message);
+        } catch {
+          /* ignore */
+        }
+        throw new Error(message);
+      }
+      return res;
+    });
   }
 
   void promise.catch(() => {

@@ -40,6 +40,8 @@ module.exports = {
         // c2.android.avc.encoder = software H.264 fallback — avoids
         // OMX.qcom.video.encoder.avc stack-corruption crash on Android 10 + Samsung
         SCRCPY_VIDEO_ENCODER: 'c2.android.avc.encoder',
+        // swipe = reliable drag on Samsung Galaxy Note; motionevent = optional
+        ADB_TOUCH_MODE: 'swipe',
       },
     },
 
