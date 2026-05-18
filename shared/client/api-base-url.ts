@@ -17,3 +17,20 @@ export function getApiBaseUrl(): string {
 
   return raw.replace(/\/+$/, '');
 }
+
+/**
+ * Base URL for device input (tap/swipe/touch).
+ * Prefer same-origin Next proxy so cookies + CSRF always work in production.
+ */
+export function getClientInputApiBase(fallback?: string): string {
+  if (typeof window !== 'undefined') {
+    return `${window.location.origin}/api/proxy`;
+  }
+  const raw = fallback?.trim();
+  if (raw) return raw.replace(/\/+$/, '');
+  try {
+    return getApiBaseUrl();
+  } catch {
+    return '';
+  }
+}

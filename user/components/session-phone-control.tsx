@@ -17,7 +17,7 @@ import { DeviceTouchOverlay } from "@boxphon/shared/client/device-touch-overlay"
 import { formatDurationThai } from "@boxphon/shared/client/format-duration";
 import { getServerNow } from "@boxphon/shared/client/server-time";
 import { sendDeviceInputFast } from "@boxphon/shared/client/device-input-transport";
-import { getApiBaseUrl } from "@boxphon/shared/client/api-base-url";
+import { getClientInputApiBase } from "@boxphon/shared/client/api-base-url";
 import type { SessionStreamViewState } from "@boxphon/shared/client/session-stream-view";
 import {
   type ScreenOrientationMode,
@@ -29,20 +29,15 @@ import {
   getFrameDimensions,
 } from "@/lib/screen-orientation";
 
-function resolveApiBaseUrl(): string {
-  try {
-    return getApiBaseUrl();
-  } catch {
-    const raw =
-      process.env.NEXT_PUBLIC_API_BASE_URL ||
-      process.env.NEXT_PUBLIC_BACKEND_URL ||
-      process.env.NEXT_PUBLIC_API_URL ||
-      "";
-    return raw.replace(/\/$/, "");
-  }
-}
-
-const BASE_URL = resolveApiBaseUrl();
+const BASE_URL =
+  typeof window !== "undefined"
+    ? getClientInputApiBase()
+    : (
+        process.env.NEXT_PUBLIC_API_BASE_URL ||
+        process.env.NEXT_PUBLIC_BACKEND_URL ||
+        process.env.NEXT_PUBLIC_API_URL ||
+        ""
+      ).replace(/\/$/, "");
 
 const KEY = { BACK: 4, HOME: 3, RECENTS: 187 };
 

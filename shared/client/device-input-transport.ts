@@ -55,7 +55,10 @@ export function sendDeviceInputFast(
   payload: DeviceInputPayload,
   options?: { awaitResponse?: boolean; forceHttp?: boolean },
 ): Promise<Response> | void {
-  const base = apiBaseUrl?.trim();
+  let base = apiBaseUrl?.trim();
+  if (!base && typeof window !== "undefined") {
+    base = `${window.location.origin}/api/proxy`;
+  }
   const mustUseHttp =
     options?.forceHttp ||
     type === "tap" ||

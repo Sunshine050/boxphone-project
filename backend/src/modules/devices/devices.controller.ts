@@ -360,6 +360,16 @@ export class DevicesController {
       this.scrcpyService.hasActiveStream(serialToUse) &&
       this.scrcpyService.sendInput(serialToUse, { type, payload });
 
+    // Tap/key via ADB — most reliable on Samsung / mixed scrcpy control states.
+    if (type === "tap" || type === "key") {
+      await this.adbScreenshotService.sendInput(serialToUse, {
+        type,
+        payload,
+      });
+      this.adbScreenshotService.clearCacheForSerial(serialToUse);
+      return { ok: true, transport: "adb" };
+    }
+
     if (type === "touch") {
       const action = String(payload?.action || "");
       if (tryScrcpy()) {
@@ -386,7 +396,7 @@ export class DevicesController {
 
     await this.adbScreenshotService.sendInput(serialToUse, { type, payload });
 
-    if (type === "tap" || type === "key" || type === "text") {
+    if (type === "text") {
       this.adbScreenshotService.clearCacheForSerial(serialToUse);
     }
 

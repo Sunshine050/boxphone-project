@@ -2,6 +2,15 @@ export type DeviceInputType = "tap" | "swipe" | "touch" | "key" | "text";
 
 export type DeviceInputPayload = Record<string, unknown>;
 
+function resolveApiBase(apiBaseUrl: string): string {
+  const trimmed = apiBaseUrl?.trim();
+  if (trimmed) return trimmed.replace(/\/$/, "");
+  if (typeof window !== "undefined") {
+    return `${window.location.origin}/api/proxy`;
+  }
+  return "";
+}
+
 function getCsrfToken(): string | null {
   if (typeof document === "undefined") return null;
   const m = document.cookie.match(/(^|\s)csrf_token=([^;]+)/);
@@ -19,7 +28,13 @@ export function sendDeviceInput(
   payload: DeviceInputPayload,
   options?: { awaitResponse?: boolean },
 ): Promise<Response> | void {
-  const base = apiBaseUrl.replace(/\/$/, "");
+  const base = resolveApiBase(apiBaseUrl);
+  if (!base) {
+    if (options?.awaitResponse) {
+      return Promise.reject(new Error("No API base URL for device input"));
+    }
+    return;
+  }
   const csrf = getCsrfToken();
 
   const promise = fetch(`${base}/devices/${deviceId}/input`, {

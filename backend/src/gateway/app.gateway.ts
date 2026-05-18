@@ -485,6 +485,21 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect {
       return;
     }
 
+    if (type === "tap" || type === "key") {
+      try {
+        await this.adbScreenshotService.sendInput(serial, {
+          type: type as "tap" | "key",
+          payload: body,
+        });
+        if (type === "tap") {
+          this.adbScreenshotService.clearCacheForSerial(serial);
+        }
+      } catch {
+        /* ignore */
+      }
+      return;
+    }
+
     // Prefer scrcpy control channel when ready; always fall through to ADB on failure.
     if (
       this.scrcpyService.isEnabled() &&
