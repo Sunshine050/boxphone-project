@@ -1,4 +1,8 @@
 import { io, type Socket } from "socket.io-client";
+import {
+  attachStreamSocketInputSync,
+  syncDeviceInputStreamSocket,
+} from "@boxphon/shared/client/device-input-transport";
 
 const BACKEND_URL = (
   process.env.NEXT_PUBLIC_API_BASE_URL ||
@@ -25,6 +29,8 @@ export const getStreamSocket = (): Socket => {
     withCredentials: true,
   });
 
+  attachStreamSocketInputSync(streamSocket);
+
   streamSocket.on("disconnect", () => {
     console.warn("[AdminStream] socket disconnected");
   });
@@ -36,5 +42,6 @@ export const closeStreamSocket = () => {
   if (streamSocket) {
     streamSocket.disconnect();
     streamSocket = null;
+    syncDeviceInputStreamSocket(null);
   }
 };

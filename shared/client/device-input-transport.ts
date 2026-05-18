@@ -8,15 +8,47 @@ export type DeviceInputTarget = {
   deviceSerial?: string;
 };
 
-let streamSocketRef: Socket | null = null;
+/** Current connected stream socket (kept in sync by socket-client on connect/disconnect). */
+let liveStreamSocket: Socket | null = null;
 
-/** Bind the stream socket used for H.264 (same connection for low-latency input). */
+/**
+ * Update the live stream socket used for `device_input`.
+ * Called from user/admin `socket-client` on connect, disconnect, and new socket creation.
+ */
+export function syncDeviceInputStreamSocket(socket: Socket | null): void {
+  if (socket?.connected) {
+    liveStreamSocket = socket;
+    return;
+  }
+  if (!socket || liveStreamSocket === socket) {
+    liveStreamSocket = null;
+  }
+}
+
+/** Wire connect/disconnect handlers so touch survives stream socket reconnects. */
+export function attachStreamSocketInputSync(sock: Socket): void {
+  const onConnect = () => syncDeviceInputStreamSocket(sock);
+  const onDisconnect = () => {
+    if (liveStreamSocket === sock) {
+      liveStreamSocket = null;
+    }
+  };
+  sock.on("connect", onConnect);
+  sock.on("disconnect", onDisconnect);
+  if (sock.connected) {
+    onConnect();
+  }
+}
+
+/**
+ * @deprecated Prefer `attachStreamSocketInputSync` in socket-client. Kept for compatibility.
+ */
 export function bindDeviceInputSocket(socket: Socket | null): void {
-  streamSocketRef = socket;
+  syncDeviceInputStreamSocket(socket);
 }
 
 export function getDeviceInputSocket(): Socket | null {
-  return streamSocketRef?.connected ? streamSocketRef : null;
+  return liveStreamSocket?.connected ? liveStreamSocket : null;
 }
 
 /**
@@ -31,24 +63,32 @@ export function sendDeviceInputFast(
   options?: { awaitResponse?: boolean },
 ): Promise<Response> | void {
   const socket = getDeviceInputSocket();
-  if (socket && target.deviceSerial) {
+  const useWebSocket = !!(socket && target.deviceSerial);
+
+  if (useWebSocket) {
     socket.emit("device_input", {
       deviceId: target.deviceId,
       deviceSerial: target.deviceSerial,
       type,
       payload,
     });
-    if (options?.awaitResponse) {
-      return Promise.resolve(new Response(null, { status: 200 }));
+    if (!options?.awaitResponse) {
+      return;
     }
-    return;
   }
 
-  return sendDeviceInput(
-    apiBaseUrl,
-    target.deviceId,
-    type,
-    payload,
-    options,
-  );
+  const base = apiBaseUrl?.trim();
+  if (base) {
+    return sendDeviceInput(base, target.deviceId, type, payload, options);
+  }
+
+  if (useWebSocket && options?.awaitResponse) {
+    return Promise.resolve(new Response(null, { status: 200 }));
+  }
+
+  if (options?.awaitResponse) {
+    return Promise.reject(
+      new Error("Device input unavailable: stream socket disconnected and no API URL"),
+    );
+  }
 }

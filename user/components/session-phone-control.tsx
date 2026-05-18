@@ -16,12 +16,9 @@ import { H264Player, type H264PlayerHandle } from "@/components/h264-player";
 import { DeviceTouchOverlay } from "@boxphon/shared/client/device-touch-overlay";
 import { formatDurationThai } from "@boxphon/shared/client/format-duration";
 import { getServerNow } from "@boxphon/shared/client/server-time";
-import {
-  bindDeviceInputSocket,
-  sendDeviceInputFast,
-} from "@boxphon/shared/client/device-input-transport";
+import { sendDeviceInputFast } from "@boxphon/shared/client/device-input-transport";
+import { getApiBaseUrl } from "@boxphon/shared/client/api-base-url";
 import type { SessionStreamViewState } from "@boxphon/shared/client/session-stream-view";
-import { getStreamSocket } from "@/lib/socket-client";
 import {
   type ScreenOrientationMode,
   loadOrientationMode,
@@ -32,21 +29,26 @@ import {
   getFrameDimensions,
 } from "@/lib/screen-orientation";
 
-const BASE_URL = (
-  process.env.NEXT_PUBLIC_API_BASE_URL ||
-  process.env.NEXT_PUBLIC_BACKEND_URL ||
-  ""
-).replace(/\/$/, "");
+function resolveApiBaseUrl(): string {
+  try {
+    return getApiBaseUrl();
+  } catch {
+    const raw =
+      process.env.NEXT_PUBLIC_API_BASE_URL ||
+      process.env.NEXT_PUBLIC_BACKEND_URL ||
+      process.env.NEXT_PUBLIC_API_URL ||
+      "";
+    return raw.replace(/\/$/, "");
+  }
+}
+
+const BASE_URL = resolveApiBaseUrl();
 
 const KEY = { BACK: 4, HOME: 3, RECENTS: 187 };
 
 type StreamingMode = "scrcpy" | "screenshot";
 
-const BASE_URL_FOR_MODE = (
-  process.env.NEXT_PUBLIC_API_BASE_URL ||
-  process.env.NEXT_PUBLIC_BACKEND_URL ||
-  ""
-).replace(/\/$/, "");
+const BASE_URL_FOR_MODE = BASE_URL;
 
 let cachedStreamingMode: "unknown" | StreamingMode | null = null;
 let streamingModeFetch: Promise<StreamingMode> | null = null;
@@ -202,13 +204,6 @@ export function SessionPhoneControl({
 
   const deviceId = session.device_id?._id;
   const deviceSerial = session.device_id?.serial_number;
-
-  useEffect(() => {
-    if (streamingMode !== "scrcpy" || !deviceSerial) return;
-    const socket = getStreamSocket();
-    bindDeviceInputSocket(socket);
-    return () => bindDeviceInputSocket(null);
-  }, [streamingMode, deviceSerial]);
 
   const refreshScreenshot = useCallback(() => {
     if (!deviceId) return;

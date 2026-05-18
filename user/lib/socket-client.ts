@@ -1,4 +1,8 @@
 import { io, Socket } from "socket.io-client";
+import {
+  attachStreamSocketInputSync,
+  syncDeviceInputStreamSocket,
+} from "@boxphon/shared/client/device-input-transport";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_SOCKET_URL || "https://api.myrealphone.cloud";
 
@@ -56,6 +60,8 @@ export const getStreamSocket = (token?: string): Socket => {
     ...(token ? { auth: { token } } : {}),
   });
 
+  attachStreamSocketInputSync(streamSocket);
+
   streamSocket.on("disconnect", () => {
     console.log("❌ Stream socket disconnected");
   });
@@ -67,6 +73,7 @@ export const closeStreamSocket = () => {
   if (streamSocket) {
     streamSocket.disconnect();
     streamSocket = null;
+    syncDeviceInputStreamSocket(null);
   }
 };
 

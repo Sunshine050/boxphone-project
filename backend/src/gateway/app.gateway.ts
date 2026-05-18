@@ -469,6 +469,10 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect {
       return;
     }
 
+    this.logger.debug(
+      `device_input ${client.id} ${serial} type=${type}`,
+    );
+
     if (type === "text") {
       try {
         await this.adbScreenshotService.sendInput(serial, {
