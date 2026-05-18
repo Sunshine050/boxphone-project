@@ -440,31 +440,17 @@ export const H264Player = forwardRef<H264PlayerHandle, H264PlayerProps>(
         }
       };
 
-      const applyStreamMetadata = (payload: {
+      const onMetadataEvent = (payload: {
+        deviceSerial: string;
         width: number;
         height: number;
         deviceName: string;
+        codec?: string;
+        /** Device's logical display size (portrait-base) — ADB input coordinate space */
         displayWidth?: number;
         displayHeight?: number;
       }) => {
-        const prev = streamVideoSizeRef.current;
-        const sizeChanged =
-          prev.width > 0 &&
-          prev.height > 0 &&
-          (prev.width !== payload.width || prev.height !== payload.height);
-
-        if (sizeChanged) {
-          console.log(
-            "[H264Player] stream size change",
-            `${prev.width}x${prev.height}`,
-            "→",
-            `${payload.width}x${payload.height}`,
-          );
-          closeDecoder();
-          waitingKeyFrameRef.current = true;
-          decodeErrorStreak = 0;
-          setErrorMessage(null);
-        }
+        if (payload.deviceSerial !== deviceSerial) return;
 
         streamVideoSizeRef.current = {
           width: payload.width,
@@ -475,25 +461,26 @@ export const H264Player = forwardRef<H264PlayerHandle, H264PlayerProps>(
           height: payload.height,
         };
 
+        // Canvas renders video at video resolution
         if (canvasRef.current) {
           canvasRef.current.width = payload.width;
           canvasRef.current.height = payload.height;
         }
 
+        // Touch overlay needs NATIVE display coordinates (ADB input space).
+        // `displayWidth/Height` from backend is the portrait-base size from
+        // `adb shell wm size`.  Rotate it to match the current video orientation
+        // (video dims already reflect the device's physical orientation).
         if (payload.displayWidth && payload.displayHeight) {
           const isLandscape = payload.width > payload.height;
-          const portraitW = Math.min(
-            payload.displayWidth,
-            payload.displayHeight,
-          );
-          const portraitH = Math.max(
-            payload.displayWidth,
-            payload.displayHeight,
-          );
+          // wm size always portrait-base → smaller side = portrait width, larger = height
+          const portraitW = Math.min(payload.displayWidth, payload.displayHeight);
+          const portraitH = Math.max(payload.displayWidth, payload.displayHeight);
           naturalSizeRef.current = isLandscape
-            ? { width: portraitH, height: portraitW }
-            : { width: portraitW, height: portraitH };
+            ? { width: portraitH, height: portraitW }   // landscape: swap dims
+            : { width: portraitW, height: portraitH };  // portrait: keep as-is
         } else {
+          // Fallback: use video resolution (less accurate for scaled streams)
           naturalSizeRef.current = {
             width: payload.width,
             height: payload.height,
@@ -505,28 +492,10 @@ export const H264Player = forwardRef<H264PlayerHandle, H264PlayerProps>(
           height: payload.height,
           deviceName: payload.deviceName,
         });
-
-        if (sizeChanged && configPacketRef.current) {
-          ensureDecoderConfigured(configPacketRef.current, true);
-        }
-
         if (!isPlayingRef.current) {
           setStatus("waiting");
           bumpWatchdog();
         }
-      };
-
-      const onMetadataEvent = (payload: {
-        deviceSerial: string;
-        width: number;
-        height: number;
-        deviceName: string;
-        codec?: string;
-        displayWidth?: number;
-        displayHeight?: number;
-      }) => {
-        if (payload.deviceSerial !== deviceSerial) return;
-        applyStreamMetadata(payload);
       };
 
       const onFrame = (payload: FramePayload) => {
@@ -540,18 +509,19 @@ export const H264Player = forwardRef<H264PlayerHandle, H264PlayerProps>(
           return;
         }
         if (payload.isConfig) {
+          // Config packet = SPS + PPS from scrcpy.
           configPacketRef.current = bytes;
           const nextCodec = codecFromConfig(bytes);
-          const codecChanged =
+          if (
             decoderConfiguredRef.current &&
             configuredCodecRef.current &&
-            configuredCodecRef.current !== nextCodec;
-          if (codecChanged) {
+            configuredCodecRef.current !== nextCodec
+          ) {
             closeDecoder();
           }
           configuredCodecRef.current = nextCodec;
-          if (!decoderConfiguredRef.current || codecChanged) {
-            ensureDecoderConfigured(bytes, codecChanged);
+          if (!decoderConfiguredRef.current) {
+            ensureDecoderConfigured(bytes);
           }
           waitingKeyFrameRef.current = true;
           return;
