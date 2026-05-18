@@ -4,17 +4,16 @@ import { sendDeviceInput } from "./send-device-input";
 
 export type DeviceInputTarget = {
   deviceId: string;
-  /** scrcpy / ADB serial — enables WebSocket path when set */
+  /** scrcpy / ADB serial — enables WebSocket fast path when set */
   deviceSerial?: string;
 };
 
-/** Current connected stream socket (kept in sync by socket-client on connect/disconnect). */
+/**
+ * Live stream socket reference — kept in sync by user/admin `socket-client.ts`
+ * through {@link attachStreamSocketInputSync} and survives socket reconnects.
+ */
 let liveStreamSocket: Socket | null = null;
 
-/**
- * Update the live stream socket used for `device_input`.
- * Called from user/admin `socket-client` on connect, disconnect, and new socket creation.
- */
 export function syncDeviceInputStreamSocket(socket: Socket | null): void {
   if (socket?.connected) {
     liveStreamSocket = socket;
@@ -40,9 +39,7 @@ export function attachStreamSocketInputSync(sock: Socket): void {
   }
 }
 
-/**
- * @deprecated Prefer `attachStreamSocketInputSync` in socket-client. Kept for compatibility.
- */
+/** Compatibility shim for older call sites. */
 export function bindDeviceInputSocket(socket: Socket | null): void {
   syncDeviceInputStreamSocket(socket);
 }
@@ -52,8 +49,13 @@ export function getDeviceInputSocket(): Socket | null {
 }
 
 /**
- * Prefer WebSocket `device_input` when stream socket is connected and serial is known.
- * Falls back to HTTP POST for screenshot mode or disconnected sockets.
+ * Send a device input event using the fastest available transport.
+ *
+ * - WebSocket path: emit `device_input` on the live stream socket. Resolves
+ *   immediately (the gateway handles delivery and does not ack).
+ * - HTTP fallback: POST `/devices/:id/input` when no socket is available.
+ *
+ * Critically: each call is delivered EXACTLY ONCE — never on both transports.
  */
 export function sendDeviceInputFast(
   apiBaseUrl: string,
@@ -63,32 +65,27 @@ export function sendDeviceInputFast(
   options?: { awaitResponse?: boolean },
 ): Promise<Response> | void {
   const socket = getDeviceInputSocket();
-  const useWebSocket = !!(socket && target.deviceSerial);
-
-  if (useWebSocket) {
+  if (socket && target.deviceSerial) {
     socket.emit("device_input", {
       deviceId: target.deviceId,
       deviceSerial: target.deviceSerial,
       type,
       payload,
     });
-    if (!options?.awaitResponse) {
-      return;
+    if (options?.awaitResponse) {
+      return Promise.resolve(new Response(null, { status: 200 }));
     }
+    return;
   }
 
   const base = apiBaseUrl?.trim();
-  if (base) {
-    return sendDeviceInput(base, target.deviceId, type, payload, options);
+  if (!base) {
+    if (options?.awaitResponse) {
+      return Promise.reject(
+        new Error("Device input unavailable: no socket and no API URL"),
+      );
+    }
+    return;
   }
-
-  if (useWebSocket && options?.awaitResponse) {
-    return Promise.resolve(new Response(null, { status: 200 }));
-  }
-
-  if (options?.awaitResponse) {
-    return Promise.reject(
-      new Error("Device input unavailable: stream socket disconnected and no API URL"),
-    );
-  }
+  return sendDeviceInput(base, target.deviceId, type, payload, options);
 }

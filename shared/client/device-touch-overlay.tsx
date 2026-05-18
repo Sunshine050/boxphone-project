@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { mapClientToDevice, type Size2D } from "./map-pointer-to-device";
 import {
   sendDeviceInputFast,
@@ -18,16 +18,20 @@ export type DeviceTouchOverlayProps = {
   onAction?: () => void;
 };
 
-const TAP_MOVE_PX = 10;
-const TAP_MS = 400;
+/** Gesture thresholds — tuned for Note 9 / iPad / desktop mouse alike. */
+const TAP_MOVE_PX = 8;
+const TAP_MS = 380;
 const LONG_PRESS_MS = 480;
-const MOVE_INTERVAL_MS = 10;
-const SWIPE_START_PX = 3;
+const MOVE_INTERVAL_MS = 8;
+const SWIPE_START_PX_TOUCH = 3;
+const SWIPE_START_PX_MOUSE = 4;
+const CROSSHAIR_HIDE_MS = 260;
 const MAX_POINTERS = 10;
 
 type ActivePointer = {
   id: number;
   pointerIndex: number;
+  pointerType: string;
   startX: number;
   startY: number;
   lastX: number;
@@ -42,11 +46,6 @@ type ActivePointer = {
   downAck: boolean;
 };
 
-function isCoarsePointer(): boolean {
-  if (typeof window === "undefined") return true;
-  return window.matchMedia("(pointer: coarse)").matches;
-}
-
 export function DeviceTouchOverlay({
   deviceId,
   deviceSerial,
@@ -57,38 +56,26 @@ export function DeviceTouchOverlay({
   onAction,
 }: DeviceTouchOverlayProps) {
   const overlayRef = useRef<HTMLDivElement>(null);
-  const pointersRef = useRef<Map<number, ActivePointer>>(new Map());
+  const crosshairLayerRef = useRef<HTMLDivElement>(null);
+
+  /** Map<pointerId, ActivePointer> — minimal allocation on the hot path. */
+  const pointers = useRef<Map<number, ActivePointer>>(new Map());
   const moveRafRef = useRef<number | null>(null);
-  const pendingMovesRef = useRef<Map<number, { x: number; y: number }>>(
-    new Map(),
-  );
-  const [crosshairs, setCrosshairs] = useState<
-    Map<number, { x: number; y: number }>
-  >(new Map());
+  const pendingMoves = useRef<Map<number, { x: number; y: number }>>(new Map());
+
+  /**
+   * Crosshair DOM nodes are managed imperatively so dragging never triggers a
+   * React re-render — that was the root cause of jittery / "wonky" touch.
+   */
+  const crosshairNodes = useRef<Map<number, HTMLSpanElement>>(new Map());
   const crosshairTimers = useRef<Map<number, ReturnType<typeof setTimeout>>>(
     new Map(),
   );
 
-  const inputTarget: DeviceInputTarget = {
-    deviceId,
-    deviceSerial,
-  };
-
-  const swipeStartPx = isCoarsePointer() ? SWIPE_START_PX : 5;
-
-  useEffect(() => {
-    const el = overlayRef.current;
-    if (!el) return;
-    const prevent = (e: TouchEvent) => e.preventDefault();
-    el.addEventListener("touchstart", prevent, { passive: false });
-    el.addEventListener("touchmove", prevent, { passive: false });
-    el.addEventListener("touchend", prevent, { passive: false });
-    return () => {
-      el.removeEventListener("touchstart", prevent);
-      el.removeEventListener("touchmove", prevent);
-      el.removeEventListener("touchend", prevent);
-    };
-  }, []);
+  const inputTarget = useMemo<DeviceInputTarget>(
+    () => ({ deviceId, deviceSerial }),
+    [deviceId, deviceSerial],
+  );
 
   const resolveVideoSize = useCallback((): Size2D => {
     const v = getVideoSize?.();
@@ -115,57 +102,83 @@ export function DeviceTouchOverlay({
     [getVideoElement, resolveVideoSize, getNaturalSize],
   );
 
-  const showCrosshair = useCallback((pointerId: number, clientX: number, clientY: number) => {
-    const rect = overlayRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    const local = { x: clientX - rect.left, y: clientY - rect.top };
-    setCrosshairs((prev) => {
-      const next = new Map(prev);
-      next.set(pointerId, local);
-      return next;
-    });
-    const existing = crosshairTimers.current.get(pointerId);
-    if (existing) clearTimeout(existing);
-    crosshairTimers.current.set(
-      pointerId,
-      setTimeout(() => {
-        setCrosshairs((prev) => {
-          const next = new Map(prev);
-          next.delete(pointerId);
-          return next;
-        });
-        crosshairTimers.current.delete(pointerId);
-      }, 280),
-    );
+  /* ──────────────── Crosshair (imperative, no React state) ──────────────── */
+
+  const removeCrosshair = useCallback((pointerId: number) => {
+    const node = crosshairNodes.current.get(pointerId);
+    if (node) {
+      node.remove();
+      crosshairNodes.current.delete(pointerId);
+    }
+    const timer = crosshairTimers.current.get(pointerId);
+    if (timer) {
+      clearTimeout(timer);
+      crosshairTimers.current.delete(pointerId);
+    }
   }, []);
 
-  const sendTouch = useCallback(
-    (
-      action: string,
-      x: number,
-      y: number,
-      pointerIndex: number,
-      opts?: { awaitResponse?: boolean },
-    ) => {
-      sendDeviceInputFast(
-        apiBaseUrl,
-        inputTarget,
-        "touch",
-        { action, x, y, pointerId: pointerIndex },
-        opts,
+  const ensureCrosshairNode = useCallback((pointerId: number) => {
+    let node = crosshairNodes.current.get(pointerId);
+    if (node) return node;
+    const layer = crosshairLayerRef.current;
+    if (!layer) return null;
+
+    node = document.createElement("span");
+    node.className = "pointer-events-none absolute z-20 will-change-transform";
+    node.style.left = "0";
+    node.style.top = "0";
+    node.innerHTML = `
+      <span style="position:absolute;left:-6px;top:-6px;width:12px;height:12px;border-radius:9999px;border:1px solid rgba(34,211,238,0.9);background:rgba(34,211,238,0.18)"></span>
+      <span style="position:absolute;left:0;top:0;width:6px;height:1px;background:rgba(34,211,238,0.6);transform:translateX(-100%)"></span>
+      <span style="position:absolute;left:0;top:0;width:1px;height:6px;background:rgba(34,211,238,0.6);transform:translateY(-100%)"></span>
+      <span style="position:absolute;left:0;top:0;width:6px;height:1px;background:rgba(34,211,238,0.6)"></span>
+      <span style="position:absolute;left:0;top:0;width:1px;height:6px;background:rgba(34,211,238,0.6)"></span>
+    `;
+    layer.appendChild(node);
+    crosshairNodes.current.set(pointerId, node);
+    return node;
+  }, []);
+
+  const moveCrosshair = useCallback(
+    (pointerId: number, clientX: number, clientY: number) => {
+      const layer = crosshairLayerRef.current;
+      if (!layer) return;
+      const rect = layer.getBoundingClientRect();
+      const lx = clientX - rect.left;
+      const ly = clientY - rect.top;
+      const node = ensureCrosshairNode(pointerId);
+      if (!node) return;
+      node.style.transform = `translate3d(${lx}px, ${ly}px, 0)`;
+      const existing = crosshairTimers.current.get(pointerId);
+      if (existing) clearTimeout(existing);
+      crosshairTimers.current.set(
+        pointerId,
+        setTimeout(() => removeCrosshair(pointerId), CROSSHAIR_HIDE_MS),
       );
+    },
+    [ensureCrosshairNode, removeCrosshair],
+  );
+
+  /* ──────────────── Send helpers ──────────────── */
+
+  const sendTouch = useCallback(
+    (action: "down" | "up" | "move", x: number, y: number, pointerIndex: number) => {
+      sendDeviceInputFast(apiBaseUrl, inputTarget, "touch", {
+        action,
+        x,
+        y,
+        pointerId: pointerIndex,
+      });
     },
     [apiBaseUrl, inputTarget],
   );
 
   const flushTouchMove = useCallback(
     (pointerId: number, clientX: number, clientY: number, force = false) => {
-      const p = pointersRef.current.get(pointerId);
+      const p = pointers.current.get(pointerId);
       if (!p?.touchActive || !p.downAck) return;
-
       const pos = toDevice(clientX, clientY);
       if (!pos) return;
-
       const now = performance.now();
       if (
         !force &&
@@ -174,7 +187,6 @@ export function DeviceTouchOverlay({
       ) {
         return;
       }
-
       p.lastMoveSentAt = now;
       p.lastSentX = pos.x;
       p.lastSentY = pos.y;
@@ -185,18 +197,17 @@ export function DeviceTouchOverlay({
 
   const runMoveRaf = useCallback(() => {
     moveRafRef.current = null;
-    const pending = pendingMovesRef.current;
+    const pending = pendingMoves.current;
     if (pending.size === 0) return;
-    const copy = new Map(pending);
-    pendingMovesRef.current = new Map();
-    for (const [pointerId, pos] of copy) {
+    for (const [pointerId, pos] of pending) {
       flushTouchMove(pointerId, pos.x, pos.y);
     }
+    pending.clear();
   }, [flushTouchMove]);
 
   const scheduleTouchMove = useCallback(
     (pointerId: number, clientX: number, clientY: number) => {
-      pendingMovesRef.current.set(pointerId, { x: clientX, y: clientY });
+      pendingMoves.current.set(pointerId, { x: clientX, y: clientY });
       if (moveRafRef.current == null) {
         moveRafRef.current = requestAnimationFrame(runMoveRaf);
       }
@@ -205,10 +216,9 @@ export function DeviceTouchOverlay({
   );
 
   const beginTouchDrag = useCallback(
-    async (pointerId: number, clientX: number, clientY: number) => {
-      const p = pointersRef.current.get(pointerId);
+    (pointerId: number, clientX: number, clientY: number) => {
+      const p = pointers.current.get(pointerId);
       if (!p || p.touchActive) return;
-
       const start = toDevice(p.startX, p.startY);
       if (!start) return;
 
@@ -217,18 +227,9 @@ export function DeviceTouchOverlay({
       p.lastSentX = start.x;
       p.lastSentY = start.y;
       p.lastMoveSentAt = 0;
-      p.downAck = false;
+      p.downAck = true;
 
-      try {
-        await sendTouch("down", start.x, start.y, p.pointerIndex, {
-          awaitResponse: true,
-        });
-        p.downAck = true;
-      } catch {
-        p.touchActive = false;
-        p.isSwiping = false;
-        return;
-      }
+      sendTouch("down", start.x, start.y, p.pointerIndex);
 
       const current = toDevice(clientX, clientY);
       if (current && (current.x !== start.x || current.y !== start.y)) {
@@ -239,20 +240,13 @@ export function DeviceTouchOverlay({
   );
 
   const endTouch = useCallback(
-    async (pointerId: number, clientX: number, clientY: number) => {
-      const p = pointersRef.current.get(pointerId);
+    (pointerId: number, clientX: number, clientY: number) => {
+      const p = pointers.current.get(pointerId);
       if (!p?.touchActive) return;
-
       flushTouchMove(pointerId, clientX, clientY, true);
       const end = toDevice(clientX, clientY);
       if (end && p.downAck) {
-        try {
-          await sendTouch("up", end.x, end.y, p.pointerIndex, {
-            awaitResponse: true,
-          });
-        } catch {
-          /* best-effort */
-        }
+        sendTouch("up", end.x, end.y, p.pointerIndex);
       }
       p.touchActive = false;
       p.downAck = false;
@@ -260,82 +254,86 @@ export function DeviceTouchOverlay({
     [flushTouchMove, toDevice, sendTouch],
   );
 
-  const processPointerMove = useCallback(
-    (pointerId: number, clientX: number, clientY: number) => {
-      const p = pointersRef.current.get(pointerId);
-      if (!p) return;
+  /* ──────────────── Pointer event handlers ──────────────── */
 
-      p.lastX = clientX;
-      p.lastY = clientY;
-
-      const dist = Math.hypot(clientX - p.startX, clientY - p.startY);
-
-      if (!p.isSwiping && dist >= swipeStartPx) {
-        if (p.longPressTimer) {
-          clearTimeout(p.longPressTimer);
-          p.longPressTimer = null;
-        }
-        void beginTouchDrag(pointerId, clientX, clientY);
-      }
-
-      if (p.touchActive && p.downAck) {
-        scheduleTouchMove(pointerId, clientX, clientY);
-      }
-
-      showCrosshair(pointerId, clientX, clientY);
-    },
-    [beginTouchDrag, scheduleTouchMove, showCrosshair, swipeStartPx],
-  );
-
-  const allocPointerIndex = (): number => {
-    const used = new Set(
-      [...pointersRef.current.values()].map((p) => p.pointerIndex),
-    );
+  const allocPointerIndex = useCallback((): number => {
+    const used = new Set<number>();
+    for (const p of pointers.current.values()) used.add(p.pointerIndex);
     for (let i = 0; i < MAX_POINTERS; i++) {
       if (!used.has(i)) return i;
     }
     return 0;
-  };
+  }, []);
+
+  const processPointerMove = useCallback(
+    (pointerId: number, clientX: number, clientY: number, pointerType: string) => {
+      const p = pointers.current.get(pointerId);
+      if (!p) return;
+      p.lastX = clientX;
+      p.lastY = clientY;
+
+      const dist = Math.hypot(clientX - p.startX, clientY - p.startY);
+      const startThreshold =
+        pointerType === "mouse" ? SWIPE_START_PX_MOUSE : SWIPE_START_PX_TOUCH;
+
+      if (!p.isSwiping && dist >= startThreshold) {
+        if (p.longPressTimer) {
+          clearTimeout(p.longPressTimer);
+          p.longPressTimer = null;
+        }
+        beginTouchDrag(pointerId, clientX, clientY);
+      }
+      if (p.touchActive && p.downAck) {
+        scheduleTouchMove(pointerId, clientX, clientY);
+      }
+      moveCrosshair(pointerId, clientX, clientY);
+    },
+    [beginTouchDrag, scheduleTouchMove, moveCrosshair],
+  );
 
   const onPointerDown = (e: React.PointerEvent) => {
-    if (e.button !== 0) return;
-    if (pointersRef.current.size >= MAX_POINTERS) return;
-    if (pointersRef.current.has(e.pointerId)) return;
+    // Accept primary mouse button, all touches, and pen tip.
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    if (pointers.current.has(e.pointerId)) return;
+    if (pointers.current.size >= MAX_POINTERS) return;
 
     e.preventDefault();
     e.stopPropagation();
-    e.currentTarget.setPointerCapture(e.pointerId);
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch {
+      /* ignore */
+    }
 
     const pointerIndex = allocPointerIndex();
-    showCrosshair(e.pointerId, e.clientX, e.clientY);
+    moveCrosshair(e.pointerId, e.clientX, e.clientY);
 
     const longPressTimer = setTimeout(() => {
-      const p = pointersRef.current.get(e.pointerId);
+      const p = pointers.current.get(e.pointerId);
       if (!p || p.isSwiping || p.touchActive) return;
       const dist = Math.hypot(p.lastX - p.startX, p.lastY - p.startY);
-      if (dist < TAP_MOVE_PX) {
-        const pos = toDevice(p.startX, p.startY);
-        if (pos) {
-          try {
-            navigator.vibrate?.(30);
-          } catch {
-            /* ignore */
-          }
-          sendDeviceInputFast(apiBaseUrl, inputTarget, "swipe", {
-            x1: pos.x,
-            y1: pos.y,
-            x2: pos.x,
-            y2: pos.y,
-            duration: 500,
-          });
-          onAction?.();
-        }
+      if (dist >= TAP_MOVE_PX) return;
+      const pos = toDevice(p.startX, p.startY);
+      if (!pos) return;
+      try {
+        navigator.vibrate?.(25);
+      } catch {
+        /* ignore */
       }
+      sendDeviceInputFast(apiBaseUrl, inputTarget, "swipe", {
+        x1: pos.x,
+        y1: pos.y,
+        x2: pos.x,
+        y2: pos.y,
+        duration: 500,
+      });
+      onAction?.();
     }, LONG_PRESS_MS);
 
-    pointersRef.current.set(e.pointerId, {
+    pointers.current.set(e.pointerId, {
       id: e.pointerId,
       pointerIndex,
+      pointerType: e.pointerType || "touch",
       startX: e.clientX,
       startY: e.clientY,
       lastX: e.clientX,
@@ -352,25 +350,29 @@ export function DeviceTouchOverlay({
   };
 
   const onPointerMove = (e: React.PointerEvent) => {
-    if (!pointersRef.current.has(e.pointerId)) return;
+    const p = pointers.current.get(e.pointerId);
+    if (!p) return;
     e.preventDefault();
 
     const native = e.nativeEvent as PointerEvent;
     const coalesced =
       typeof native.getCoalescedEvents === "function"
         ? native.getCoalescedEvents()
-        : [native];
-
-    for (const ev of coalesced) {
-      processPointerMove(e.pointerId, ev.clientX, ev.clientY);
+        : null;
+    if (coalesced && coalesced.length > 0) {
+      for (const ev of coalesced) {
+        processPointerMove(e.pointerId, ev.clientX, ev.clientY, p.pointerType);
+      }
+    } else {
+      processPointerMove(e.pointerId, e.clientX, e.clientY, p.pointerType);
     }
   };
 
-  const onPointerUp = async (e: React.PointerEvent) => {
-    const p = pointersRef.current.get(e.pointerId);
+  const onPointerUp = (e: React.PointerEvent) => {
+    const p = pointers.current.get(e.pointerId);
     if (!p) return;
-
     e.preventDefault();
+
     if (p.longPressTimer) {
       clearTimeout(p.longPressTimer);
       p.longPressTimer = null;
@@ -380,28 +382,21 @@ export function DeviceTouchOverlay({
     const dt = performance.now() - p.t;
 
     if (p.touchActive) {
-      await endTouch(e.pointerId, e.clientX, e.clientY);
+      endTouch(e.pointerId, e.clientX, e.clientY);
     } else if (!p.isSwiping && dist < TAP_MOVE_PX && dt < TAP_MS) {
       const pos = toDevice(p.startX, p.startY);
       if (pos) {
-        showCrosshair(e.pointerId, p.startX, p.startY);
+        moveCrosshair(e.pointerId, p.startX, p.startY);
         try {
           navigator.vibrate?.(6);
         } catch {
           /* ignore */
         }
-        try {
-          await sendDeviceInputFast(
-            apiBaseUrl,
-            inputTarget,
-            "tap",
-            { x: pos.x, y: pos.y },
-            { awaitResponse: true },
-          );
-          onAction?.();
-        } catch {
-          /* tap failed */
-        }
+        sendDeviceInputFast(apiBaseUrl, inputTarget, "tap", {
+          x: pos.x,
+          y: pos.y,
+        });
+        onAction?.();
       }
     } else if (p.isSwiping && !p.touchActive) {
       const from = toDevice(p.startX, p.startY);
@@ -418,99 +413,87 @@ export function DeviceTouchOverlay({
       }
     }
 
-    pointersRef.current.delete(e.pointerId);
-    pendingMovesRef.current.delete(e.pointerId);
-    setCrosshairs((prev) => {
-      const next = new Map(prev);
-      next.delete(e.pointerId);
-      return next;
-    });
-    if (pointersRef.current.size === 0 && moveRafRef.current != null) {
+    pointers.current.delete(e.pointerId);
+    pendingMoves.current.delete(e.pointerId);
+    if (pointers.current.size === 0 && moveRafRef.current != null) {
       cancelAnimationFrame(moveRafRef.current);
       moveRafRef.current = null;
     }
   };
 
-  const onPointerCancel = async (e: React.PointerEvent) => {
-    const p = pointersRef.current.get(e.pointerId);
+  const onPointerCancel = (e: React.PointerEvent) => {
+    const p = pointers.current.get(e.pointerId);
     if (!p) return;
-    if (p.longPressTimer) clearTimeout(p.longPressTimer);
+    if (p.longPressTimer) {
+      clearTimeout(p.longPressTimer);
+      p.longPressTimer = null;
+    }
     if (p.touchActive && p.downAck) {
       const pos = toDevice(p.lastX, p.lastY);
       if (pos) {
-        try {
-          await sendTouch("up", pos.x, pos.y, p.pointerIndex, {
-            awaitResponse: true,
-          });
-        } catch {
-          /* ignore */
-        }
+        sendTouch("up", pos.x, pos.y, p.pointerIndex);
       }
     }
-    pointersRef.current.delete(e.pointerId);
-    pendingMovesRef.current.delete(e.pointerId);
-    if (pointersRef.current.size === 0 && moveRafRef.current != null) {
+    removeCrosshair(e.pointerId);
+    pointers.current.delete(e.pointerId);
+    pendingMoves.current.delete(e.pointerId);
+    if (pointers.current.size === 0 && moveRafRef.current != null) {
       cancelAnimationFrame(moveRafRef.current);
       moveRafRef.current = null;
     }
   };
 
-  return (
-    <TouchOverlayView
-      overlayRef={overlayRef}
-      crosshairs={crosshairs}
-      onPointerDown={onPointerDown}
-      onPointerMove={onPointerMove}
-      onPointerUp={onPointerUp}
-      onPointerCancel={onPointerCancel}
-    />
-  );
-}
+  /* ──────────────── Side effects ──────────────── */
 
-function TouchOverlayView({
-  overlayRef,
-  crosshairs,
-  onPointerDown,
-  onPointerMove,
-  onPointerUp,
-  onPointerCancel,
-}: {
-  overlayRef: React.RefObject<HTMLDivElement | null>;
-  crosshairs: Map<number, { x: number; y: number }>;
-  onPointerDown: (e: React.PointerEvent) => void;
-  onPointerMove: (e: React.PointerEvent) => void;
-  onPointerUp: (e: React.PointerEvent) => void;
-  onPointerCancel: (e: React.PointerEvent) => void;
-}) {
+  useEffect(() => {
+    const el = overlayRef.current;
+    if (!el) return;
+    // Block browser gestures (pinch-zoom on iOS, double-tap zoom) without
+    // affecting our own pointer event handlers.
+    const prevent = (e: TouchEvent) => e.preventDefault();
+    el.addEventListener("touchstart", prevent, { passive: false });
+    el.addEventListener("touchmove", prevent, { passive: false });
+    el.addEventListener("touchend", prevent, { passive: false });
+    return () => {
+      el.removeEventListener("touchstart", prevent);
+      el.removeEventListener("touchmove", prevent);
+      el.removeEventListener("touchend", prevent);
+    };
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      for (const timer of crosshairTimers.current.values()) clearTimeout(timer);
+      crosshairTimers.current.clear();
+      crosshairNodes.current.clear();
+      if (moveRafRef.current != null) {
+        cancelAnimationFrame(moveRafRef.current);
+        moveRafRef.current = null;
+      }
+    };
+  }, []);
+
   return (
     <div
       ref={overlayRef}
       className="absolute inset-0 z-10 cursor-crosshair touch-none select-none"
-      style={
-        {
-          touchAction: "none",
-          WebkitTouchCallout: "none",
-          WebkitTapHighlightColor: "transparent",
-        } as React.CSSProperties
-      }
+      style={{
+        touchAction: "none",
+        WebkitTouchCallout: "none",
+        WebkitTapHighlightColor: "transparent",
+        WebkitUserSelect: "none",
+        userSelect: "none",
+      }}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
       onPointerCancel={onPointerCancel}
     >
-      {[...crosshairs.entries()].map(([id, pt]) => (
-        <span
-          key={id}
-          className="pointer-events-none absolute z-20"
-          style={{ left: pt.x, top: pt.y }}
-        >
-          <span className="absolute -left-2 -top-2 h-4 w-4 rounded-full border border-cyan-400/90 bg-cyan-400/20" />
-          <span className="absolute left-0 top-0 h-px w-2 -translate-x-full bg-cyan-400/60" />
-          <span className="absolute left-0 top-0 h-2 w-px -translate-y-full bg-cyan-400/60" />
-        </span>
-      ))}
+      <div
+        ref={crosshairLayerRef}
+        className="pointer-events-none absolute inset-0"
+        aria-hidden
+      />
     </div>
   );
 }
-
-
