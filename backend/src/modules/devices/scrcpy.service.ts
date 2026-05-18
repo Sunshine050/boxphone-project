@@ -23,8 +23,14 @@ import {
   serializeInjectTouchEvent,
 } from "./scrcpy-control.util";
 import type { AdbInputCommand } from "./adb-screenshot.service";
+import { parseVideoSizeFromConfigPacket } from "./h264-sps.util";
 
 const execFileAsync = promisify(execFile);
+
+export type StreamMetadataChangeListener = (
+  serial: string,
+  metadata: StreamMetadata,
+) => void;
 
 export interface FrameMeta {
   isConfig: boolean;
@@ -96,8 +102,51 @@ export class ScrcpyService implements OnModuleInit, OnModuleDestroy {
     Promise<ScrcpyStreamState>
   >();
   private readonly usedPorts = new Set<number>();
+  private readonly metadataChangeListeners = new Set<StreamMetadataChangeListener>();
 
   constructor(private readonly config: ConfigService) {}
+
+  /** Fired when video width/height changes (e.g. device rotation). */
+  onStreamMetadataChange(listener: StreamMetadataChangeListener): () => void {
+    this.metadataChangeListeners.add(listener);
+    return () => this.metadataChangeListeners.delete(listener);
+  }
+
+  private notifyStreamMetadataChange(state: ScrcpyStreamState): void {
+    if (!state.videoHeaderReceived) return;
+    const metadata = this.buildStreamMetadata(state);
+    for (const listener of this.metadataChangeListeners) {
+      try {
+        listener(state.serial, metadata);
+      } catch (e: any) {
+        this.logger.warn(
+          `metadata change listener failed: ${e?.message || e}`,
+        );
+      }
+    }
+  }
+
+  private maybeUpdateVideoSizeFromConfig(
+    state: ScrcpyStreamState,
+    config: Buffer,
+  ): void {
+    const parsed = parseVideoSizeFromConfigPacket(config);
+    if (!parsed || parsed.width <= 0 || parsed.height <= 0) return;
+
+    const prevW = state.width;
+    const prevH = state.height;
+    if (prevW === parsed.width && prevH === parsed.height) return;
+
+    state.width = parsed.width;
+    state.height = parsed.height;
+
+    if (prevW <= 0 || prevH <= 0) return;
+
+    this.logger.log(
+      `[scrcpy/${state.serial}] video size ${prevW}x${prevH} → ${parsed.width}x${parsed.height} (rotation/resolution change)`,
+    );
+    this.notifyStreamMetadataChange(state);
+  }
 
   /* ─────────── env getters ─────────── */
 
@@ -1071,7 +1120,10 @@ export class ScrcpyService implements OnModuleInit, OnModuleDestroy {
       const meta: FrameMeta = { isConfig, isKeyFrame, pts };
 
       // Cache SPS/PPS so late subscribers can initialize their decoder
-      if (isConfig) state.configPacket = payload;
+      if (isConfig) {
+        state.configPacket = payload;
+        this.maybeUpdateVideoSizeFromConfig(state, payload);
+      }
       if (isKeyFrame && !isConfig) {
         state.lastKeyFramePacket = payload;
         state.lastKeyFramePts = pts;

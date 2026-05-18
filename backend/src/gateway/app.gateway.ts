@@ -6,7 +6,12 @@ import {
   OnGatewayDisconnect,
 } from "@nestjs/websockets";
 import { Server, Socket } from "socket.io";
-import { ForbiddenException, Logger, UnauthorizedException } from "@nestjs/common";
+import {
+  ForbiddenException,
+  Logger,
+  OnModuleInit,
+  UnauthorizedException,
+} from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { JwtService } from "@nestjs/jwt";
 import * as cookie from "cookie";
@@ -20,6 +25,7 @@ import { UsersService } from "../modules/users/users.service";
 import {
   ScrcpyService,
   FrameMeta,
+  StreamMetadata,
 } from "../modules/devices/scrcpy.service";
 import { AdbScreenshotService } from "../modules/devices/adb-screenshot.service";
 
@@ -37,7 +43,9 @@ type AuthenticatedSocket = Socket & {
   // 5 MB เพียงพอสำหรับ JPEG frame ที่บีบอัดแล้วและลด DoS / memory exhaustion risk
   maxHttpBufferSize: 5e6,
 })
-export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect {
+export class AppGateway
+  implements OnGatewayConnection, OnGatewayDisconnect, OnModuleInit
+{
   @WebSocketServer() server: Server;
   private logger: Logger = new Logger("AppGateway");
 
@@ -56,6 +64,33 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   // socket.id -> serial -> unsubscribe fn (scrcpy stream subscriptions per socket)
   private streamSubscriptions: Map<string, Map<string, () => void>> = new Map();
+
+  onModuleInit(): void {
+    this.scrcpyService.onStreamMetadataChange((serial, metadata) => {
+      this.broadcastStreamMetadata(serial, metadata);
+    });
+  }
+
+  /** Push updated stream dimensions to every socket subscribed to this device. */
+  private broadcastStreamMetadata(
+    serial: string,
+    metadata: StreamMetadata,
+  ): void {
+    let count = 0;
+    for (const [clientId, subs] of this.streamSubscriptions) {
+      if (!subs.has(serial)) continue;
+      this.server.to(clientId).emit("stream_metadata", {
+        deviceSerial: serial,
+        ...metadata,
+      });
+      count++;
+    }
+    if (count > 0) {
+      this.logger.log(
+        `stream_metadata (size update) ${serial} → ${count} client(s) ${metadata.width}x${metadata.height}`,
+      );
+    }
+  }
 
   async handleConnection(client: AuthenticatedSocket) {
     try {
