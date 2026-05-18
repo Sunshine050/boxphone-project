@@ -42,6 +42,44 @@ const KEY = { BACK: 4, HOME: 3, RECENTS: 187 };
 
 type StreamingMode = "scrcpy" | "screenshot";
 
+const BASE_URL_FOR_MODE = (
+  process.env.NEXT_PUBLIC_API_BASE_URL ||
+  process.env.NEXT_PUBLIC_BACKEND_URL ||
+  ""
+).replace(/\/$/, "");
+
+let cachedStreamingMode: "unknown" | StreamingMode | null = null;
+let streamingModeFetch: Promise<StreamingMode> | null = null;
+
+function detectStreamingMode(): Promise<StreamingMode> {
+  if (cachedStreamingMode === "scrcpy" || cachedStreamingMode === "screenshot") {
+    return Promise.resolve(cachedStreamingMode);
+  }
+  if (streamingModeFetch) return streamingModeFetch;
+
+  streamingModeFetch = fetch(`${BASE_URL_FOR_MODE}/devices/streaming-mode`, {
+    credentials: "include",
+  })
+    .then((r) => (r.ok ? r.json() : null))
+    .then((data) => {
+      const supportsWebCodecs =
+        typeof window !== "undefined" && "VideoDecoder" in window;
+      const mode: StreamingMode =
+        data?.mode === "scrcpy" && supportsWebCodecs ? "scrcpy" : "screenshot";
+      cachedStreamingMode = mode;
+      return mode;
+    })
+    .catch(() => {
+      cachedStreamingMode = "screenshot";
+      return "screenshot" as StreamingMode;
+    })
+    .finally(() => {
+      streamingModeFetch = null;
+    });
+
+  return streamingModeFetch;
+}
+
 /** Compact timer for narrow card headers (mobile). */
 function formatDurationHeaderCompact(totalSeconds: number): string {
   const sec = Math.max(0, Math.floor(totalSeconds));
@@ -64,8 +102,6 @@ interface SessionPhoneControlProps {
   /** Shared stream/orientation state (survives expand ↔ grid). */
   streamView?: SessionStreamViewState;
   onStreamViewChange?: (patch: Partial<SessionStreamViewState>) => void;
-  /** Framer shared layout id for expand animation */
-  layoutId?: string;
   /** Server-corrected epoch_ms of when session data was last fetched from the
    *  API.  The backend computes remaining_seconds as-of the response time, so
    *  we subtract elapsed since fetchedAt (not since start/resume_time which
@@ -80,7 +116,6 @@ export function SessionPhoneControl({
   onCollapse,
   streamView,
   onStreamViewChange,
-  layoutId,
   fetchedAt,
 }: SessionPhoneControlProps) {
   const [now, setNow] = useState(() => getServerNow());
@@ -154,24 +189,12 @@ export function SessionPhoneControl({
     return () => clearInterval(timer);
   }, []);
 
-  // Detect streaming capability (feature flag) — fetched once on mount.
+  // Detect streaming mode once per page load (shared across all cards).
   useEffect(() => {
     let cancelled = false;
-    fetch(`${BASE_URL}/devices/streaming-mode`, { credentials: "include" })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data) => {
-        if (cancelled) return;
-        const supportsWebCodecs =
-          typeof window !== "undefined" && "VideoDecoder" in window;
-        if (data?.mode === "scrcpy" && supportsWebCodecs) {
-          setStreamingMode("scrcpy");
-        } else {
-          setStreamingMode("screenshot");
-        }
-      })
-      .catch(() => {
-        if (!cancelled) setStreamingMode("screenshot");
-      });
+    void detectStreamingMode().then((mode) => {
+      if (!cancelled) setStreamingMode(mode);
+    });
     return () => {
       cancelled = true;
     };
@@ -331,9 +354,7 @@ export function SessionPhoneControl({
 
   return (
     <motion.div
-      layoutId={layoutId}
       className={`flex w-full min-w-0 shrink-0 flex-col ${shellMaxClass}`}
-      transition={{ layout: { type: "spring", stiffness: 380, damping: 36 } }}
     >
       <div className="flex w-full min-w-0 flex-col overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/50 p-2 shadow-lg shadow-black/20 sm:rounded-3xl sm:p-3 md:p-3.5">
         <motion.div

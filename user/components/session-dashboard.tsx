@@ -14,6 +14,7 @@ import {
   type SessionStreamViewState,
 } from "@boxphon/shared/client/session-stream-view";
 import { loadOrientationMode } from "@/lib/screen-orientation";
+import { cn } from "@/lib/utils";
 
 import {
   Dialog,
@@ -45,7 +46,7 @@ const cardVariants = {
     opacity: 1,
     y: 0,
     scale: 1,
-    transition: { type: "spring", stiffness: 320, damping: 28 },
+    transition: { type: "spring" as const, stiffness: 320, damping: 28 },
   },
 };
 
@@ -85,11 +86,8 @@ export function SessionDashboard({
     setSessions(initialSessions);
   }, [initialSessions]);
 
-  const expandedSession =
-    sessions.find((s) => s._id === expandedSessionId) ?? null;
-
   useEffect(() => {
-    if (!expandedSession) return;
+    if (!expandedSessionId) return;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     const onKeyDown = (event: KeyboardEvent) => {
@@ -102,7 +100,7 @@ export function SessionDashboard({
       document.body.style.overflow = previousOverflow;
       window.removeEventListener("keydown", onKeyDown);
     };
-  }, [expandedSession]);
+  }, [expandedSessionId]);
 
   const handleLogout = async () => {
     await AuthService.logout();
@@ -116,16 +114,47 @@ export function SessionDashboard({
       animate={{ opacity: 1 }}
       transition={{ duration: 0.45, ease: "easeOut" }}
     >
-      <div className="mx-auto w-full max-w-[1400px] px-3 py-4 sm:px-5 sm:py-6">
+      <AnimatePresence>
+        {expandedSessionId && (
+          <motion.div
+            key="expanded-backdrop"
+            className="fixed inset-0 z-40 bg-slate-950/85"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
+            onClick={() => setExpandedSessionId(null)}
+            aria-hidden
+          />
+        )}
+      </AnimatePresence>
+
+      {expandedSessionId && (
+        <button
+          type="button"
+          aria-label="ปิดโหมดขยาย"
+          onClick={() => setExpandedSessionId(null)}
+          className="fixed right-4 top-4 z-[60] rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-200 transition-colors hover:bg-slate-800"
+        >
+          ปิด
+        </button>
+      )}
+
+      <motion.div
+        className={cn(
+          "mx-auto w-full max-w-[1400px] px-3 py-4 sm:px-5 sm:py-6",
+          expandedSessionId && "pointer-events-none",
+        )}
+      >
         <motion.header
-          className="mb-6 flex items-center justify-between gap-4"
+          className="mb-6 flex items-center justify-between gap-4 pointer-events-auto"
           initial={{ opacity: 0, y: -12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4, delay: 0.05 }}
         >
           <h1 className="text-xl font-bold sm:text-2xl">CloudPhone Devices</h1>
 
-          <div className="flex items-center gap-3 sm:gap-4">
+          <motion.div className="flex items-center gap-3 sm:gap-4">
             <NotificationBell />
 
             <Dialog>
@@ -164,7 +193,7 @@ export function SessionDashboard({
                 </DialogFooter>
               </DialogContent>
             </Dialog>
-          </div>
+          </motion.div>
         </motion.header>
 
         {sessions.length === 0 ? (
@@ -172,6 +201,7 @@ export function SessionDashboard({
             initial={{ opacity: 0, scale: 0.98 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ delay: 0.15 }}
+            className="pointer-events-auto"
           >
             <Card className="border-slate-800 bg-slate-900/60">
               <CardContent className="p-10 text-center text-slate-400">
@@ -187,7 +217,7 @@ export function SessionDashboard({
             animate="show"
           >
             {sessions.map((s) => {
-              const isExpanded = expandedSessionId === s._id;
+              const isThisExpanded = expandedSessionId === s._id;
               return (
                 <motion.div
                   key={s._id}
@@ -195,13 +225,28 @@ export function SessionDashboard({
                   layout="position"
                   className="flex w-full min-w-0 justify-center"
                 >
-                  {isExpanded ? (
+                  {/* Hold grid cell size while card is position:fixed */}
+                  {isThisExpanded && (
                     <motion.div
                       layout
                       className="pointer-events-none invisible w-full max-w-[min(calc(100vw-1.5rem),240px)] min-h-[380px] sm:max-w-[260px] md:max-w-[280px]"
                       aria-hidden
                     />
-                  ) : (
+                  )}
+
+                  {/* Same SessionPhoneControl instance — never unmounts on expand/collapse */}
+                  <motion.div
+                    layoutId={`phone-${s._id}`}
+                    className={cn(
+                      "phone-shell flex w-full min-w-0 justify-center",
+                      isThisExpanded
+                        ? "pointer-events-auto fixed inset-x-0 top-14 bottom-6 z-50 flex items-start justify-center overflow-y-auto px-4"
+                        : "relative",
+                    )}
+                    transition={{
+                      layout: { type: "spring", stiffness: 380, damping: 36 },
+                    }}
+                  >
                     <SessionPhoneControl
                       session={s}
                       fetchedAt={lastSyncTimestamp}
@@ -209,65 +254,17 @@ export function SessionDashboard({
                       onStreamViewChange={(patch) =>
                         patchStreamView(s._id, patch)
                       }
+                      variant={isThisExpanded ? "expanded" : "default"}
                       onExpand={() => setExpandedSessionId(s._id)}
-                      layoutId={`phone-${s._id}`}
+                      onCollapse={() => setExpandedSessionId(null)}
                     />
-                  )}
+                  </motion.div>
                 </motion.div>
               );
             })}
           </motion.div>
         )}
-      </div>
-
-      <AnimatePresence>
-        {expandedSession && (
-          <motion.div
-            key="expanded-overlay"
-            className="fixed inset-0 z-50 flex flex-col items-center justify-start overflow-y-auto bg-slate-950/85 px-4 pt-14 pb-6"
-            style={{ isolation: "isolate" }}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            onClick={(e) => {
-              if (e.target === e.currentTarget) setExpandedSessionId(null);
-            }}
-          >
-            <motion.button
-              type="button"
-              aria-label="ปิดโหมดขยาย"
-              onClick={() => setExpandedSessionId(null)}
-              className="fixed right-4 top-4 z-[60] rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-200 transition-colors hover:bg-slate-800"
-              initial={{ opacity: 0, y: -8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-            >
-              ปิด
-            </motion.button>
-
-            <motion.div
-              initial={{ opacity: 0, scale: 0.92, y: 24 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 16 }}
-              transition={{ type: "spring", stiffness: 300, damping: 28 }}
-              className="w-full flex justify-center"
-            >
-              <SessionPhoneControl
-                session={expandedSession}
-                variant="expanded"
-                fetchedAt={lastSyncTimestamp}
-                streamView={getStreamView(expandedSession._id)}
-                onStreamViewChange={(patch) =>
-                  patchStreamView(expandedSession._id, patch)
-                }
-                onCollapse={() => setExpandedSessionId(null)}
-                layoutId={`phone-${expandedSession._id}`}
-              />
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      </motion.div>
     </motion.div>
   );
 }

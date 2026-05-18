@@ -428,8 +428,10 @@ export const H264Player = forwardRef<H264PlayerHandle, H264PlayerProps>(
           height: payload.height,
           deviceName: payload.deviceName,
         });
-        setStatus("waiting");
-        bumpWatchdog();
+        if (!isPlayingRef.current) {
+          setStatus("waiting");
+          bumpWatchdog();
+        }
       };
 
       const onFrame = (payload: FramePayload) => {
@@ -443,11 +445,11 @@ export const H264Player = forwardRef<H264PlayerHandle, H264PlayerProps>(
           return;
         }
         if (payload.isConfig) {
-          // Config packet = SPS + PPS from scrcpy.
-          // Use it to (re)configure the VideoDecoder — do NOT feed it to decode().
+          // Config packet = SPS + PPS from scrcpy — configure decoder once per subscription.
           configPacketRef.current = bytes;
-          closeDecoder(); // reset so ensureDecoderConfigured runs fresh
-          ensureDecoderConfigured(bytes);
+          if (!decoderConfiguredRef.current) {
+            ensureDecoderConfigured(bytes);
+          }
           return;
         }
 
@@ -550,7 +552,7 @@ export const H264Player = forwardRef<H264PlayerHandle, H264PlayerProps>(
         subscribedRef.current = false;
         closeDecoder();
         configPacketRef.current = null;
-        if (ctx && canvas) ctx.clearRect(0, 0, canvas.width, canvas.height);
+        // Keep last decoded frame on canvas until unmount (avoids blank flash).
       };
       // status is intentionally excluded — we read it via ref-style closure
       // eslint-disable-next-line react-hooks/exhaustive-deps

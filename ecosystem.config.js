@@ -35,7 +35,7 @@ module.exports = {
         SCRCPY_MAX_SIZE: '1280',
         SCRCPY_PORT_POOL_START: '27183',
         SCRCPY_PORT_POOL_SIZE: '100',
-        SCRCPY_IDLE_TIMEOUT_MS: '30000',
+        SCRCPY_IDLE_TIMEOUT_MS: '60000',
         MAX_CONCURRENT_STREAMS: '20',
         // c2.android.avc.encoder = software H.264 fallback — avoids
         // OMX.qcom.video.encoder.avc stack-corruption crash on Android 10 + Samsung
@@ -124,7 +124,7 @@ module.exports = {
         SCRCPY_MAX_SIZE: '1280',
         SCRCPY_PORT_POOL_START: '27183',
         SCRCPY_PORT_POOL_SIZE: '100',
-        SCRCPY_IDLE_TIMEOUT_MS: '30000',
+        SCRCPY_IDLE_TIMEOUT_MS: '60000',
         MAX_CONCURRENT_STREAMS: '20',
         // staging อย่าให้ seed admin ทับ production
       },
