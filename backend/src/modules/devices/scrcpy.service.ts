@@ -437,11 +437,8 @@ export class ScrcpyService implements OnModuleInit, OnModuleDestroy {
     try {
       switch (cmd.type) {
         case "tap": {
-          const { x, y } = this.scaleAdbToVideo(
-            stream,
-            Math.round(Number(cmd.payload.x)),
-            Math.round(Number(cmd.payload.y)),
-          );
+          const x = Math.round(Number(cmd.payload.x));
+          const y = Math.round(Number(cmd.payload.y));
           this.writeControl(
             stream,
             serializeInjectTouchEvent({
@@ -466,13 +463,8 @@ export class ScrcpyService implements OnModuleInit, OnModuleDestroy {
         }
         case "touch": {
           const action = String(cmd.payload.action || "");
-          const scaled = this.scaleAdbToVideo(
-            stream,
-            Math.round(Number(cmd.payload.x)),
-            Math.round(Number(cmd.payload.y)),
-          );
-          const x = scaled.x;
-          const y = scaled.y;
+          const x = Math.round(Number(cmd.payload.x));
+          const y = Math.round(Number(cmd.payload.y));
           const pointerId = BigInt(
             Math.max(0, Math.min(9, Number(cmd.payload.pointerId ?? 0))),
           );
@@ -495,20 +487,10 @@ export class ScrcpyService implements OnModuleInit, OnModuleDestroy {
           return true;
         }
         case "swipe": {
-          const p1 = this.scaleAdbToVideo(
-            stream,
-            Math.round(Number(cmd.payload.x1)),
-            Math.round(Number(cmd.payload.y1)),
-          );
-          const p2 = this.scaleAdbToVideo(
-            stream,
-            Math.round(Number(cmd.payload.x2)),
-            Math.round(Number(cmd.payload.y2)),
-          );
-          const x1 = p1.x;
-          const y1 = p1.y;
-          const x2 = p2.x;
-          const y2 = p2.y;
+          const x1 = Math.round(Number(cmd.payload.x1));
+          const y1 = Math.round(Number(cmd.payload.y1));
+          const x2 = Math.round(Number(cmd.payload.x2));
+          const y2 = Math.round(Number(cmd.payload.y2));
           const duration = Math.max(
             50,
             Math.min(800, Math.round(Number(cmd.payload.duration ?? 200))),
@@ -588,7 +570,6 @@ export class ScrcpyService implements OnModuleInit, OnModuleDestroy {
     if (!stream?.controlReady || !stream.controlSocket) return false;
     const touchSpace = this.getTouchScreenSize(stream);
     if (!touchSpace) return false;
-    const scaled = this.scaleAdbToVideo(stream, x, y);
     const action = isFirst
       ? AMOTION_EVENT_ACTION_DOWN
       : AMOTION_EVENT_ACTION_POINTER_DOWN;
@@ -597,8 +578,8 @@ export class ScrcpyService implements OnModuleInit, OnModuleDestroy {
       serializeInjectTouchEvent({
         action,
         pointerId: BigInt(pointerId),
-        x: scaled.x,
-        y: scaled.y,
+        x: Math.round(x),
+        y: Math.round(y),
         ...touchSpace,
       }),
     );
@@ -616,7 +597,6 @@ export class ScrcpyService implements OnModuleInit, OnModuleDestroy {
     if (!stream?.controlReady || !stream.controlSocket) return false;
     const touchSpace = this.getTouchScreenSize(stream);
     if (!touchSpace) return false;
-    const scaled = this.scaleAdbToVideo(stream, x, y);
     const action = isLast
       ? AMOTION_EVENT_ACTION_UP
       : AMOTION_EVENT_ACTION_POINTER_UP;
@@ -625,8 +605,8 @@ export class ScrcpyService implements OnModuleInit, OnModuleDestroy {
       serializeInjectTouchEvent({
         action,
         pointerId: BigInt(pointerId),
-        x: scaled.x,
-        y: scaled.y,
+        x: Math.round(x),
+        y: Math.round(y),
         ...touchSpace,
       }),
     );
@@ -643,57 +623,17 @@ export class ScrcpyService implements OnModuleInit, OnModuleDestroy {
     if (!stream?.controlReady || !stream.controlSocket) return false;
     const touchSpace = this.getTouchScreenSize(stream);
     if (!touchSpace) return false;
-    const scaled = this.scaleAdbToVideo(stream, x, y);
     this.writeControl(
       stream,
       serializeInjectTouchEvent({
         action: AMOTION_EVENT_ACTION_MOVE,
         pointerId: BigInt(pointerId),
-        x: scaled.x,
-        y: scaled.y,
+        x: Math.round(x),
+        y: Math.round(y),
         ...touchSpace,
       }),
     );
     return true;
-  }
-
-  /**
-   * Clients send ADB / wm-size coordinates (e.g. 1080×1920). scrcpy's server
-   * expects touch in the encoded video frame space — mismatch causes
-   * "Ignoring touch event, it was generated for a different device size".
-   */
-  private scaleAdbToVideo(
-    stream: ScrcpyStreamState,
-    adbX: number,
-    adbY: number,
-  ): { x: number; y: number } {
-    const videoW = stream.width;
-    const videoH = stream.height;
-    if (videoW <= 0 || videoH <= 0) {
-      return { x: adbX, y: adbY };
-    }
-
-    const dw =
-      stream.displayWidth > 0 ? stream.displayWidth : videoW;
-    const dh =
-      stream.displayHeight > 0 ? stream.displayHeight : videoH;
-    const portraitW = Math.min(dw, dh);
-    const portraitH = Math.max(dw, dh);
-    const isLandscape = videoW > videoH;
-    const adbW = isLandscape ? portraitH : portraitW;
-    const adbH = isLandscape ? portraitW : portraitH;
-
-    const nx = adbW > 1 ? adbX / (adbW - 1) : 0;
-    const ny = adbH > 1 ? adbY / (adbH - 1) : 0;
-
-    return {
-      x: Math.round(
-        Math.max(0, Math.min(1, nx)) * Math.max(0, videoW - 1),
-      ),
-      y: Math.round(
-        Math.max(0, Math.min(1, ny)) * Math.max(0, videoH - 1),
-      ),
-    };
   }
 
   private getTouchScreenSize(

@@ -233,6 +233,7 @@ export const H264Player = forwardRef<H264PlayerHandle, H264PlayerProps>(
 
       const isPlayingRef = { current: false };
       let decodeErrorStreak = 0;
+      let preferSoftwareDecoder = false;
 
       const closeDecoder = () => {
         if (decoderRef.current && decoderRef.current.state !== "closed") {
@@ -244,7 +245,6 @@ export const H264Player = forwardRef<H264PlayerHandle, H264PlayerProps>(
         }
         decoderRef.current = null;
         decoderConfiguredRef.current = false;
-        configuredCodecRef.current = null;
         waitingKeyFrameRef.current = true; // need keyframe after every (re)configure
       };
 
@@ -348,42 +348,66 @@ export const H264Player = forwardRef<H264PlayerHandle, H264PlayerProps>(
       };
 
       const ensureDecoderConfigured = (config: Uint8Array) => {
-        if (decoderConfiguredRef.current) return;
+        if (
+          decoderConfiguredRef.current &&
+          decoderRef.current?.state === "configured"
+        ) {
+          return;
+        }
+
+        closeDecoder();
         const codec = codecFromConfig(config);
         const description = buildAVCConfig(config);
+        configuredCodecRef.current = codec;
+
+        const hw = preferSoftwareDecoder
+          ? ("prefer-software" as const)
+          : ("prefer-hardware" as const);
+
         try {
           decoderRef.current = new VideoDecoder({
             output: handleDecodedFrame,
             error: (e) => {
-              // Transient decode glitches (delta before keyframe) — wait for IDR
-              // instead of tearing down the decoder and showing a fatal overlay.
-              console.warn("[H264Player] decoder error", e);
-              waitingKeyFrameRef.current = true;
+              // WebCodecs closes the decoder after error — recreate silently.
+              console.warn("[H264Player] decoder error — recovering", e);
               decodeErrorStreak += 1;
-              if (decodeErrorStreak >= 8) {
-                onError?.(e instanceof Error ? e : new Error(String(e)));
+              setErrorMessage(null);
+              if (decodeErrorStreak >= 12) {
                 setStatus("error");
-                setErrorMessage(String(e));
-                closeDecoder();
+                setErrorMessage("วิดีโอขัดข้อง — ลองรีเฟรชหน้า");
+                onError?.(e instanceof Error ? e : new Error(String(e)));
+                return;
               }
+              if (!preferSoftwareDecoder) {
+                preferSoftwareDecoder = true;
+              }
+              const cfg = configPacketRef.current;
+              if (cfg) ensureDecoderConfigured(cfg);
             },
           });
           decoderRef.current.configure({
             codec,
-            // AVCDecoderConfigurationRecord is required by Chrome WebCodecs
-            // when receiving AVC/AVCC-format H.264 chunks.
             ...(description ? { description } : {}),
             optimizeForLatency: true,
-            hardwareAcceleration: "prefer-hardware",
+            hardwareAcceleration: hw,
           });
           decoderConfiguredRef.current = true;
+          waitingKeyFrameRef.current = true;
           console.log(
             "[H264Player] decoder configured",
             codec,
-            description ? "(with description)" : "(no description — fallback)",
+            hw,
+            description ? "(with description)" : "(no description)",
           );
         } catch (e: any) {
-          const err = new Error(`VideoDecoder configure failed: ${e?.message || e}`);
+          if (!preferSoftwareDecoder) {
+            preferSoftwareDecoder = true;
+            ensureDecoderConfigured(config);
+            return;
+          }
+          const err = new Error(
+            `VideoDecoder configure failed: ${e?.message || e}`,
+          );
           onError?.(err);
           setStatus("error");
           setErrorMessage(err.message);
@@ -481,7 +505,15 @@ export const H264Player = forwardRef<H264PlayerHandle, H264PlayerProps>(
           !decoderRef.current ||
           decoderRef.current.state !== "configured"
         ) {
-          return; // not ready yet — drop frame until decoder warm
+          if (configPacketRef.current) {
+            ensureDecoderConfigured(configPacketRef.current);
+          }
+          if (
+            !decoderRef.current ||
+            decoderRef.current.state !== "configured"
+          ) {
+            return;
+          }
         }
 
         // After configure() / reconfigure, WebCodecs MUST receive a keyframe
@@ -505,6 +537,9 @@ export const H264Player = forwardRef<H264PlayerHandle, H264PlayerProps>(
         } catch (e: any) {
           console.warn("[H264Player] decode frame failed", e);
           waitingKeyFrameRef.current = true;
+          if (configPacketRef.current) {
+            ensureDecoderConfigured(configPacketRef.current);
+          }
         }
       };
 
@@ -587,7 +622,11 @@ export const H264Player = forwardRef<H264PlayerHandle, H264PlayerProps>(
           style={{ imageRendering: "auto" }}
         />
         {status !== "playing" && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-slate-900">
+          <div
+            className={`absolute inset-0 flex flex-col items-center justify-center gap-3 ${
+              status === "error" ? "bg-slate-900" : "bg-slate-900/70"
+            }`}
+          >
             <div
               className={`h-10 w-10 rounded-full border-4 border-cyan-500 ${
                 status === "error"

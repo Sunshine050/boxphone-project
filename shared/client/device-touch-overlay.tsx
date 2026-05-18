@@ -1,7 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { mapClientToDevice, type Size2D } from "./map-pointer-to-device";
+import {
+  mapClientToDevice,
+  mapClientToVideo,
+  type Size2D,
+} from "./map-pointer-to-device";
 import {
   sendDeviceInputFast,
   type DeviceInputTarget,
@@ -20,7 +24,8 @@ export type DeviceTouchOverlayProps = {
 const TAP_MOVE_PX = 12;
 const TAP_MS = 420;
 const LONG_PRESS_MS = 500;
-const MOVE_INTERVAL_MS = 12;
+const MOVE_INTERVAL_MS = 32;
+const MOVE_MIN_PX = 2;
 const SWIPE_START_PX = 5;
 const MAX_POINTERS = 2;
 
@@ -122,12 +127,24 @@ export function DeviceTouchOverlay({
     [getVideoElement, resolveVideoSize, resolveDeviceSize],
   );
 
+  /** scrcpy control channel — same letterbox math, video frame coordinates */
+  const toVideo = useCallback(
+    (clientX: number, clientY: number) => {
+      const el = getVideoElement() ?? overlayRef.current;
+      if (!el) return null;
+      const video = resolveVideoSize();
+      if (video.width <= 0 || video.height <= 0) return null;
+      return mapClientToVideo(clientX, clientY, el, video);
+    },
+    [getVideoElement, resolveVideoSize],
+  );
+
   const showCrosshair = useCallback((clientX: number, clientY: number) => {
     const rect = overlayRef.current?.getBoundingClientRect();
     if (!rect) return;
     setCrosshair({ x: clientX - rect.left, y: clientY - rect.top });
     if (crosshairTimer.current) clearTimeout(crosshairTimer.current);
-    crosshairTimer.current = setTimeout(() => setCrosshair(null), 300);
+    crosshairTimer.current = setTimeout(() => setCrosshair(null), 900);
   }, []);
 
   const sendTouch = useCallback(
@@ -153,13 +170,13 @@ export function DeviceTouchOverlay({
     (pointerId: number, clientX: number, clientY: number, force = false) => {
       const p = pointersRef.current.get(pointerId);
       if (!p?.touchActive || !p.downAck) return;
-      const pos = toDevice(clientX, clientY);
+      const pos = toVideo(clientX, clientY);
       if (!pos) return;
       const now = performance.now();
       if (
         !force &&
         now - p.lastMoveSentAt < MOVE_INTERVAL_MS &&
-        Math.hypot(pos.x - p.lastSentX, pos.y - p.lastSentY) < 1
+        Math.hypot(pos.x - p.lastSentX, pos.y - p.lastSentY) < MOVE_MIN_PX
       ) {
         return;
       }
@@ -168,7 +185,7 @@ export function DeviceTouchOverlay({
       p.lastSentY = pos.y;
       sendTouch("move", pos.x, pos.y, p.pointerIndex);
     },
-    [sendTouch, toDevice],
+    [sendTouch, toVideo],
   );
 
   const runMoveRaf = useCallback(() => {
@@ -195,7 +212,7 @@ export function DeviceTouchOverlay({
     async (pointerId: number, clientX: number, clientY: number) => {
       const p = pointersRef.current.get(pointerId);
       if (!p || p.touchActive) return;
-      const start = toDevice(p.startX, p.startY);
+      const start = toVideo(p.startX, p.startY);
       if (!start) return;
 
       p.touchActive = true;
@@ -203,25 +220,16 @@ export function DeviceTouchOverlay({
       p.lastSentX = start.x;
       p.lastSentY = start.y;
       p.lastMoveSentAt = 0;
-      p.downAck = false;
+      p.downAck = true;
 
-      try {
-        await sendTouch("down", start.x, start.y, p.pointerIndex, {
-          awaitResponse: true,
-        });
-        p.downAck = true;
-      } catch {
-        p.touchActive = false;
-        p.isSwiping = false;
-        return;
-      }
+      sendTouch("down", start.x, start.y, p.pointerIndex);
 
-      const current = toDevice(clientX, clientY);
+      const current = toVideo(clientX, clientY);
       if (current && (current.x !== start.x || current.y !== start.y)) {
         flushTouchMove(pointerId, clientX, clientY, true);
       }
     },
-    [toDevice, sendTouch, flushTouchMove],
+    [toVideo, sendTouch, flushTouchMove],
   );
 
   const endTouch = useCallback(
@@ -229,20 +237,14 @@ export function DeviceTouchOverlay({
       const p = pointersRef.current.get(pointerId);
       if (!p?.touchActive) return;
       flushTouchMove(pointerId, clientX, clientY, true);
-      const end = toDevice(clientX, clientY);
+      const end = toVideo(clientX, clientY);
       if (end && p.downAck) {
-        try {
-          await sendTouch("up", end.x, end.y, p.pointerIndex, {
-            awaitResponse: true,
-          });
-        } catch {
-          /* best-effort */
-        }
+        sendTouch("up", end.x, end.y, p.pointerIndex);
       }
       p.touchActive = false;
       p.downAck = false;
     },
-    [flushTouchMove, toDevice, sendTouch],
+    [flushTouchMove, toVideo, sendTouch],
   );
 
   const allocPointerIndex = (): number => {
@@ -262,7 +264,7 @@ export function DeviceTouchOverlay({
       p.lastY = clientY;
 
       if (!p.isPrimary) {
-        const pos = toDevice(clientX, clientY);
+        const pos = toVideo(clientX, clientY);
         if (pos && p.touchActive && p.downAck) {
           sendTouch("move", pos.x, pos.y, p.pointerIndex);
         }
@@ -283,7 +285,7 @@ export function DeviceTouchOverlay({
       }
       showCrosshair(clientX, clientY);
     },
-    [beginTouchDrag, scheduleTouchMove, showCrosshair, swipeStartPx, sendTouch, toDevice],
+    [beginTouchDrag, scheduleTouchMove, showCrosshair, swipeStartPx, sendTouch, toVideo],
   );
 
   const onPointerDown = (e: React.PointerEvent) => {
@@ -358,16 +360,11 @@ export function DeviceTouchOverlay({
     pointersRef.current.set(e.pointerId, entry);
 
     if (!isPrimary) {
-      const pos = toDevice(e.clientX, e.clientY);
+      const pos = toVideo(e.clientX, e.clientY);
       if (pos) {
         entry.touchActive = true;
         entry.downAck = true;
-        void sendTouch("down", pos.x, pos.y, pointerIndex, {
-          awaitResponse: true,
-        })?.catch(() => {
-          entry.touchActive = false;
-          entry.downAck = false;
-        });
+        sendTouch("down", pos.x, pos.y, pointerIndex);
       }
     }
   };
@@ -443,7 +440,7 @@ export function DeviceTouchOverlay({
               y1: from.y,
               x2: to.x,
               y2: to.y,
-              duration: Math.max(80, Math.min(Math.round(dt), 400)),
+              duration: Math.max(200, Math.min(Math.round(dt * 1.15), 550)),
             },
             { awaitResponse: true },
           )?.catch(() => {});
@@ -451,15 +448,9 @@ export function DeviceTouchOverlay({
         }
       }
     } else if (p.touchActive && p.downAck) {
-      const pos = toDevice(e.clientX, e.clientY);
+      const pos = toVideo(e.clientX, e.clientY);
       if (pos) {
-        try {
-          await sendTouch("up", pos.x, pos.y, p.pointerIndex, {
-            awaitResponse: true,
-          });
-        } catch {
-          /* ignore */
-        }
+        sendTouch("up", pos.x, pos.y, p.pointerIndex);
       }
       p.touchActive = false;
       p.downAck = false;
@@ -481,15 +472,9 @@ export function DeviceTouchOverlay({
     if (!p) return;
     if (p.longPressTimer) clearTimeout(p.longPressTimer);
     if (p.touchActive && p.downAck) {
-      const pos = toDevice(p.lastX, p.lastY);
+      const pos = toVideo(p.lastX, p.lastY);
       if (pos) {
-        try {
-          await sendTouch("up", pos.x, pos.y, p.pointerIndex, {
-            awaitResponse: true,
-          });
-        } catch {
-          /* ignore */
-        }
+        sendTouch("up", pos.x, pos.y, p.pointerIndex);
       }
     }
     pointersRef.current.delete(e.pointerId);
@@ -523,8 +508,10 @@ export function DeviceTouchOverlay({
         <span
           className="pointer-events-none absolute z-20"
           style={{ left: crosshair.x, top: crosshair.y }}
+          aria-hidden
         >
-          <span className="absolute -left-1.5 -top-1.5 h-3 w-3 rounded-full border border-cyan-400/90 bg-cyan-400/25" />
+          <span className="absolute -left-4 -top-4 h-8 w-8 rounded-full border-2 border-cyan-300/95 bg-cyan-400/20 shadow-[0_0_14px_rgba(34,211,238,0.55)]" />
+          <span className="absolute -left-1 -top-1 h-2 w-2 rounded-full bg-cyan-300 shadow-[0_0_6px_rgba(103,232,249,0.9)]" />
         </span>
       )}
     </div>

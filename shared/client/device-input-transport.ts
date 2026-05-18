@@ -44,9 +44,8 @@ export function getDeviceInputSocket(): Socket | null {
 
 /**
  * Send device input.
- * - `tap` / `swipe` → always HTTP (reliable, confirmed by server).
- * - `touch` move → WebSocket when available (low latency).
- * - `touch` down/up → HTTP when `awaitResponse` (must know server accepted).
+ * - `tap` / `swipe` / `key` → HTTP (ADB, reliable).
+ * - `touch` → WebSocket when available (video-space coords for scrcpy).
  */
 export function sendDeviceInputFast(
   apiBaseUrl: string,
@@ -63,8 +62,7 @@ export function sendDeviceInputFast(
     options?.forceHttp ||
     type === "tap" ||
     type === "swipe" ||
-    type === "key" ||
-    (type === "touch" && options?.awaitResponse);
+    type === "key";
 
   if (!mustUseHttp) {
     const socket = getDeviceInputSocket();
