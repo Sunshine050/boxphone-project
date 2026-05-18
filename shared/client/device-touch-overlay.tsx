@@ -21,12 +21,13 @@ export type DeviceTouchOverlayProps = {
   onAction?: () => void;
 };
 
-const TAP_MOVE_PX = 12;
-const TAP_MS = 420;
-const LONG_PRESS_MS = 500;
-const MOVE_INTERVAL_MS = 32;
+/** Max finger movement still counted as a tap (small buttons). */
+const TAP_MOVE_PX = 8;
+const TAP_MS = 450;
+const LONG_PRESS_MS = 550;
+const MOVE_INTERVAL_MS = 36;
 const MOVE_MIN_PX = 2;
-const SWIPE_START_PX = 5;
+const SWIPE_START_PX = 10;
 const MAX_POINTERS = 2;
 
 type ActivePointer = {
@@ -40,6 +41,7 @@ type ActivePointer = {
   t: number;
   longPressTimer: ReturnType<typeof setTimeout> | null;
   longPressFired: boolean;
+  longPressHolding: boolean;
   isSwiping: boolean;
   touchActive: boolean;
   lastSentX: number;
@@ -75,7 +77,7 @@ export function DeviceTouchOverlay({
   const crosshairTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const inputTarget: DeviceInputTarget = { deviceId, deviceSerial };
-  const swipeStartPx = isCoarsePointer() ? SWIPE_START_PX : 7;
+  const swipeStartPx = isCoarsePointer() ? SWIPE_START_PX : 14;
 
   useEffect(() => {
     const el = overlayRef.current;
@@ -127,7 +129,6 @@ export function DeviceTouchOverlay({
     [getVideoElement, resolveVideoSize, resolveDeviceSize],
   );
 
-  /** scrcpy control channel — same letterbox math, video frame coordinates */
   const toVideo = useCallback(
     (clientX: number, clientY: number) => {
       const el = getVideoElement() ?? overlayRef.current;
@@ -139,12 +140,22 @@ export function DeviceTouchOverlay({
     [getVideoElement, resolveVideoSize],
   );
 
-  const showCrosshair = useCallback((clientX: number, clientY: number) => {
-    const rect = overlayRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    setCrosshair({ x: clientX - rect.left, y: clientY - rect.top });
+  const showCrosshair = useCallback(
+    (clientX: number, clientY: number, persist = false) => {
+      const rect = overlayRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      setCrosshair({ x: clientX - rect.left, y: clientY - rect.top });
+      if (crosshairTimer.current) clearTimeout(crosshairTimer.current);
+      if (!persist) {
+        crosshairTimer.current = setTimeout(() => setCrosshair(null), 700);
+      }
+    },
+    [],
+  );
+
+  const clearCrosshair = useCallback(() => {
     if (crosshairTimer.current) clearTimeout(crosshairTimer.current);
-    crosshairTimer.current = setTimeout(() => setCrosshair(null), 900);
+    crosshairTimer.current = setTimeout(() => setCrosshair(null), 400);
   }, []);
 
   const sendTouch = useCallback(
@@ -153,15 +164,13 @@ export function DeviceTouchOverlay({
       x: number,
       y: number,
       pointerIndex: number,
-      opts?: { awaitResponse?: boolean },
     ) => {
-      sendDeviceInputFast(
-        apiBaseUrl,
-        inputTarget,
-        "touch",
-        { action, x, y, pointerId: pointerIndex },
-        opts,
-      );
+      sendDeviceInputFast(apiBaseUrl, inputTarget, "touch", {
+        action,
+        x,
+        y,
+        pointerId: pointerIndex,
+      });
     },
     [apiBaseUrl, inputTarget],
   );
@@ -209,9 +218,9 @@ export function DeviceTouchOverlay({
   );
 
   const beginTouchDrag = useCallback(
-    async (pointerId: number, clientX: number, clientY: number) => {
+    (pointerId: number, clientX: number, clientY: number) => {
       const p = pointersRef.current.get(pointerId);
-      if (!p || p.touchActive) return;
+      if (!p || p.touchActive || p.longPressHolding) return;
       const start = toVideo(p.startX, p.startY);
       if (!start) return;
 
@@ -232,8 +241,34 @@ export function DeviceTouchOverlay({
     [toVideo, sendTouch, flushTouchMove],
   );
 
+  const beginLongPressHold = useCallback(
+    (pointerId: number) => {
+      const p = pointersRef.current.get(pointerId);
+      if (!p || p.touchActive || p.longPressHolding) return;
+      const pos = toVideo(p.startX, p.startY);
+      if (!pos) return;
+
+      p.longPressFired = true;
+      p.longPressHolding = true;
+      p.touchActive = true;
+      p.downAck = true;
+      p.lastSentX = pos.x;
+      p.lastSentY = pos.y;
+
+      try {
+        navigator.vibrate?.(25);
+      } catch {
+        /* ignore */
+      }
+
+      sendTouch("down", pos.x, pos.y, p.pointerIndex);
+      showCrosshair(p.startX, p.startY, true);
+    },
+    [toVideo, sendTouch, showCrosshair],
+  );
+
   const endTouch = useCallback(
-    async (pointerId: number, clientX: number, clientY: number) => {
+    (pointerId: number, clientX: number, clientY: number) => {
       const p = pointersRef.current.get(pointerId);
       if (!p?.touchActive) return;
       flushTouchMove(pointerId, clientX, clientY, true);
@@ -243,6 +278,7 @@ export function DeviceTouchOverlay({
       }
       p.touchActive = false;
       p.downAck = false;
+      p.longPressHolding = false;
     },
     [flushTouchMove, toVideo, sendTouch],
   );
@@ -263,6 +299,14 @@ export function DeviceTouchOverlay({
       p.lastX = clientX;
       p.lastY = clientY;
 
+      if (p.longPressHolding) {
+        showCrosshair(clientX, clientY, true);
+        if (p.touchActive && p.downAck) {
+          scheduleTouchMove(pointerId, clientX, clientY);
+        }
+        return;
+      }
+
       if (!p.isPrimary) {
         const pos = toVideo(clientX, clientY);
         if (pos && p.touchActive && p.downAck) {
@@ -273,19 +317,26 @@ export function DeviceTouchOverlay({
       }
 
       const dist = Math.hypot(clientX - p.startX, clientY - p.startY);
-      if (!p.isSwiping && dist >= swipeStartPx) {
+      if (!p.isSwiping && !p.longPressFired && dist >= swipeStartPx) {
         if (p.longPressTimer) {
           clearTimeout(p.longPressTimer);
           p.longPressTimer = null;
         }
-        void beginTouchDrag(pointerId, clientX, clientY);
+        beginTouchDrag(pointerId, clientX, clientY);
       }
       if (p.touchActive && p.downAck) {
         scheduleTouchMove(pointerId, clientX, clientY);
       }
       showCrosshair(clientX, clientY);
     },
-    [beginTouchDrag, scheduleTouchMove, showCrosshair, swipeStartPx, sendTouch, toVideo],
+    [
+      beginTouchDrag,
+      scheduleTouchMove,
+      showCrosshair,
+      swipeStartPx,
+      sendTouch,
+      toVideo,
+    ],
   );
 
   const onPointerDown = (e: React.PointerEvent) => {
@@ -305,7 +356,7 @@ export function DeviceTouchOverlay({
     if (isPrimary) primaryPointerIdRef.current = e.pointerId;
 
     const pointerIndex = allocPointerIndex();
-    showCrosshair(e.clientX, e.clientY);
+    showCrosshair(e.clientX, e.clientY, true);
 
     let longPressTimer: ReturnType<typeof setTimeout> | null = null;
     if (isPrimary) {
@@ -314,27 +365,7 @@ export function DeviceTouchOverlay({
         if (!p || p.isSwiping || p.touchActive || p.longPressFired) return;
         const dist = Math.hypot(p.lastX - p.startX, p.lastY - p.startY);
         if (dist >= TAP_MOVE_PX) return;
-        const pos = toDevice(p.startX, p.startY);
-        if (!pos) return;
-        p.longPressFired = true;
-        try {
-          navigator.vibrate?.(30);
-        } catch {
-          /* ignore */
-        }
-        void sendDeviceInputFast(
-          apiBaseUrl,
-          inputTarget,
-          "swipe",
-          {
-            x1: pos.x,
-            y1: pos.y,
-            x2: pos.x,
-            y2: pos.y,
-            duration: 600,
-          },
-          { awaitResponse: true },
-        )?.catch(() => {});
+        beginLongPressHold(e.pointerId);
         onAction?.();
       }, LONG_PRESS_MS);
     }
@@ -350,6 +381,7 @@ export function DeviceTouchOverlay({
       t: performance.now(),
       longPressTimer,
       longPressFired: false,
+      longPressHolding: false,
       isSwiping: false,
       touchActive: false,
       lastSentX: 0,
@@ -398,8 +430,9 @@ export function DeviceTouchOverlay({
     const dt = performance.now() - p.t;
 
     if (p.isPrimary) {
-      if (p.touchActive) {
-        await endTouch(e.pointerId, e.clientX, e.clientY);
+      if (p.touchActive || p.longPressHolding) {
+        endTouch(e.pointerId, e.clientX, e.clientY);
+        clearCrosshair();
       } else if (
         !p.isSwiping &&
         !p.longPressFired &&
@@ -410,7 +443,7 @@ export function DeviceTouchOverlay({
         if (pos) {
           showCrosshair(p.startX, p.startY);
           try {
-            navigator.vibrate?.(8);
+            navigator.vibrate?.(6);
           } catch {
             /* ignore */
           }
@@ -427,6 +460,7 @@ export function DeviceTouchOverlay({
             console.warn("[touch] tap failed", err);
           }
         }
+        clearCrosshair();
       } else if (p.isSwiping && !p.touchActive) {
         const from = toDevice(p.startX, p.startY);
         const to = toDevice(e.clientX, e.clientY);
@@ -440,12 +474,13 @@ export function DeviceTouchOverlay({
               y1: from.y,
               x2: to.x,
               y2: to.y,
-              duration: Math.max(200, Math.min(Math.round(dt * 1.15), 550)),
+              duration: Math.max(220, Math.min(Math.round(dt * 1.2), 600)),
             },
             { awaitResponse: true },
           )?.catch(() => {});
           onAction?.();
         }
+        clearCrosshair();
       }
     } else if (p.touchActive && p.downAck) {
       const pos = toVideo(e.clientX, e.clientY);
@@ -486,6 +521,7 @@ export function DeviceTouchOverlay({
       cancelAnimationFrame(moveRafRef.current);
       moveRafRef.current = null;
     }
+    clearCrosshair();
   };
 
   return (
@@ -510,8 +546,8 @@ export function DeviceTouchOverlay({
           style={{ left: crosshair.x, top: crosshair.y }}
           aria-hidden
         >
-          <span className="absolute -left-4 -top-4 h-8 w-8 rounded-full border-2 border-cyan-300/95 bg-cyan-400/20 shadow-[0_0_14px_rgba(34,211,238,0.55)]" />
-          <span className="absolute -left-1 -top-1 h-2 w-2 rounded-full bg-cyan-300 shadow-[0_0_6px_rgba(103,232,249,0.9)]" />
+          <span className="absolute -left-2.5 -top-2.5 h-5 w-5 rounded-full border border-cyan-400/90 bg-cyan-500/15 shadow-[0_0_8px_rgba(34,211,238,0.45)]" />
+          <span className="absolute -left-0.5 -top-0.5 h-1 w-1 rounded-full bg-cyan-300" />
         </span>
       )}
     </div>

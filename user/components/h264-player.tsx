@@ -179,6 +179,8 @@ export const H264Player = forwardRef<H264PlayerHandle, H264PlayerProps>(
     const decoderRef = useRef<VideoDecoder | null>(null);
     const configPacketRef = useRef<Uint8Array | null>(null);
     const naturalSizeRef = useRef({ width: 0, height: 0 });
+    /** Stream header size — used for touch/scrcpy mapping (stable, not per-frame). */
+    const streamVideoSizeRef = useRef({ width: 0, height: 0 });
     const videoSizeRef = useRef({ width: 0, height: 0 });
     const decoderConfiguredRef = useRef(false);
     const configuredCodecRef = useRef<string | null>(null);
@@ -195,7 +197,11 @@ export const H264Player = forwardRef<H264PlayerHandle, H264PlayerProps>(
 
     useImperativeHandle(ref, () => ({
       getNaturalSize: () => naturalSizeRef.current,
-      getVideoSize: () => videoSizeRef.current,
+      getVideoSize: () => {
+        const s = streamVideoSizeRef.current;
+        if (s.width > 0 && s.height > 0) return s;
+        return videoSizeRef.current;
+      },
       getCanvas: () => canvasRef.current,
     }));
 
@@ -234,6 +240,8 @@ export const H264Player = forwardRef<H264PlayerHandle, H264PlayerProps>(
       const isPlayingRef = { current: false };
       let decodeErrorStreak = 0;
       let preferSoftwareDecoder = false;
+      let decoderRecoverTimer: ReturnType<typeof setTimeout> | null = null;
+      let lastDecoderRecoverAt = 0;
 
       const closeDecoder = () => {
         if (decoderRef.current && decoderRef.current.state !== "closed") {
@@ -266,6 +274,8 @@ export const H264Player = forwardRef<H264PlayerHandle, H264PlayerProps>(
               width: frame.displayWidth,
               height: frame.displayHeight,
             };
+            // Keep streamVideoSizeRef from stream_metadata for touch mapping —
+            // decoded frame dims can differ slightly and cause scrcpy touch reject.
             // First frame: if we never received stream_metadata with native
             // display size, fall back to video dimensions for touch mapping
             // (better than nothing, though slightly inaccurate for scaled streams).
@@ -347,8 +357,24 @@ export const H264Player = forwardRef<H264PlayerHandle, H264PlayerProps>(
         armWatchdog();
       };
 
-      const ensureDecoderConfigured = (config: Uint8Array) => {
+      const scheduleDecoderRecover = (config: Uint8Array) => {
+        const now = Date.now();
+        if (now - lastDecoderRecoverAt < 400) return;
+        if (decoderRecoverTimer) return;
+        decoderRecoverTimer = setTimeout(() => {
+          decoderRecoverTimer = null;
+          lastDecoderRecoverAt = Date.now();
+          waitingKeyFrameRef.current = true;
+          ensureDecoderConfigured(config, true);
+        }, 200);
+      };
+
+      const ensureDecoderConfigured = (
+        config: Uint8Array,
+        forceRecreate = false,
+      ) => {
         if (
+          !forceRecreate &&
           decoderConfiguredRef.current &&
           decoderRef.current?.state === "configured"
         ) {
@@ -368,11 +394,10 @@ export const H264Player = forwardRef<H264PlayerHandle, H264PlayerProps>(
           decoderRef.current = new VideoDecoder({
             output: handleDecodedFrame,
             error: (e) => {
-              // WebCodecs closes the decoder after error — recreate silently.
               console.warn("[H264Player] decoder error — recovering", e);
               decodeErrorStreak += 1;
               setErrorMessage(null);
-              if (decodeErrorStreak >= 12) {
+              if (decodeErrorStreak >= 15) {
                 setStatus("error");
                 setErrorMessage("วิดีโอขัดข้อง — ลองรีเฟรชหน้า");
                 onError?.(e instanceof Error ? e : new Error(String(e)));
@@ -381,8 +406,9 @@ export const H264Player = forwardRef<H264PlayerHandle, H264PlayerProps>(
               if (!preferSoftwareDecoder) {
                 preferSoftwareDecoder = true;
               }
+              closeDecoder();
               const cfg = configPacketRef.current;
-              if (cfg) ensureDecoderConfigured(cfg);
+              if (cfg) scheduleDecoderRecover(cfg);
             },
           });
           decoderRef.current.configure({
@@ -426,6 +452,10 @@ export const H264Player = forwardRef<H264PlayerHandle, H264PlayerProps>(
       }) => {
         if (payload.deviceSerial !== deviceSerial) return;
 
+        streamVideoSizeRef.current = {
+          width: payload.width,
+          height: payload.height,
+        };
         videoSizeRef.current = {
           width: payload.width,
           height: payload.height,
@@ -538,7 +568,7 @@ export const H264Player = forwardRef<H264PlayerHandle, H264PlayerProps>(
           console.warn("[H264Player] decode frame failed", e);
           waitingKeyFrameRef.current = true;
           if (configPacketRef.current) {
-            ensureDecoderConfigured(configPacketRef.current);
+            scheduleDecoderRecover(configPacketRef.current);
           }
         }
       };
@@ -594,6 +624,10 @@ export const H264Player = forwardRef<H264PlayerHandle, H264PlayerProps>(
 
       return () => {
         cancelled = true;
+        if (decoderRecoverTimer) {
+          clearTimeout(decoderRecoverTimer);
+          decoderRecoverTimer = null;
+        }
         clearWatchdog();
         try {
           socket.emit("stream_unsubscribe", { deviceSerial });

@@ -437,8 +437,11 @@ export class ScrcpyService implements OnModuleInit, OnModuleDestroy {
     try {
       switch (cmd.type) {
         case "tap": {
-          const x = Math.round(Number(cmd.payload.x));
-          const y = Math.round(Number(cmd.payload.y));
+          const { x, y } = this.clampTouchPoint(
+            touchSpace,
+            Number(cmd.payload.x),
+            Number(cmd.payload.y),
+          );
           this.writeControl(
             stream,
             serializeInjectTouchEvent({
@@ -463,8 +466,11 @@ export class ScrcpyService implements OnModuleInit, OnModuleDestroy {
         }
         case "touch": {
           const action = String(cmd.payload.action || "");
-          const x = Math.round(Number(cmd.payload.x));
-          const y = Math.round(Number(cmd.payload.y));
+          const { x, y } = this.clampTouchPoint(
+            touchSpace,
+            Number(cmd.payload.x),
+            Number(cmd.payload.y),
+          );
           const pointerId = BigInt(
             Math.max(0, Math.min(9, Number(cmd.payload.pointerId ?? 0))),
           );
@@ -487,10 +493,20 @@ export class ScrcpyService implements OnModuleInit, OnModuleDestroy {
           return true;
         }
         case "swipe": {
-          const x1 = Math.round(Number(cmd.payload.x1));
-          const y1 = Math.round(Number(cmd.payload.y1));
-          const x2 = Math.round(Number(cmd.payload.x2));
-          const y2 = Math.round(Number(cmd.payload.y2));
+          const p1 = this.clampTouchPoint(
+            touchSpace,
+            Number(cmd.payload.x1),
+            Number(cmd.payload.y1),
+          );
+          const p2 = this.clampTouchPoint(
+            touchSpace,
+            Number(cmd.payload.x2),
+            Number(cmd.payload.y2),
+          );
+          const x1 = p1.x;
+          const y1 = p1.y;
+          const x2 = p2.x;
+          const y2 = p2.y;
           const duration = Math.max(
             50,
             Math.min(800, Math.round(Number(cmd.payload.duration ?? 200))),
@@ -570,6 +586,7 @@ export class ScrcpyService implements OnModuleInit, OnModuleDestroy {
     if (!stream?.controlReady || !stream.controlSocket) return false;
     const touchSpace = this.getTouchScreenSize(stream);
     if (!touchSpace) return false;
+    const pt = this.clampTouchPoint(touchSpace, x, y);
     const action = isFirst
       ? AMOTION_EVENT_ACTION_DOWN
       : AMOTION_EVENT_ACTION_POINTER_DOWN;
@@ -578,8 +595,8 @@ export class ScrcpyService implements OnModuleInit, OnModuleDestroy {
       serializeInjectTouchEvent({
         action,
         pointerId: BigInt(pointerId),
-        x: Math.round(x),
-        y: Math.round(y),
+        x: pt.x,
+        y: pt.y,
         ...touchSpace,
       }),
     );
@@ -597,6 +614,7 @@ export class ScrcpyService implements OnModuleInit, OnModuleDestroy {
     if (!stream?.controlReady || !stream.controlSocket) return false;
     const touchSpace = this.getTouchScreenSize(stream);
     if (!touchSpace) return false;
+    const pt = this.clampTouchPoint(touchSpace, x, y);
     const action = isLast
       ? AMOTION_EVENT_ACTION_UP
       : AMOTION_EVENT_ACTION_POINTER_UP;
@@ -605,8 +623,8 @@ export class ScrcpyService implements OnModuleInit, OnModuleDestroy {
       serializeInjectTouchEvent({
         action,
         pointerId: BigInt(pointerId),
-        x: Math.round(x),
-        y: Math.round(y),
+        x: pt.x,
+        y: pt.y,
         ...touchSpace,
       }),
     );
@@ -623,13 +641,14 @@ export class ScrcpyService implements OnModuleInit, OnModuleDestroy {
     if (!stream?.controlReady || !stream.controlSocket) return false;
     const touchSpace = this.getTouchScreenSize(stream);
     if (!touchSpace) return false;
+    const pt = this.clampTouchPoint(touchSpace, x, y);
     this.writeControl(
       stream,
       serializeInjectTouchEvent({
         action: AMOTION_EVENT_ACTION_MOVE,
         pointerId: BigInt(pointerId),
-        x: Math.round(x),
-        y: Math.round(y),
+        x: pt.x,
+        y: pt.y,
         ...touchSpace,
       }),
     );
@@ -651,6 +670,20 @@ export class ScrcpyService implements OnModuleInit, OnModuleDestroy {
         : { screenWidth: portraitW, screenHeight: portraitH };
     }
     return null;
+  }
+
+  /** Clamp to scrcpy video space so the server does not reject touch events. */
+  private clampTouchPoint(
+    touchSpace: { screenWidth: number; screenHeight: number },
+    x: number,
+    y: number,
+  ): { x: number; y: number } {
+    const maxX = Math.max(0, touchSpace.screenWidth - 1);
+    const maxY = Math.max(0, touchSpace.screenHeight - 1);
+    return {
+      x: Math.max(0, Math.min(maxX, Math.round(x))),
+      y: Math.max(0, Math.min(maxY, Math.round(y))),
+    };
   }
 
   private writeControl(stream: ScrcpyStreamState, packet: Buffer): void {
