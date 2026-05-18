@@ -181,6 +181,7 @@ export const H264Player = forwardRef<H264PlayerHandle, H264PlayerProps>(
     const naturalSizeRef = useRef({ width: 0, height: 0 });
     const videoSizeRef = useRef({ width: 0, height: 0 });
     const decoderConfiguredRef = useRef(false);
+    const configuredCodecRef = useRef<string | null>(null);
     // After configure() or a reconfigure triggered by a new config packet,
     // WebCodecs requires the very first chunk to be a keyframe.  Drop all
     // delta frames until one arrives.
@@ -231,6 +232,7 @@ export const H264Player = forwardRef<H264PlayerHandle, H264PlayerProps>(
       };
 
       const isPlayingRef = { current: false };
+      let decodeErrorStreak = 0;
 
       const closeDecoder = () => {
         if (decoderRef.current && decoderRef.current.state !== "closed") {
@@ -242,6 +244,7 @@ export const H264Player = forwardRef<H264PlayerHandle, H264PlayerProps>(
         }
         decoderRef.current = null;
         decoderConfiguredRef.current = false;
+        configuredCodecRef.current = null;
         waitingKeyFrameRef.current = true; // need keyframe after every (re)configure
       };
 
@@ -286,6 +289,7 @@ export const H264Player = forwardRef<H264PlayerHandle, H264PlayerProps>(
           }
           cx.drawImage(frame, 0, 0);
           isPlayingRef.current = true;
+          decodeErrorStreak = 0;
           setStatus("playing");
           setErrorMessage(null);
           clearWatchdog();
@@ -351,11 +355,17 @@ export const H264Player = forwardRef<H264PlayerHandle, H264PlayerProps>(
           decoderRef.current = new VideoDecoder({
             output: handleDecodedFrame,
             error: (e) => {
-              console.error("[H264Player] decoder error", e);
-              onError?.(e instanceof Error ? e : new Error(String(e)));
-              setStatus("error");
-              setErrorMessage(String(e));
-              closeDecoder();
+              // Transient decode glitches (delta before keyframe) — wait for IDR
+              // instead of tearing down the decoder and showing a fatal overlay.
+              console.warn("[H264Player] decoder error", e);
+              waitingKeyFrameRef.current = true;
+              decodeErrorStreak += 1;
+              if (decodeErrorStreak >= 8) {
+                onError?.(e instanceof Error ? e : new Error(String(e)));
+                setStatus("error");
+                setErrorMessage(String(e));
+                closeDecoder();
+              }
             },
           });
           decoderRef.current.configure({
@@ -445,11 +455,21 @@ export const H264Player = forwardRef<H264PlayerHandle, H264PlayerProps>(
           return;
         }
         if (payload.isConfig) {
-          // Config packet = SPS + PPS from scrcpy — configure decoder once per subscription.
+          // Config packet = SPS + PPS from scrcpy.
           configPacketRef.current = bytes;
+          const nextCodec = codecFromConfig(bytes);
+          if (
+            decoderConfiguredRef.current &&
+            configuredCodecRef.current &&
+            configuredCodecRef.current !== nextCodec
+          ) {
+            closeDecoder();
+          }
+          configuredCodecRef.current = nextCodec;
           if (!decoderConfiguredRef.current) {
             ensureDecoderConfigured(bytes);
           }
+          waitingKeyFrameRef.current = true;
           return;
         }
 
@@ -484,6 +504,7 @@ export const H264Player = forwardRef<H264PlayerHandle, H264PlayerProps>(
           );
         } catch (e: any) {
           console.warn("[H264Player] decode frame failed", e);
+          waitingKeyFrameRef.current = true;
         }
       };
 
