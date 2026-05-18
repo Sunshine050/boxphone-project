@@ -16,7 +16,12 @@ import { H264Player, type H264PlayerHandle } from "@/components/h264-player";
 import { DeviceTouchOverlay } from "@boxphon/shared/client/device-touch-overlay";
 import { formatDurationThai } from "@boxphon/shared/client/format-duration";
 import { getServerNow } from "@boxphon/shared/client/server-time";
-import { sendDeviceInput } from "@boxphon/shared/client/send-device-input";
+import {
+  bindDeviceInputSocket,
+  sendDeviceInputFast,
+} from "@boxphon/shared/client/device-input-transport";
+import type { SessionStreamViewState } from "@boxphon/shared/client/session-stream-view";
+import { getStreamSocket } from "@/lib/socket-client";
 import {
   type ScreenOrientationMode,
   loadOrientationMode,
@@ -55,9 +60,12 @@ interface SessionPhoneControlProps {
   session: Session;
   variant?: "default" | "expanded";
   onExpand?: () => void;
-  /** When true, don't render the H264Player (use when this card is covered by
-   *  an expanded overlay to avoid two decoders competing for the same stream) */
-  suppressStream?: boolean;
+  onCollapse?: () => void;
+  /** Shared stream/orientation state (survives expand ↔ grid). */
+  streamView?: SessionStreamViewState;
+  onStreamViewChange?: (patch: Partial<SessionStreamViewState>) => void;
+  /** Framer shared layout id for expand animation */
+  layoutId?: string;
   /** Server-corrected epoch_ms of when session data was last fetched from the
    *  API.  The backend computes remaining_seconds as-of the response time, so
    *  we subtract elapsed since fetchedAt (not since start/resume_time which
@@ -69,16 +77,24 @@ export function SessionPhoneControl({
   session,
   variant = "default",
   onExpand,
-  suppressStream = false,
+  onCollapse,
+  streamView,
+  onStreamViewChange,
+  layoutId,
   fetchedAt,
 }: SessionPhoneControlProps) {
   const [now, setNow] = useState(() => getServerNow());
   const [imgSrc, setImgSrc] = useState<string | null>(null);
   const [imgError, setImgError] = useState(false);
-  const [streamSize, setStreamSize] = useState({ width: 1080, height: 2340 });
-  const [orientationMode, setOrientationMode] = useState<ScreenOrientationMode>(
-    () => loadOrientationMode(session._id),
-  );
+  const [localStreamSize, setLocalStreamSize] = useState({
+    width: 1080,
+    height: 2340,
+  });
+  const [localOrientation, setLocalOrientation] =
+    useState<ScreenOrientationMode>(() => loadOrientationMode(session._id));
+
+  const streamSize = streamView?.streamSize ?? localStreamSize;
+  const orientationMode = streamView?.orientationMode ?? localOrientation;
   const [streamingMode, setStreamingMode] = useState<"unknown" | StreamingMode>(
     "unknown",
   );
@@ -102,19 +118,29 @@ export function SessionPhoneControl({
     return width >= height;
   }, [streamSize.width, streamSize.height, orientationMode]);
 
-  const applyStreamDimensions = useCallback((width: number, height: number) => {
-    if (width > 0 && height > 0) {
-      setStreamSize({ width, height });
-    }
-  }, []);
+  const applyStreamDimensions = useCallback(
+    (width: number, height: number) => {
+      if (width <= 0 || height <= 0) return;
+      const next = { width, height };
+      if (onStreamViewChange) {
+        onStreamViewChange({ streamSize: next });
+      } else {
+        setLocalStreamSize(next);
+      }
+    },
+    [onStreamViewChange],
+  );
 
   const cycleOrientation = () => {
-    setOrientationMode((prev) => {
-      const next = cycleOrientationMode(prev);
-      saveOrientationMode(session._id, next);
-      return next;
-    });
+    const next = cycleOrientationMode(orientationMode);
+    saveOrientationMode(session._id, next);
+    if (onStreamViewChange) {
+      onStreamViewChange({ orientationMode: next });
+    } else {
+      setLocalOrientation(next);
+    }
   };
+
   const imgRef = useRef<HTMLImageElement | null>(null);
   const h264PlayerRef = useRef<H264PlayerHandle>(null);
   const imgTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -153,6 +179,14 @@ export function SessionPhoneControl({
 
   const deviceId = session.device_id?._id;
   const deviceSerial = session.device_id?.serial_number;
+
+  useEffect(() => {
+    if (streamingMode !== "scrcpy" || !deviceSerial) return;
+    const socket = getStreamSocket();
+    bindDeviceInputSocket(socket);
+    return () => bindDeviceInputSocket(null);
+  }, [streamingMode, deviceSerial]);
+
   const refreshScreenshot = useCallback(() => {
     if (!deviceId) return;
     const seq = ++refreshSeqRef.current;
@@ -297,7 +331,9 @@ export function SessionPhoneControl({
 
   return (
     <motion.div
+      layoutId={layoutId}
       className={`flex w-full min-w-0 shrink-0 flex-col ${shellMaxClass}`}
+      transition={{ layout: { type: "spring", stiffness: 380, damping: 36 } }}
     >
       <div className="flex w-full min-w-0 flex-col overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/50 p-2 shadow-lg shadow-black/20 sm:rounded-3xl sm:p-3 md:p-3.5">
         <motion.div
@@ -355,16 +391,11 @@ export function SessionPhoneControl({
               {formatDurationThai(remaining)}
             </span>
           </div>
-        </motion.div>
+          </motion.div>
         </motion.div>
 
         <motion.div
           layout
-          className="relative mx-auto w-full min-w-0"
-          transition={{ type: "spring", stiffness: 320, damping: 32 }}
-        >
-        <div
-          key={`${orientationMode}-${frameAspectCss}`}
           className="relative mx-auto w-full min-w-0 overflow-hidden rounded-[1.75rem] border-[3px] border-slate-700 bg-slate-900 shadow-xl shadow-cyan-900/20 sm:rounded-[2rem] sm:border-4 md:rounded-[2.25rem]"
           style={{
             ...frameSizeStyle,
@@ -372,9 +403,10 @@ export function SessionPhoneControl({
             userSelect: "none",
             WebkitUserSelect: "none",
           }}
+          transition={{ layout: { duration: 0.22, ease: "easeOut" } }}
         >
           {/* ── stream layer ── */}
-          {streamingMode === "scrcpy" && deviceSerial && streamActive && !suppressStream ? (
+          {streamingMode === "scrcpy" && deviceSerial && streamActive ? (
             <H264Player
               ref={h264PlayerRef}
               deviceSerial={deviceSerial}
@@ -414,6 +446,7 @@ export function SessionPhoneControl({
           {streamActive && deviceId && (
             <DeviceTouchOverlay
               deviceId={deviceId}
+              deviceSerial={deviceSerial}
               apiBaseUrl={BASE_URL}
               getNaturalSize={getNaturalSize}
               getVideoElement={getVideoElement}
@@ -443,7 +476,7 @@ export function SessionPhoneControl({
               </span>
             </div>
           )}
-        </div>
+        </motion.div>
 
         {/* ── Android nav buttons (Back / Home / Recents) ── */}
         {streamActive && deviceId && (
@@ -458,9 +491,9 @@ export function SessionPhoneControl({
                 type="button"
                 aria-label={btn.label}
                 onClick={() => {
-                  void sendDeviceInput(
+                  void sendDeviceInputFast(
                     BASE_URL,
-                    deviceId,
+                    { deviceId, deviceSerial },
                     "key",
                     { keycode: btn.key },
                     { awaitResponse: true },
@@ -474,7 +507,6 @@ export function SessionPhoneControl({
             ))}
           </div>
         )}
-        </motion.div>
       </div>
     </motion.div>
   );

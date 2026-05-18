@@ -11,6 +11,18 @@ import * as net from "net";
 import * as path from "path";
 import * as fs from "fs";
 import * as crypto from "crypto";
+import {
+  AMOTION_EVENT_ACTION_DOWN,
+  AMOTION_EVENT_ACTION_MOVE,
+  AMOTION_EVENT_ACTION_POINTER_DOWN,
+  AMOTION_EVENT_ACTION_POINTER_UP,
+  AMOTION_EVENT_ACTION_UP,
+  ANDROID_KEYEVENT_ACTION_DOWN,
+  ANDROID_KEYEVENT_ACTION_UP,
+  serializeInjectKeycode,
+  serializeInjectTouchEvent,
+} from "./scrcpy-control.util";
+import type { AdbInputCommand } from "./adb-screenshot.service";
 
 const execFileAsync = promisify(execFile);
 
@@ -34,6 +46,8 @@ export interface StreamMetadata {
    *  video width/height) when computing ADB touch coordinates. */
   displayWidth?: number;
   displayHeight?: number;
+  /** 0 | 90 | 180 | 270 — derived from video vs display orientation */
+  rotation?: number;
 }
 
 interface ScrcpyStreamState {
@@ -42,6 +56,8 @@ interface ScrcpyStreamState {
   scid: string;
   shellProcess: ChildProcess | null;
   socket: net.Socket | null;
+  controlSocket: net.Socket | null;
+  controlReady: boolean;
   deviceName: string;
   codecId: string;
   width: number;
@@ -138,7 +154,7 @@ export class ScrcpyService implements OnModuleInit, OnModuleDestroy {
 
   private get idleTimeoutMs(): number {
     return parseInt(
-      this.config.get<string>("SCRCPY_IDLE_TIMEOUT_MS") || "30000",
+      this.config.get<string>("SCRCPY_IDLE_TIMEOUT_MS") || "60000",
       10,
     );
   }
@@ -384,11 +400,18 @@ export class ScrcpyService implements OnModuleInit, OnModuleDestroy {
   }
 
   private buildStreamMetadata(stream: ScrcpyStreamState): StreamMetadata {
+    const rotation =
+      stream.width > 0 && stream.height > 0
+        ? stream.width >= stream.height
+          ? 90
+          : 0
+        : 0;
     return {
       width: stream.width,
       height: stream.height,
       deviceName: stream.deviceName,
       codec: "avc1.42E01E",
+      rotation,
       ...(stream.displayWidth > 0 && stream.displayHeight > 0
         ? {
             displayWidth: stream.displayWidth,
@@ -396,6 +419,281 @@ export class ScrcpyService implements OnModuleInit, OnModuleDestroy {
           }
         : {}),
     };
+  }
+
+  hasActiveStream(serial: string): boolean {
+    const s = this.streams.get(serial);
+    return !!s && s.status === "running" && s.controlReady;
+  }
+
+  /** Low-latency touch/key via scrcpy control socket (multi-pointer capable). */
+  sendInput(serial: string, cmd: AdbInputCommand): boolean {
+    const stream = this.streams.get(serial);
+    if (!stream?.controlReady || !stream.controlSocket) return false;
+
+    const touchSpace = this.getTouchScreenSize(stream);
+    if (!touchSpace) return false;
+
+    try {
+      switch (cmd.type) {
+        case "tap": {
+          const x = Math.round(Number(cmd.payload.x));
+          const y = Math.round(Number(cmd.payload.y));
+          this.writeControl(
+            stream,
+            serializeInjectTouchEvent({
+              action: AMOTION_EVENT_ACTION_DOWN,
+              pointerId: BigInt(0),
+              x,
+              y,
+              ...touchSpace,
+            }),
+          );
+          this.writeControl(
+            stream,
+            serializeInjectTouchEvent({
+              action: AMOTION_EVENT_ACTION_UP,
+              pointerId: BigInt(0),
+              x,
+              y,
+              ...touchSpace,
+            }),
+          );
+          return true;
+        }
+        case "touch": {
+          const action = String(cmd.payload.action || "");
+          const x = Math.round(Number(cmd.payload.x));
+          const y = Math.round(Number(cmd.payload.y));
+          const pointerId = BigInt(
+            Math.max(0, Math.min(9, Number(cmd.payload.pointerId ?? 0))),
+          );
+          let motion = AMOTION_EVENT_ACTION_MOVE;
+          if (action === "down") motion = AMOTION_EVENT_ACTION_DOWN;
+          else if (action === "up") motion = AMOTION_EVENT_ACTION_UP;
+          else if (action === "move") motion = AMOTION_EVENT_ACTION_MOVE;
+          else return false;
+
+          this.writeControl(
+            stream,
+            serializeInjectTouchEvent({
+              action: motion,
+              pointerId,
+              x,
+              y,
+              ...touchSpace,
+            }),
+          );
+          return true;
+        }
+        case "swipe": {
+          const x1 = Math.round(Number(cmd.payload.x1));
+          const y1 = Math.round(Number(cmd.payload.y1));
+          const x2 = Math.round(Number(cmd.payload.x2));
+          const y2 = Math.round(Number(cmd.payload.y2));
+          const duration = Math.max(
+            50,
+            Math.min(800, Math.round(Number(cmd.payload.duration ?? 200))),
+          );
+          const steps = Math.max(2, Math.min(12, Math.round(duration / 40)));
+          this.writeControl(
+            stream,
+            serializeInjectTouchEvent({
+              action: AMOTION_EVENT_ACTION_DOWN,
+              pointerId: BigInt(0),
+              x: x1,
+              y: y1,
+              ...touchSpace,
+            }),
+          );
+          for (let i = 1; i < steps; i++) {
+            const t = i / steps;
+            this.writeControl(
+              stream,
+              serializeInjectTouchEvent({
+                action: AMOTION_EVENT_ACTION_MOVE,
+                pointerId: BigInt(0),
+                x: Math.round(x1 + (x2 - x1) * t),
+                y: Math.round(y1 + (y2 - y1) * t),
+                ...touchSpace,
+              }),
+            );
+          }
+          this.writeControl(
+            stream,
+            serializeInjectTouchEvent({
+              action: AMOTION_EVENT_ACTION_UP,
+              pointerId: BigInt(0),
+              x: x2,
+              y: y2,
+              ...touchSpace,
+            }),
+          );
+          return true;
+        }
+        case "key": {
+          const keycode = Math.round(Number(cmd.payload.keycode));
+          this.writeControl(
+            stream,
+            serializeInjectKeycode({
+              action: ANDROID_KEYEVENT_ACTION_DOWN,
+              keycode,
+            }),
+          );
+          this.writeControl(
+            stream,
+            serializeInjectKeycode({
+              action: ANDROID_KEYEVENT_ACTION_UP,
+              keycode,
+            }),
+          );
+          return true;
+        }
+        default:
+          return false;
+      }
+    } catch (e: any) {
+      this.logger.warn(`scrcpy sendInput(${serial}) failed: ${e.message}`);
+      return false;
+    }
+  }
+
+  /** Multi-pointer helpers for WebSocket batch input. */
+  sendPointerDown(
+    serial: string,
+    pointerId: number,
+    x: number,
+    y: number,
+    isFirst: boolean,
+  ): boolean {
+    const stream = this.streams.get(serial);
+    if (!stream?.controlReady || !stream.controlSocket) return false;
+    const touchSpace = this.getTouchScreenSize(stream);
+    if (!touchSpace) return false;
+    const action = isFirst
+      ? AMOTION_EVENT_ACTION_DOWN
+      : AMOTION_EVENT_ACTION_POINTER_DOWN;
+    this.writeControl(
+      stream,
+      serializeInjectTouchEvent({
+        action,
+        pointerId: BigInt(pointerId),
+        x,
+        y,
+        ...touchSpace,
+      }),
+    );
+    return true;
+  }
+
+  sendPointerUp(
+    serial: string,
+    pointerId: number,
+    x: number,
+    y: number,
+    isLast: boolean,
+  ): boolean {
+    const stream = this.streams.get(serial);
+    if (!stream?.controlReady || !stream.controlSocket) return false;
+    const touchSpace = this.getTouchScreenSize(stream);
+    if (!touchSpace) return false;
+    const action = isLast
+      ? AMOTION_EVENT_ACTION_UP
+      : AMOTION_EVENT_ACTION_POINTER_UP;
+    this.writeControl(
+      stream,
+      serializeInjectTouchEvent({
+        action,
+        pointerId: BigInt(pointerId),
+        x,
+        y,
+        ...touchSpace,
+      }),
+    );
+    return true;
+  }
+
+  sendPointerMove(
+    serial: string,
+    pointerId: number,
+    x: number,
+    y: number,
+  ): boolean {
+    const stream = this.streams.get(serial);
+    if (!stream?.controlReady || !stream.controlSocket) return false;
+    const touchSpace = this.getTouchScreenSize(stream);
+    if (!touchSpace) return false;
+    this.writeControl(
+      stream,
+      serializeInjectTouchEvent({
+        action: AMOTION_EVENT_ACTION_MOVE,
+        pointerId: BigInt(pointerId),
+        x,
+        y,
+        ...touchSpace,
+      }),
+    );
+    return true;
+  }
+
+  private getTouchScreenSize(
+    stream: ScrcpyStreamState,
+  ): { screenWidth: number; screenHeight: number } | null {
+    if (stream.width > 0 && stream.height > 0) {
+      return { screenWidth: stream.width, screenHeight: stream.height };
+    }
+    if (stream.displayWidth > 0 && stream.displayHeight > 0) {
+      const portraitW = Math.min(stream.displayWidth, stream.displayHeight);
+      const portraitH = Math.max(stream.displayWidth, stream.displayHeight);
+      const landscape = stream.width > stream.height;
+      return landscape
+        ? { screenWidth: portraitH, screenHeight: portraitW }
+        : { screenWidth: portraitW, screenHeight: portraitH };
+    }
+    return null;
+  }
+
+  private writeControl(stream: ScrcpyStreamState, packet: Buffer): void {
+    if (!stream.controlSocket?.writable) return;
+    stream.controlSocket.write(packet);
+  }
+
+  private async connectControlSocket(
+    state: ScrcpyStreamState,
+    port: number,
+  ): Promise<void> {
+    try {
+      const sock = await this.connectSocket(port);
+      state.controlSocket = sock;
+      sock.on("error", (err) => {
+        this.logger.warn(
+          `[scrcpy/${state.serial}] control socket error: ${err.message}`,
+        );
+        state.controlReady = false;
+      });
+      sock.on("close", () => {
+        state.controlReady = false;
+      });
+      // Optional dummy byte on control connection (send_dummy_byte=true).
+      await new Promise<void>((resolve) => {
+        const onData = (chunk: Buffer) => {
+          sock.off("data", onData);
+          resolve();
+        };
+        sock.once("data", onData);
+        setTimeout(() => {
+          sock.off("data", onData);
+          resolve();
+        }, 400);
+      });
+      state.controlReady = true;
+      this.logger.log(`[scrcpy/${state.serial}] control channel ready`);
+    } catch (e: any) {
+      this.logger.warn(
+        `[scrcpy/${state.serial}] control channel failed: ${e.message}`,
+      );
+      state.controlReady = false;
+    }
   }
 
   listActiveStreams(): Array<{
@@ -493,6 +791,8 @@ export class ScrcpyService implements OnModuleInit, OnModuleDestroy {
       scid,
       shellProcess: null,
       socket: null,
+      controlSocket: null,
+      controlReady: false,
       deviceName: "",
       codecId: "",
       width: 0,
@@ -574,7 +874,7 @@ export class ScrcpyService implements OnModuleInit, OnModuleDestroy {
         "tunnel_forward=true",
         "video=true",
         "audio=false",
-        "control=false",
+        "control=true",
         "cleanup=true",
         `video_bit_rate=${this.bitrate}`,
         `max_fps=${this.maxFps}`,
@@ -624,8 +924,9 @@ export class ScrcpyService implements OnModuleInit, OnModuleDestroy {
       // take >1s, so be generous here. connectSocket retries internally too.
       await new Promise((r) => setTimeout(r, 1500));
 
-      // 5) connect TCP to forwarded port
+      // 5) connect TCP to forwarded port (video), then control (second connection)
       state.socket = await this.connectSocket(port);
+      void this.connectControlSocket(state, port);
       state.socket.on("data", (chunk) => this.handleData(state, chunk));
       state.socket.on("error", (err) => {
         this.logger.warn(`[scrcpy/${serial}] socket error: ${err.message}`);
@@ -773,6 +1074,16 @@ export class ScrcpyService implements OnModuleInit, OnModuleDestroy {
         // ignore
       }
       state.socket = null;
+    }
+
+    if (state.controlSocket) {
+      try {
+        state.controlSocket.destroy();
+      } catch {
+        // ignore
+      }
+      state.controlSocket = null;
+      state.controlReady = false;
     }
 
     if (state.shellProcess) {

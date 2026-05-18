@@ -9,6 +9,11 @@ import { NotificationBell } from "./notification-bell";
 import type { Session } from "@/types/session";
 import { AuthService } from "@/services/auth.service";
 import { SessionPhoneControl } from "@/components/session-phone-control";
+import {
+  DEFAULT_SESSION_STREAM_VIEW,
+  type SessionStreamViewState,
+} from "@boxphon/shared/client/session-stream-view";
+import { loadOrientationMode } from "@/lib/screen-orientation";
 
 import {
   Dialog,
@@ -53,6 +58,28 @@ export function SessionDashboard({
   const [expandedSessionId, setExpandedSessionId] = useState<string | null>(
     null,
   );
+  const [streamViews, setStreamViews] = useState<
+    Record<string, SessionStreamViewState>
+  >({});
+
+  const getStreamView = (sessionId: string): SessionStreamViewState =>
+    streamViews[sessionId] ?? {
+      ...DEFAULT_SESSION_STREAM_VIEW,
+      orientationMode: loadOrientationMode(sessionId),
+    };
+
+  const patchStreamView = (
+    sessionId: string,
+    patch: Partial<SessionStreamViewState>,
+  ) => {
+    setStreamViews((prev) => {
+      const current = prev[sessionId] ?? {
+        ...DEFAULT_SESSION_STREAM_VIEW,
+        orientationMode: loadOrientationMode(sessionId),
+      };
+      return { ...prev, [sessionId]: { ...current, ...patch } };
+    });
+  };
 
   useEffect(() => {
     setSessions(initialSessions);
@@ -159,21 +186,36 @@ export function SessionDashboard({
             initial="hidden"
             animate="show"
           >
-            {sessions.map((s) => (
-              <motion.div
-                key={s._id}
-                variants={cardVariants}
-                layout
-                className="flex w-full min-w-0 justify-center"
-              >
-                <SessionPhoneControl
-                  session={s}
-                  fetchedAt={lastSyncTimestamp}
-                  onExpand={() => setExpandedSessionId(s._id)}
-                  suppressStream={expandedSessionId === s._id}
-                />
-              </motion.div>
-            ))}
+            {sessions.map((s) => {
+              const isExpanded = expandedSessionId === s._id;
+              return (
+                <motion.div
+                  key={s._id}
+                  variants={cardVariants}
+                  layout="position"
+                  className="flex w-full min-w-0 justify-center"
+                >
+                  {isExpanded ? (
+                    <motion.div
+                      layout
+                      className="pointer-events-none invisible w-full max-w-[min(calc(100vw-1.5rem),240px)] min-h-[380px] sm:max-w-[260px] md:max-w-[280px]"
+                      aria-hidden
+                    />
+                  ) : (
+                    <SessionPhoneControl
+                      session={s}
+                      fetchedAt={lastSyncTimestamp}
+                      streamView={getStreamView(s._id)}
+                      onStreamViewChange={(patch) =>
+                        patchStreamView(s._id, patch)
+                      }
+                      onExpand={() => setExpandedSessionId(s._id)}
+                      layoutId={`phone-${s._id}`}
+                    />
+                  )}
+                </motion.div>
+              );
+            })}
           </motion.div>
         )}
       </div>
@@ -212,10 +254,15 @@ export function SessionDashboard({
               className="w-full flex justify-center"
             >
               <SessionPhoneControl
-                key={`expanded-${expandedSession._id}`}
                 session={expandedSession}
                 variant="expanded"
                 fetchedAt={lastSyncTimestamp}
+                streamView={getStreamView(expandedSession._id)}
+                onStreamViewChange={(patch) =>
+                  patchStreamView(expandedSession._id, patch)
+                }
+                onCollapse={() => setExpandedSessionId(null)}
+                layoutId={`phone-${expandedSession._id}`}
               />
             </motion.div>
           </motion.div>

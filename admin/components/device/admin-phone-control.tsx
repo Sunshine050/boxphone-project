@@ -177,6 +177,7 @@ export function AdminPhoneControl({
       {canStream && streamingMode !== "unknown" && deviceId && (
         <DeviceTouchOverlay
           deviceId={deviceId}
+          deviceSerial={deviceSerial}
           apiBaseUrl={BASE_URL}
           getNaturalSize={getNaturalSize}
           getVideoElement={getVideoElement}

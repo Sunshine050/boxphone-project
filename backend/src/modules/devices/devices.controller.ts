@@ -355,21 +355,33 @@ export class DevicesController {
       throw new BadRequestException("Device serial not found");
     }
 
+    const tryScrcpy = () =>
+      this.scrcpyService.isEnabled() &&
+      this.scrcpyService.hasActiveStream(serialToUse) &&
+      this.scrcpyService.sendInput(serialToUse, { type, payload });
+
     if (type === "touch") {
       const action = String(payload?.action || "");
+      if (tryScrcpy()) {
+        return { ok: true, transport: "scrcpy" };
+      }
       if (action === "down" || action === "up") {
         await this.adbScreenshotService.sendInput(serialToUse, {
           type,
           payload,
         });
-        return { ok: true };
+        return { ok: true, transport: "adb" };
       }
       void this.adbScreenshotService
         .sendInput(serialToUse, { type, payload })
         .catch(() => {
           /* move stream is best-effort */
         });
-      return { ok: true };
+      return { ok: true, transport: "adb" };
+    }
+
+    if (tryScrcpy()) {
+      return { ok: true, transport: "scrcpy" };
     }
 
     await this.adbScreenshotService.sendInput(serialToUse, { type, payload });
@@ -378,6 +390,6 @@ export class DevicesController {
       this.adbScreenshotService.clearCacheForSerial(serialToUse);
     }
 
-    return { ok: true };
+    return { ok: true, transport: "adb" };
   }
 }

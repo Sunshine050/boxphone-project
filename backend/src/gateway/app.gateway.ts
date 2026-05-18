@@ -21,6 +21,7 @@ import {
   ScrcpyService,
   FrameMeta,
 } from "../modules/devices/scrcpy.service";
+import { AdbScreenshotService } from "../modules/devices/adb-screenshot.service";
 
 type AuthenticatedSocket = Socket & {
   data: {
@@ -47,6 +48,7 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect {
     private readonly jwtService: JwtService,
     private readonly usersService: UsersService,
     private readonly scrcpyService: ScrcpyService,
+    private readonly adbScreenshotService: AdbScreenshotService,
   ) {}
 
   // Map device_id -> socket_id
@@ -423,6 +425,122 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect {
         deviceSerial: serial,
         message: error.message || "Failed to subscribe",
       });
+    }
+  }
+
+  /**
+   * Low-latency device input over the stream WebSocket (preferred over HTTP POST).
+   * Supports multi-pointer touch when scrcpy control channel is active.
+   */
+  @SubscribeMessage("device_input")
+  async handleDeviceInput(
+    client: AuthenticatedSocket,
+    payload: {
+      deviceId?: string;
+      deviceSerial?: string;
+      type?: string;
+      payload?: Record<string, unknown>;
+    },
+  ) {
+    const type = payload?.type;
+    const body = payload?.payload ?? {};
+    if (
+      !type ||
+      !["tap", "swipe", "touch", "key", "text"].includes(type)
+    ) {
+      return;
+    }
+
+    let serial = payload?.deviceSerial?.trim() || "";
+    if (!serial && payload?.deviceId) {
+      try {
+        const device = await this.devicesService.findOne(payload.deviceId);
+        serial =
+          device?.serial_number || (device as any)?.onlySerial || "";
+      } catch {
+        return;
+      }
+    }
+    if (!serial) return;
+
+    try {
+      await this.assertUserCanAccessDevice(client, serial);
+    } catch {
+      return;
+    }
+
+    if (type === "text") {
+      try {
+        await this.adbScreenshotService.sendInput(serial, {
+          type: "text",
+          payload: body,
+        });
+      } catch {
+        /* ignore */
+      }
+      return;
+    }
+
+    if (
+      this.scrcpyService.isEnabled() &&
+      this.scrcpyService.hasActiveStream(serial)
+    ) {
+      const multi = body.multi as
+        | { action: string; pointerId: number; x: number; y: number }[]
+        | undefined;
+      if (Array.isArray(multi) && multi.length > 0) {
+        const activeCount = Number(body.activePointerCount ?? multi.length);
+        for (const ev of multi) {
+          const pid = Math.round(Number(ev.pointerId));
+          const x = Math.round(Number(ev.x));
+          const y = Math.round(Number(ev.y));
+          if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+          if (ev.action === "down") {
+            this.scrcpyService.sendPointerDown(
+              serial,
+              pid,
+              x,
+              y,
+              activeCount <= 1,
+            );
+          } else if (ev.action === "up") {
+            this.scrcpyService.sendPointerUp(
+              serial,
+              pid,
+              x,
+              y,
+              activeCount <= 1,
+            );
+          } else if (ev.action === "move") {
+            this.scrcpyService.sendPointerMove(serial, pid, x, y);
+          }
+        }
+        return;
+      }
+
+      if (
+        this.scrcpyService.sendInput(serial, {
+          type: type as "tap" | "swipe" | "touch" | "key",
+          payload: body,
+        })
+      ) {
+        return;
+      }
+    }
+
+    try {
+      if (type === "touch" && body.action === "move") {
+        void this.adbScreenshotService
+          .sendInput(serial, { type: "touch", payload: body })
+          .catch(() => {});
+        return;
+      }
+      await this.adbScreenshotService.sendInput(serial, {
+        type: type as "tap" | "swipe" | "touch" | "key",
+        payload: body,
+      });
+    } catch {
+      /* best-effort */
     }
   }
 

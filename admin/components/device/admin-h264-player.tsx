@@ -8,6 +8,7 @@ import {
   useImperativeHandle,
 } from "react";
 import { getStreamSocket } from "@/lib/socket-client";
+import { bindDeviceInputSocket } from "@boxphon/shared/client/device-input-transport";
 
 /* ─── public types ─── */
 export interface AdminH264PlayerMeta {
@@ -148,6 +149,7 @@ export const AdminH264Player = forwardRef<AdminH264PlayerHandle, Props>(
       if (!deviceSerial) return;
 
       const socket = getStreamSocket();
+      bindDeviceInputSocket(socket);
       let cancelled = false;
       let watchdog: ReturnType<typeof setTimeout> | null = null;
       let retries = 0;
@@ -328,6 +330,7 @@ export const AdminH264Player = forwardRef<AdminH264PlayerHandle, Props>(
 
       return () => {
         cancelled = true;
+        bindDeviceInputSocket(null);
         clearWd();
         try { socket.emit("stream_unsubscribe", { deviceSerial }); } catch { /* ignore */ }
         socket.off("connect");
