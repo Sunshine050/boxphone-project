@@ -8,10 +8,6 @@ export type DeviceInputTarget = {
   deviceSerial?: string;
 };
 
-/**
- * Live stream socket reference — kept in sync by user/admin `socket-client.ts`
- * through {@link attachStreamSocketInputSync} and survives socket reconnects.
- */
 let liveStreamSocket: Socket | null = null;
 
 export function syncDeviceInputStreamSocket(socket: Socket | null): void {
@@ -24,7 +20,6 @@ export function syncDeviceInputStreamSocket(socket: Socket | null): void {
   }
 }
 
-/** Wire connect/disconnect handlers so touch survives stream socket reconnects. */
 export function attachStreamSocketInputSync(sock: Socket): void {
   const onConnect = () => syncDeviceInputStreamSocket(sock);
   const onDisconnect = () => {
@@ -39,7 +34,6 @@ export function attachStreamSocketInputSync(sock: Socket): void {
   }
 }
 
-/** Compatibility shim for older call sites. */
 export function bindDeviceInputSocket(socket: Socket | null): void {
   syncDeviceInputStreamSocket(socket);
 }
@@ -49,40 +43,43 @@ export function getDeviceInputSocket(): Socket | null {
 }
 
 /**
- * Send a device input event using the fastest available transport.
- *
- * - WebSocket path: emit `device_input` on the live stream socket. Resolves
- *   immediately (the gateway handles delivery and does not ack).
- * - HTTP fallback: POST `/devices/:id/input` when no socket is available.
- *
- * Critically: each call is delivered EXACTLY ONCE — never on both transports.
+ * Send device input.
+ * - `tap` / `swipe` → always HTTP (reliable, confirmed by server).
+ * - `touch` move → WebSocket when available (low latency).
+ * - `touch` down/up → HTTP when `awaitResponse` (must know server accepted).
  */
 export function sendDeviceInputFast(
   apiBaseUrl: string,
   target: DeviceInputTarget,
   type: DeviceInputType,
   payload: DeviceInputPayload,
-  options?: { awaitResponse?: boolean },
+  options?: { awaitResponse?: boolean; forceHttp?: boolean },
 ): Promise<Response> | void {
-  const socket = getDeviceInputSocket();
-  if (socket && target.deviceSerial) {
-    socket.emit("device_input", {
-      deviceId: target.deviceId,
-      deviceSerial: target.deviceSerial,
-      type,
-      payload,
-    });
-    if (options?.awaitResponse) {
-      return Promise.resolve(new Response(null, { status: 200 }));
+  const base = apiBaseUrl?.trim();
+  const mustUseHttp =
+    options?.forceHttp ||
+    type === "tap" ||
+    type === "swipe" ||
+    type === "key" ||
+    (type === "touch" && options?.awaitResponse);
+
+  if (!mustUseHttp) {
+    const socket = getDeviceInputSocket();
+    if (socket && target.deviceSerial) {
+      socket.emit("device_input", {
+        deviceId: target.deviceId,
+        deviceSerial: target.deviceSerial,
+        type,
+        payload,
+      });
+      return;
     }
-    return;
   }
 
-  const base = apiBaseUrl?.trim();
   if (!base) {
     if (options?.awaitResponse) {
       return Promise.reject(
-        new Error("Device input unavailable: no socket and no API URL"),
+        new Error("Device input unavailable: no API URL configured"),
       );
     }
     return;

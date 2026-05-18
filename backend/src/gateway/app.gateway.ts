@@ -485,6 +485,7 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect {
       return;
     }
 
+    // Prefer scrcpy control channel when ready; always fall through to ADB on failure.
     if (
       this.scrcpyService.isEnabled() &&
       this.scrcpyService.hasActiveStream(serial)
