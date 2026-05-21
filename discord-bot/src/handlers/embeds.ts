@@ -49,18 +49,5 @@ export function buildEmbed(event: AnyEvent): EmbedBuilder {
         .setDescription(`อุปกรณ์ **${event.deviceName}** เชื่อมต่อแล้ว`)
         .setColor(Colors.Green);
 
-    case 'payment_received':
-      return embed
-        .setTitle('✅ ชำระเงินสำเร็จ')
-        .setDescription(
-          `ได้รับชำระเงิน **${event.amountTHB} บาท** สำหรับแพ็กเกจ **${event.packageName}**`,
-        )
-        .setColor(Colors.Green);
-
-    case 'payment_failed':
-      return embed
-        .setTitle('❌ ชำระเงินไม่สำเร็จ')
-        .setDescription(`เกิดข้อผิดพลาดในการชำระเงิน: ${event.reason}`)
-        .setColor(Colors.Red);
   }
 }

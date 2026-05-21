@@ -42,19 +42,6 @@ export const DeviceOnlineEvent = baseEvent.extend({
   deviceName: z.string(),
 });
 
-export const PaymentReceivedEvent = baseEvent.extend({
-  type: z.literal('payment_received'),
-  userId: z.string(),
-  amountTHB: z.number().positive(),
-  packageName: z.string(),
-});
-
-export const PaymentFailedEvent = baseEvent.extend({
-  type: z.literal('payment_failed'),
-  userId: z.string(),
-  reason: z.string(),
-});
-
 // Union of all supported events
 export const AnyEvent = z.discriminatedUnion('type', [
   SessionStartEvent,
@@ -62,8 +49,6 @@ export const AnyEvent = z.discriminatedUnion('type', [
   SessionWarningEvent,
   DeviceOfflineEvent,
   DeviceOnlineEvent,
-  PaymentReceivedEvent,
-  PaymentFailedEvent,
 ]);
 
 export type AnyEvent = z.infer<typeof AnyEvent>;
@@ -72,5 +57,3 @@ export type SessionEndEvent = z.infer<typeof SessionEndEvent>;
 export type SessionWarningEvent = z.infer<typeof SessionWarningEvent>;
 export type DeviceOfflineEvent = z.infer<typeof DeviceOfflineEvent>;
 export type DeviceOnlineEvent = z.infer<typeof DeviceOnlineEvent>;
-export type PaymentReceivedEvent = z.infer<typeof PaymentReceivedEvent>;
-export type PaymentFailedEvent = z.infer<typeof PaymentFailedEvent>;
