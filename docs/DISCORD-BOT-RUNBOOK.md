@@ -194,25 +194,39 @@ discord-bot/
 
 - Node.js 20+ (LTS)
 - npm 10+
+- PM2: `npm install -g pm2`
 - เข้าถึง Discord Developer Portal
+- สิทธิ์เข้า repo: https://github.com/Sunshine050/boxphone-project
 
 ### ขั้นตอนติดตั้ง (fresh machine)
 
 ```bash
-# Step 1: เข้า discord-bot directory
+# Step 0: clone repo
+git clone https://github.com/Sunshine050/boxphone-project.git
 cd boxphone-project/discord-bot
 
-# Step 2: install dependencies
+# Step 1: install dependencies
 npm install
 
-# Step 3: สร้าง .env จาก template
+# Step 2: สร้าง .env จาก template
 cp .env.example .env
 # แก้ค่าใน .env (ดูหัวข้อ 2.2)
 
-# Step 4: build
+# Step 3: build
 npm run build
 
-# Step 5: ตรวจสอบ
+# Step 4: สร้าง logs directory (PM2 จะ crash ถ้าโฟลเดอร์ไม่มี)
+mkdir -p ../logs
+
+# Step 5: start bot
+# ─── development (auto-reload) ───
+npm run dev
+
+# ─── production (PM2) ── รันจาก root ของ monorepo ───
+cd ..
+pm2 start ecosystem.config.js --only boxphone-discord-bot --env production
+
+# Step 6: ตรวจสอบ
 curl http://localhost:4001/health
 # {"status":"ok","botReady":true} ← ต้องเห็นแบบนี้
 ```
@@ -849,27 +863,20 @@ curl -X POST http://localhost:4001/webhook \
 
 ## 4.6 Reference Documents
 
-### Source Code
+### Source Code ใน Repo
 
 | Path | คำอธิบาย |
 |---|---|
 | `discord-bot/src/` | Source code ทั้งหมด |
 | `discord-bot/.env.example` | Template env vars |
-| `discord-bot/postman/` | Postman collection |
+| `discord-bot/postman/` | Postman collection (16 requests) |
+| `discord-bot/README.md` | Setup guide + API reference |
 | `ecosystem.config.js` | PM2 config (root) |
 | `docs/DISCORD-BOT-RUNBOOK.md` | ไฟล์นี้ |
 
-### Session Reports (Obsidian Vault → `data/work/boxphone/`)
+### ชื่อโปรเจกต์
 
-| ไฟล์ | เนื้อหา |
-|---|---|
-| `discord-bot-progress.md` | Phase checklist + Q&A (Q1-Q15) + Decision log |
-| `discord-bot-architecture.md` | Architecture guide ละเอียด (อ่านก่อนแตะ code) |
-| `discord-bot-webhook-schema.md` | Zod schema + payload examples ครบทุก event |
-| `report/2026-05-22-e2e-retest-phase3-complete.md` | E2E test results (Phase 3 final) |
-| `2026-05-20-group-b-edge-case-test-report.md` | Edge cases B1–B5 |
-| `report/2026-05-21-payment-events-removal.md` | ทำไมลบ payment events |
-| `report/2026-05-22-pino-log-fields.md` | outcome + latency_ms implementation |
+> **BoxPhone** คือชื่อ product (แอป) — **MyrealPhone** คือชื่อ system/บริษัท ทั้งสองชื่ออ้างถึงระบบเดียวกัน ใน codebase ใช้ `boxphone-` เป็น prefix
 
 ---
 

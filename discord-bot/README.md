@@ -20,7 +20,17 @@
 
 ## การติดตั้ง
 
+### Prerequisites
+
+- Node.js 20+ (LTS)
+- npm 10+
+- PM2 — ถ้ายังไม่มี: `npm install -g pm2`
+
 ```bash
+# 0. Clone repo
+git clone https://github.com/Sunshine050/boxphone-project.git
+cd boxphone-project/discord-bot
+
 # 1. Install dependencies
 npm install
 
@@ -31,7 +41,15 @@ cp .env.example .env
 # 3. Build
 npm run build
 
-# 4. ตรวจสอบ
+# 4. สร้าง logs directory (PM2 จะ crash ถ้าไม่มี)
+mkdir -p ../logs
+
+# 5. Start bot
+npm start
+# หรือใช้ PM2 (production):
+# pm2 start ecosystem.config.js --only boxphone-discord-bot --env production
+
+# 6. ตรวจสอบ
 curl http://localhost:4001/health
 # {"status":"ok","botReady":true}
 ```
