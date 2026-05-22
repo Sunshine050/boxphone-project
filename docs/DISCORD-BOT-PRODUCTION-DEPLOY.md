@@ -1,4 +1,4 @@
-# 🚀 BoxPhone Discord Bot — คู่มือ Deploy Production
+# BoxPhone Discord Bot — คู่มือ Deploy Production
 
 <table>
 <tr><td><strong>เวอร์ชัน</strong></td><td>1.0</td><td><strong>วันที่</strong></td><td>2026-05-22</td></tr>
