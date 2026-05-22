@@ -84,7 +84,7 @@ openssl rand -hex 32
 
 ---
 
-## 3. Path A — VPS เดียว (แนะนำ)
+## 3. Path A — VPS เดียว 
 
 > **เหมาะกับ:** เริ่มต้น production, infrastructure ไม่ซับซ้อน
 > **ข้อดี:** ง่ายที่สุด, backend เรียก bot ผ่าน `localhost` ไม่ต้องตั้งค่าเพิ่ม
