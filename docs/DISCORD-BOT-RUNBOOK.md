@@ -1,4 +1,4 @@
-# 🤖 BoxPhone Discord Notification Bot — Runbook
+# BoxPhone Discord Notification Bot — Runbook
 
 <table>
 <tr><td><strong>เวอร์ชัน</strong></td><td>1.1</td><td><strong>วันที่</strong></td><td>2026-05-22</td></tr>
@@ -8,7 +8,7 @@
 
 ---
 
-## ⚡ Quick Start (ใช้ตอนเร่งด่วน)
+## Quick Start (ใช้ตอนเร่งด่วน)
 
 ```bash
 # ตรวจสอบ bot ทำงานอยู่ไหม
@@ -64,7 +64,7 @@ cd discord-bot && git pull && npm install && npm run build && pm2 restart boxpho
 
 Bot นี้คือ **HTTP server** ที่รับ webhook จาก NestJS backend แล้วส่ง **Discord DM** แจ้งเตือน user/admin เมื่อเกิด event ในระบบ MyrealPhone
 
-> **💡 สำคัญ:** Bot นี้ **ไม่ใช่ Discord chat bot** — ไม่รับคำสั่ง ไม่อยู่ใน server ส่งแค่ DM เท่านั้น
+> **สำคัญ:** Bot นี้ **ไม่ใช่ Discord chat bot** — ไม่รับคำสั่ง ไม่อยู่ใน server ส่งแค่ DM เท่านั้น
 
 ```
 NestJS Backend ──POST /webhook──► Discord Bot (port 4001) ──DM──► User + Admin
