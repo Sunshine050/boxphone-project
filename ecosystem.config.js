@@ -89,6 +89,26 @@ module.exports = {
       },
     },
 
+    // ─── Discord Notification Bot — Production ──────────────────────────────
+    {
+      name: 'boxphone-discord-bot',
+      script: 'dist/server.js',
+      cwd: './discord-bot',
+      instances: 1,
+      exec_mode: 'fork',
+      restart_delay: 3000,
+      max_restarts: 10,
+      watch: false,
+      out_file: './logs/discord-bot-out.log',
+      error_file: './logs/discord-bot-err.log',
+      merge_logs: true,
+      log_date_format: 'YYYY-MM-DD HH:mm:ss',
+      env_production: {
+        NODE_ENV: 'production',
+        PORT: 4001,
+      },
+    },
+
     // ═══════════════════════════════════════════════════════════════════════
     // STAGING (scrcpy H.264 streaming) — รันคู่กับ production บน server PC เดียวกัน
     // - port 3032 / 3010 / 3011 (ไม่ชน production 3031 / 3000 / 3001)
