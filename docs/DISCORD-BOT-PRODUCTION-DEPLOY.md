@@ -13,7 +13,7 @@
 
 - [1. ภาพรวมระบบ](#1-ภาพรวมระบบ)
 - [2. สิ่งที่ต้องเตรียมก่อน deploy ทุก Path](#2-สิ่งที่ต้องเตรียมก่อน-deploy-ทุก-path)
-- [3. Path A — VPS เดียว (แนะนำ)](#3-path-a--vps-เดียว-แนะนำ)
+- [3. Path A — VPS เดียว)](#3-path-a--vps-เดียว)
 - [4. Path B — VPS แยก bot ออกจาก backend](#4-path-b--vps-แยก-bot-ออกจาก-backend)
 - [5. Path C — Docker Container](#5-path-c--docker-container)
 - [6. Path D — PaaS (Railway / Render / Fly.io)](#6-path-d--paas-railway--render--flyio)
