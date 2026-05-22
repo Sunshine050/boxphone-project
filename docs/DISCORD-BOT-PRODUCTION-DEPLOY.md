@@ -119,7 +119,7 @@ npm --version    # 10.x.x
 npm install -g pm2
 
 # 4. Clone repo
-git clone https://github.com/Sunshine050/boxphone-project.git
+git clone --branch feature/discord-notification https://github.com/Sunshine050/boxphone-project.git
 cd boxphone-project
 
 # 5. ติดตั้ง dependencies

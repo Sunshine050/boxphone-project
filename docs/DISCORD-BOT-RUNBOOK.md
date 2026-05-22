@@ -202,7 +202,7 @@ discord-bot/
 
 ```bash
 # Step 0: clone repo
-git clone https://github.com/Sunshine050/boxphone-project.git
+git clone --branch feature/discord-notification https://github.com/Sunshine050/boxphone-project.git
 cd boxphone-project/discord-bot
 
 # Step 1: install dependencies
