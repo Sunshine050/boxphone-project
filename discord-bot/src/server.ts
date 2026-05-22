@@ -19,6 +19,7 @@ app.get('/health', (_req, res) => {
 
 // Webhook receiver — NestJS backend posts events here
 app.post('/webhook', authMiddleware, async (req, res) => {
+  const start = Date.now();
   const parsed = AnyEvent.safeParse(req.body);
   if (!parsed.success) {
     logger.warn({ errors: parsed.error.issues }, 'Invalid webhook payload');
@@ -29,16 +30,19 @@ app.post('/webhook', authMiddleware, async (req, res) => {
   const event = parsed.data;
 
   if (isDuplicate(event.eventId)) {
-    logger.info({ eventId: event.eventId }, 'Duplicate event dropped');
+    logger.info({ eventId: event.eventId, outcome: 'duplicate', latency_ms: Date.now() - start }, 'Duplicate event dropped');
     res.status(200).json({ status: 'duplicate' });
     return;
   }
 
-  logger.info({ eventId: event.eventId, type: event.type }, 'Event received');
-
-  await routeEvent(client, event);
-
-  res.status(200).json({ status: 'ok' });
+  try {
+    await routeEvent(client, event);
+    logger.info({ eventId: event.eventId, type: event.type, outcome: 'ok', latency_ms: Date.now() - start }, 'Event processed');
+    res.status(200).json({ status: 'ok' });
+  } catch (err) {
+    logger.error({ eventId: event.eventId, type: event.type, outcome: 'error', latency_ms: Date.now() - start, err }, 'Event processing failed');
+    res.status(500).json({ error: 'Internal error' });
+  }
 });
 
 async function start(): Promise<void> {
