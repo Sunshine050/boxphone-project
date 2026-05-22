@@ -1,4 +1,4 @@
-# 🤖 BoxPhone Discord Notification Bot
+# BoxPhone Discord Notification Bot
 
 ระบบแจ้งเตือน Discord สำหรับ MyrealPhone — รับ webhook จาก NestJS backend แล้วส่ง DM ไปหา user และ admin เมื่อเกิด event ในระบบ
 
