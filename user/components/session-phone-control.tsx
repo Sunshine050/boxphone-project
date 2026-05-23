@@ -356,17 +356,18 @@ export function SessionPhoneControl({
       ? "text-amber-400"
       : "text-cyan-400";
 
-  const fullscreenFrameStyle: React.CSSProperties = {
-    height: "100%",
-    width: "auto",
-    maxHeight: "100%",
-    maxWidth: "100%",
-    aspectRatio: frameAspectCss,
-    margin: "0 auto",
-    isolation: "isolate",
-    userSelect: "none",
-    WebkitUserSelect: "none",
-  };
+  /** Full-bleed mobile landscape: follow real stream ratio (not CSS lock). */
+  const mobileStreamAspectCss = useMemo(
+    () =>
+      frameAspectRatioCss(
+        streamSize.width,
+        streamSize.height,
+        "auto",
+      ),
+    [streamSize.width, streamSize.height],
+  );
+
+  const streamIsLandscape = streamSize.width >= streamSize.height;
 
   const phoneStream = (
     <>
@@ -477,31 +478,50 @@ export function SessionPhoneControl({
         }
         stream={
           <div
-            className="relative h-full w-full max-h-full overflow-hidden rounded-xl border-2 border-slate-700 bg-slate-900"
-            style={fullscreenFrameStyle}
+            className="relative flex h-full w-full items-center justify-center overflow-hidden bg-black"
+            style={{
+              isolation: "isolate",
+              userSelect: "none",
+              WebkitUserSelect: "none",
+            }}
           >
-            {phoneStream}
+            <div
+              className="relative max-h-full max-w-full"
+              style={
+                streamIsLandscape
+                  ? {
+                      width: "100%",
+                      height: "auto",
+                      maxHeight: "100%",
+                      aspectRatio: mobileStreamAspectCss,
+                    }
+                  : {
+                      height: "100%",
+                      width: "auto",
+                      maxWidth: "100%",
+                      aspectRatio: mobileStreamAspectCss,
+                    }
+              }
+            >
+              {phoneStream}
+            </div>
           </div>
         }
         nav={
-          streamActive && deviceId ? (
-            <aside className="flex w-14 shrink-0 flex-col justify-center gap-2 border-l border-slate-800 pl-1.5">
-              {navItems.map(({ icon: Icon, key, label }) => (
+          streamActive && deviceId
+            ? navItems.map(({ icon: Icon, key, label }) => (
                 <button
                   key={key}
                   type="button"
                   aria-label={label}
                   onClick={() => sendNavKey(key)}
-                  className="flex flex-col items-center gap-0.5 rounded-lg bg-slate-800 py-2.5 text-slate-300 active:bg-slate-600"
+                  className="flex min-w-[3rem] flex-col items-center gap-0.5 rounded-lg bg-black/45 px-1.5 py-2 text-slate-200 backdrop-blur-sm active:bg-black/65"
                 >
                   <Icon className="h-5 w-5" />
-                  <span className="text-[9px] leading-tight text-slate-500">
-                    {label}
-                  </span>
+                  <span className="text-[9px] leading-tight">{label}</span>
                 </button>
-              ))}
-            </aside>
-          ) : null
+              ))
+            : undefined
         }
       />
     );
