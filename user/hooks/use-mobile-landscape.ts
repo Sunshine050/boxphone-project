@@ -5,8 +5,9 @@ import * as React from "react";
  * - iPhone landscape height ≈ 390–430px → matches
  * - iPad landscape height ≥ 768px → excluded
  */
+/** Short viewport height in landscape = phone, not iPad (≥768px tall). */
 const MOBILE_LANDSCAPE_QUERY =
-  "(orientation: landscape) and (max-height: 520px) and (pointer: coarse)";
+  "(orientation: landscape) and (max-height: 520px)";
 
 export function useMobileLandscape(): boolean {
   const [matches, setMatches] = React.useState(false);

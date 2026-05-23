@@ -26,7 +26,7 @@ export function MobileLandscapePhoneShell({
 }: MobileLandscapePhoneShellProps) {
   return (
     <div
-      className="fixed inset-0 z-[55] h-[100dvh] w-[100dvw] overflow-hidden bg-black"
+      className="fixed inset-0 z-[100] h-[100dvh] w-[100dvw] overflow-hidden bg-black"
       data-mobile-landscape-shell
     >
       <div className="absolute inset-0">{stream}</div>

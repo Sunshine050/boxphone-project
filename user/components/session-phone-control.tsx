@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback, useMemo } from "react";
+import { createPortal } from "react-dom";
 import { motion } from "framer-motion";
 import {
   Expand,
@@ -320,6 +321,11 @@ export function SessionPhoneControl({
   const isMobileLandscape = useMobileLandscape();
   const mobileFullscreen =
     allowMobileLandscapeFullscreen && isMobileLandscape;
+  const [portalReady, setPortalReady] = useState(false);
+
+  useEffect(() => {
+    setPortalReady(true);
+  }, []);
 
   const shellMaxClass = isExpanded
     ? landscapeFrame
@@ -355,19 +361,6 @@ export function SessionPhoneControl({
     : isPaused
       ? "text-amber-400"
       : "text-cyan-400";
-
-  /** Full-bleed mobile landscape: follow real stream ratio (not CSS lock). */
-  const mobileStreamAspectCss = useMemo(
-    () =>
-      frameAspectRatioCss(
-        streamSize.width,
-        streamSize.height,
-        "auto",
-      ),
-    [streamSize.width, streamSize.height],
-  );
-
-  const streamIsLandscape = streamSize.width >= streamSize.height;
 
   const phoneStream = (
     <>
@@ -454,77 +447,61 @@ export function SessionPhoneControl({
     )?.then(() => handleActionRefresh());
   };
 
-  if (mobileFullscreen) {
-    return (
-      <MobileLandscapePhoneShell
-        deviceName={deviceName}
-        remainingLabel={formatDurationHeaderCompact(remaining)}
-        remainingClassName={remainingClassName}
-        onCollapse={onCollapse}
-        toolbarExtra={
-          streamActive ? (
-            <button
-              type="button"
-              onClick={cycleOrientation}
-              className="inline-flex h-8 shrink-0 items-center gap-1 rounded-md border border-slate-700 bg-slate-800 px-2 text-slate-200"
-              aria-label={`แนวจอ: ${orientationLabel(orientationMode)}`}
-            >
-              {orientationIcon}
-              <span className="text-[10px]">
-                {orientationLabel(orientationMode)}
-              </span>
-            </button>
-          ) : null
-        }
-        stream={
-          <div
-            className="relative flex h-full w-full items-center justify-center overflow-hidden bg-black"
-            style={{
-              isolation: "isolate",
-              userSelect: "none",
-              WebkitUserSelect: "none",
-            }}
+  const mobileLandscapeUi = (
+    <MobileLandscapePhoneShell
+      deviceName={deviceName}
+      remainingLabel={formatDurationHeaderCompact(remaining)}
+      remainingClassName={remainingClassName}
+      onCollapse={onCollapse}
+      toolbarExtra={
+        streamActive ? (
+          <button
+            type="button"
+            onClick={cycleOrientation}
+            className="inline-flex h-8 shrink-0 items-center gap-1 rounded-md bg-black/50 px-2 text-slate-100 backdrop-blur-sm"
+            aria-label={`แนวจอ: ${orientationLabel(orientationMode)}`}
           >
-            <div
-              className="relative max-h-full max-w-full"
-              style={
-                streamIsLandscape
-                  ? {
-                      width: "100%",
-                      height: "auto",
-                      maxHeight: "100%",
-                      aspectRatio: mobileStreamAspectCss,
-                    }
-                  : {
-                      height: "100%",
-                      width: "auto",
-                      maxWidth: "100%",
-                      aspectRatio: mobileStreamAspectCss,
-                    }
-              }
-            >
-              {phoneStream}
-            </div>
-          </div>
-        }
-        nav={
-          streamActive && deviceId
-            ? navItems.map(({ icon: Icon, key, label }) => (
-                <button
-                  key={key}
-                  type="button"
-                  aria-label={label}
-                  onClick={() => sendNavKey(key)}
-                  className="flex min-w-[3rem] flex-col items-center gap-0.5 rounded-lg bg-black/45 px-1.5 py-2 text-slate-200 backdrop-blur-sm active:bg-black/65"
-                >
-                  <Icon className="h-5 w-5" />
-                  <span className="text-[9px] leading-tight">{label}</span>
-                </button>
-              ))
-            : undefined
-        }
-      />
-    );
+            {orientationIcon}
+            <span className="text-[10px]">
+              {orientationLabel(orientationMode)}
+            </span>
+          </button>
+        ) : null
+      }
+      stream={
+        <div
+          className="absolute inset-0 overflow-hidden bg-black"
+          style={{
+            isolation: "isolate",
+            userSelect: "none",
+            WebkitUserSelect: "none",
+          }}
+        >
+          {phoneStream}
+        </div>
+      }
+      nav={
+        streamActive && deviceId
+          ? navItems.map(({ icon: Icon, key, label }) => (
+              <button
+                key={key}
+                type="button"
+                aria-label={label}
+                onClick={() => sendNavKey(key)}
+                className="flex min-w-[3rem] flex-col items-center gap-0.5 rounded-lg bg-black/45 px-1.5 py-2 text-slate-200 backdrop-blur-sm active:bg-black/65"
+              >
+                <Icon className="h-5 w-5" />
+                <span className="text-[9px] leading-tight">{label}</span>
+              </button>
+            ))
+          : undefined
+      }
+    />
+  );
+
+  if (mobileFullscreen) {
+    if (!portalReady) return null;
+    return createPortal(mobileLandscapeUi, document.body);
   }
 
   return (

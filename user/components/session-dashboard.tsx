@@ -258,9 +258,13 @@ export function SessionDashboard({
                     layoutId={`phone-${s._id}`}
                     className={cn(
                       "phone-shell flex w-full min-w-0 justify-center",
-                      isThisExpanded
-                        ? "pointer-events-auto fixed inset-x-0 top-14 bottom-6 z-50 flex items-start justify-center overflow-y-auto px-4"
-                        : "relative",
+                      isThisExpanded &&
+                        !hideDashboardChrome &&
+                        "pointer-events-auto fixed inset-x-0 top-14 bottom-6 z-50 flex items-start justify-center overflow-y-auto px-4",
+                      isThisExpanded &&
+                        hideDashboardChrome &&
+                        "pointer-events-none fixed inset-0 z-40",
+                      !isThisExpanded && "relative",
                     )}
                     transition={{
                       layout: { type: "spring", stiffness: 380, damping: 36 },
