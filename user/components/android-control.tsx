@@ -6,12 +6,15 @@ import { apiFetch } from "@/lib/api";
 import { ChevronLeft } from "lucide-react";
 import type { Session } from "@/types/session";
 import { SessionPhoneControl } from "@/components/session-phone-control";
+import { useMobileLandscape } from "@/hooks/use-mobile-landscape";
+import { cn } from "@/lib/utils";
 
 export function AndroidControl() {
   const router = useRouter();
   const { sessionId } = useParams<{ sessionId: string }>();
 
   const [session, setSession] = useState<Session | null>(null);
+  const isMobileLandscape = useMobileLandscape();
 
   useEffect(() => {
     async function load() {
@@ -34,7 +37,12 @@ export function AndroidControl() {
 
   return (
     <div className="flex min-h-screen flex-col overflow-hidden bg-slate-950 text-white">
-      <div className="flex flex-shrink-0 items-center justify-between border-b border-slate-800 px-4 py-3">
+      <div
+        className={cn(
+          "flex flex-shrink-0 items-center justify-between border-b border-slate-800 px-4 py-3",
+          isMobileLandscape && "hidden",
+        )}
+      >
         <button
           type="button"
           onClick={() => router.push("/dashboard")}
@@ -47,8 +55,16 @@ export function AndroidControl() {
         <span className="w-16" aria-hidden />
       </div>
 
-      <div className="flex flex-1 flex-col items-center justify-center p-3">
-        <SessionPhoneControl session={session} />
+      <div
+        className={cn(
+          "flex flex-1 flex-col items-center justify-center p-3",
+          isMobileLandscape && "p-0",
+        )}
+      >
+        <SessionPhoneControl
+          session={session}
+          onCollapse={() => router.push("/dashboard")}
+        />
       </div>
     </div>
   );

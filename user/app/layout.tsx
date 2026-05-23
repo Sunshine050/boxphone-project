@@ -10,6 +10,12 @@ const inter = localFont({
   weight: "100 900",
 })
 
+export const viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover" as const,
+};
+
 export const metadata: Metadata = {
   title: "CloudPhone - Remote Android Device Control",
   description: "Rent and control real Android devices via browser",

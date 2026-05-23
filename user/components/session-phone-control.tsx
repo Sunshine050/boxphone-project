@@ -28,6 +28,8 @@ import {
   frameAspectRatioCss,
   getFrameDimensions,
 } from "@/lib/screen-orientation";
+import { useMobileLandscape } from "@/hooks/use-mobile-landscape";
+import { MobileLandscapePhoneShell } from "@/components/mobile-landscape-phone-shell";
 
 const BASE_URL =
   typeof window !== "undefined"
@@ -104,6 +106,8 @@ interface SessionPhoneControlProps {
    *  we subtract elapsed since fetchedAt (not since start/resume_time which
    *  would double-count the already-elapsed portion). */
   fetchedAt?: number;
+  /** Full-screen shell when the user's phone is sideways (off for multi-device grid). */
+  allowMobileLandscapeFullscreen?: boolean;
 }
 
 export function SessionPhoneControl({
@@ -114,6 +118,7 @@ export function SessionPhoneControl({
   streamView,
   onStreamViewChange,
   fetchedAt,
+  allowMobileLandscapeFullscreen = true,
 }: SessionPhoneControlProps) {
   const [now, setNow] = useState(() => getServerNow());
   const [imgSrc, setImgSrc] = useState<string | null>(null);
@@ -312,6 +317,9 @@ export function SessionPhoneControl({
   const expired = session.status === "EXPIRED" || remaining <= 0;
   const streamActive = !expired && !isPaused;
   const isExpanded = variant === "expanded";
+  const isMobileLandscape = useMobileLandscape();
+  const mobileFullscreen =
+    allowMobileLandscapeFullscreen && isMobileLandscape;
 
   const shellMaxClass = isExpanded
     ? landscapeFrame
@@ -341,6 +349,163 @@ export function SessionPhoneControl({
   };
 
   const deviceName = session.device_id?.name || "Device";
+
+  const remainingClassName = expired
+    ? "text-red-400"
+    : isPaused
+      ? "text-amber-400"
+      : "text-cyan-400";
+
+  const fullscreenFrameStyle: React.CSSProperties = {
+    height: "100%",
+    width: "auto",
+    maxHeight: "100%",
+    maxWidth: "100%",
+    aspectRatio: frameAspectCss,
+    margin: "0 auto",
+    isolation: "isolate",
+    userSelect: "none",
+    WebkitUserSelect: "none",
+  };
+
+  const phoneStream = (
+    <>
+      {streamingMode === "scrcpy" && deviceSerial && streamActive ? (
+        <H264Player
+          ref={h264PlayerRef}
+          deviceSerial={deviceSerial}
+          className="absolute inset-0"
+          onMetadata={(m) => applyStreamDimensions(m.width, m.height)}
+        />
+      ) : streamingMode === "screenshot" &&
+        imgSrc &&
+        !imgError &&
+        streamActive ? (
+        <img
+          ref={imgRef}
+          src={imgSrc}
+          alt=""
+          className="pointer-events-none absolute inset-0 h-full w-full object-contain"
+          onLoad={(e) => {
+            const { naturalWidth, naturalHeight } = e.currentTarget;
+            applyStreamDimensions(naturalWidth, naturalHeight);
+          }}
+          draggable={false}
+        />
+      ) : !isPaused && !expired ? (
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-slate-900">
+          <div
+            className={`h-10 w-10 rounded-full border-4 border-cyan-500 ${imgError ? "opacity-30" : "border-t-transparent animate-spin"}`}
+          />
+          <span className="text-xs text-slate-400">
+            {imgError
+              ? "ไม่สามารถโหลดภาพได้"
+              : streamingMode === "unknown"
+                ? "กำลังตรวจสอบโหมด..."
+                : "กำลังโหลดหน้าจอ..."}
+          </span>
+        </div>
+      ) : null}
+
+      {streamActive && deviceId && (
+        <DeviceTouchOverlay
+          deviceId={deviceId}
+          deviceSerial={deviceSerial}
+          apiBaseUrl={BASE_URL}
+          getNaturalSize={getNaturalSize}
+          getVideoElement={getVideoElement}
+          getVideoSize={getVideoSize}
+          onAction={handleActionRefresh}
+        />
+      )}
+
+      {isPaused && (
+        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-slate-950/90">
+          <PauseCircle className="h-10 w-10 text-amber-400 opacity-80" />
+          <span className="text-sm font-semibold text-amber-300">
+            หยุดชั่วคราว
+          </span>
+        </div>
+      )}
+
+      {expired && (
+        <div className="absolute inset-0 z-10 flex items-center justify-center bg-slate-950/80">
+          <span className="text-lg font-bold text-red-400">หมดเวลาใช้งาน</span>
+        </div>
+      )}
+    </>
+  );
+
+  const navItems = [
+    { icon: RotateCcw, key: KEY.BACK, label: "กลับ" },
+    { icon: Home, key: KEY.HOME, label: "หน้าแรก" },
+    { icon: Square, key: KEY.RECENTS, label: "สวิตช์" },
+  ] as const;
+
+  const sendNavKey = (keycode: number) => {
+    if (!deviceId) return;
+    void sendDeviceInputFast(
+      BASE_URL,
+      { deviceId, deviceSerial },
+      "key",
+      { keycode },
+      { awaitResponse: true },
+    )?.then(() => handleActionRefresh());
+  };
+
+  if (mobileFullscreen) {
+    return (
+      <MobileLandscapePhoneShell
+        deviceName={deviceName}
+        remainingLabel={formatDurationHeaderCompact(remaining)}
+        remainingClassName={remainingClassName}
+        onCollapse={onCollapse}
+        toolbarExtra={
+          streamActive ? (
+            <button
+              type="button"
+              onClick={cycleOrientation}
+              className="inline-flex h-8 shrink-0 items-center gap-1 rounded-md border border-slate-700 bg-slate-800 px-2 text-slate-200"
+              aria-label={`แนวจอ: ${orientationLabel(orientationMode)}`}
+            >
+              {orientationIcon}
+              <span className="text-[10px]">
+                {orientationLabel(orientationMode)}
+              </span>
+            </button>
+          ) : null
+        }
+        stream={
+          <div
+            className="relative h-full w-full max-h-full overflow-hidden rounded-xl border-2 border-slate-700 bg-slate-900"
+            style={fullscreenFrameStyle}
+          >
+            {phoneStream}
+          </div>
+        }
+        nav={
+          streamActive && deviceId ? (
+            <aside className="flex w-14 shrink-0 flex-col justify-center gap-2 border-l border-slate-800 pl-1.5">
+              {navItems.map(({ icon: Icon, key, label }) => (
+                <button
+                  key={key}
+                  type="button"
+                  aria-label={label}
+                  onClick={() => sendNavKey(key)}
+                  className="flex flex-col items-center gap-0.5 rounded-lg bg-slate-800 py-2.5 text-slate-300 active:bg-slate-600"
+                >
+                  <Icon className="h-5 w-5" />
+                  <span className="text-[9px] leading-tight text-slate-500">
+                    {label}
+                  </span>
+                </button>
+              ))}
+            </aside>
+          ) : null
+        }
+      />
+    );
+  }
 
   return (
     <motion.div
@@ -372,7 +537,7 @@ export function SessionPhoneControl({
               </span>
             </button>
           )}
-          {!isExpanded && onExpand && streamActive && (
+          {!isExpanded && !mobileFullscreen && onExpand && streamActive && (
             <button
               type="button"
               onClick={onExpand}
@@ -416,77 +581,7 @@ export function SessionPhoneControl({
           }}
           transition={{ layout: { duration: 0.22, ease: "easeOut" } }}
         >
-          {/* ── stream layer ── */}
-          {streamingMode === "scrcpy" && deviceSerial && streamActive ? (
-            <H264Player
-              ref={h264PlayerRef}
-              deviceSerial={deviceSerial}
-              className="absolute inset-0"
-              onMetadata={(m) => {
-                applyStreamDimensions(m.width, m.height);
-              }}
-            />
-          ) : streamingMode === "screenshot" && imgSrc && !imgError && streamActive ? (
-            <img
-              ref={imgRef}
-              src={imgSrc}
-              alt=""
-              className="pointer-events-none absolute inset-0 h-full w-full object-contain"
-              onLoad={(e) => {
-                const { naturalWidth, naturalHeight } = e.currentTarget;
-                applyStreamDimensions(naturalWidth, naturalHeight);
-              }}
-              draggable={false}
-            />
-          ) : !isPaused && !expired ? (
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-slate-900">
-              <div
-                className={`h-10 w-10 rounded-full border-4 border-cyan-500 ${imgError ? "opacity-30" : "border-t-transparent animate-spin"}`}
-              />
-              <span className="text-xs text-slate-400">
-                {imgError
-                  ? "ไม่สามารถโหลดภาพได้"
-                  : streamingMode === "unknown"
-                    ? "กำลังตรวจสอบโหมด..."
-                    : "กำลังโหลดหน้าจอ..."}
-              </span>
-            </div>
-          ) : null}
-
-          {/* ── touch overlay (only when actively streaming) ── */}
-          {streamActive && deviceId && (
-            <DeviceTouchOverlay
-              deviceId={deviceId}
-              deviceSerial={deviceSerial}
-              apiBaseUrl={BASE_URL}
-              getNaturalSize={getNaturalSize}
-              getVideoElement={getVideoElement}
-              getVideoSize={getVideoSize}
-              onAction={handleActionRefresh}
-            />
-          )}
-
-          {/* ── paused overlay ── */}
-          {isPaused && (
-            <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-slate-950/90">
-              <PauseCircle className="h-10 w-10 text-amber-400 opacity-80" />
-              <span className="text-sm font-semibold text-amber-300">
-                หยุดชั่วคราว
-              </span>
-              <span className="text-xs text-slate-400">
-                {formatDurationThai(remaining)} คงเหลือ
-              </span>
-            </div>
-          )}
-
-          {/* ── expired overlay ── */}
-          {expired && (
-            <div className="absolute inset-0 z-10 flex items-center justify-center bg-slate-950/80">
-              <span className="text-lg font-bold text-red-400">
-                หมดเวลาใช้งาน
-              </span>
-            </div>
-          )}
+          {phoneStream}
         </motion.div>
 
         {/* ── Android nav buttons (Back / Home / Recents) ── */}

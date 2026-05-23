@@ -14,6 +14,7 @@ import {
   type SessionStreamViewState,
 } from "@boxphon/shared/client/session-stream-view";
 import { loadOrientationMode } from "@/lib/screen-orientation";
+import { useMobileLandscape } from "@/hooks/use-mobile-landscape";
 import { cn } from "@/lib/utils";
 
 import {
@@ -62,6 +63,7 @@ export function SessionDashboard({
   const [streamViews, setStreamViews] = useState<
     Record<string, SessionStreamViewState>
   >({});
+  const isMobileLandscape = useMobileLandscape();
 
   const getStreamView = (sessionId: string): SessionStreamViewState =>
     streamViews[sessionId] ?? {
@@ -85,6 +87,19 @@ export function SessionDashboard({
   useEffect(() => {
     setSessions(initialSessions);
   }, [initialSessions]);
+
+  const hideDashboardChrome =
+    isMobileLandscape &&
+    (sessions.length === 1 || expandedSessionId !== null);
+
+  useEffect(() => {
+    if (!hideDashboardChrome) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [hideDashboardChrome]);
 
   useEffect(() => {
     if (!expandedSessionId) return;
@@ -115,7 +130,7 @@ export function SessionDashboard({
       transition={{ duration: 0.45, ease: "easeOut" }}
     >
       <AnimatePresence>
-        {expandedSessionId && (
+        {expandedSessionId && !hideDashboardChrome && (
           <motion.div
             key="expanded-backdrop"
             className="fixed inset-0 z-40 bg-slate-950/85"
@@ -129,7 +144,7 @@ export function SessionDashboard({
         )}
       </AnimatePresence>
 
-      {expandedSessionId && (
+      {expandedSessionId && !hideDashboardChrome && (
         <button
           type="button"
           aria-label="ปิดโหมดขยาย"
@@ -143,11 +158,15 @@ export function SessionDashboard({
       <motion.div
         className={cn(
           "mx-auto w-full max-w-[1400px] px-3 py-4 sm:px-5 sm:py-6",
-          expandedSessionId && "pointer-events-none",
+          expandedSessionId && !hideDashboardChrome && "pointer-events-none",
+          hideDashboardChrome && "p-0",
         )}
       >
         <motion.header
-          className="mb-6 flex items-center justify-between gap-4 pointer-events-auto"
+          className={cn(
+            "mb-6 flex items-center justify-between gap-4 pointer-events-auto",
+            hideDashboardChrome && "hidden",
+          )}
           initial={{ opacity: 0, y: -12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4, delay: 0.05 }}
@@ -257,6 +276,9 @@ export function SessionDashboard({
                       variant={isThisExpanded ? "expanded" : "default"}
                       onExpand={() => setExpandedSessionId(s._id)}
                       onCollapse={() => setExpandedSessionId(null)}
+                      allowMobileLandscapeFullscreen={
+                        sessions.length === 1 || isThisExpanded
+                      }
                     />
                   </motion.div>
                 </motion.div>
