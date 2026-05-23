@@ -321,8 +321,6 @@ export function SessionPhoneControl({
   const isMobileLandscape = useMobileLandscape();
   const mobileFullscreen =
     allowMobileLandscapeFullscreen && isMobileLandscape;
-  /** Mild zoom between contain and cover — less black bars, not as tight as cover. */
-  const mobileStreamFit = mobileFullscreen ? "balanced" : "contain";
   const [portalReady, setPortalReady] = useState(false);
 
   useEffect(() => {
@@ -371,7 +369,6 @@ export function SessionPhoneControl({
           ref={h264PlayerRef}
           deviceSerial={deviceSerial}
           className="absolute inset-0"
-          objectFit={mobileStreamFit}
           onMetadata={(m) => applyStreamDimensions(m.width, m.height)}
         />
       ) : streamingMode === "screenshot" &&
