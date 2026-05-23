@@ -458,7 +458,7 @@ export function SessionPhoneControl({
           <button
             type="button"
             onClick={cycleOrientation}
-            className="inline-flex h-8 shrink-0 items-center gap-1 rounded-md bg-black/50 px-2 text-slate-100 backdrop-blur-sm"
+            className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-slate-800/80 px-3 py-2.5 text-slate-100 active:bg-slate-700/90"
             aria-label={`แนวจอ: ${orientationLabel(orientationMode)}`}
           >
             {orientationIcon}
@@ -488,10 +488,10 @@ export function SessionPhoneControl({
                 type="button"
                 aria-label={label}
                 onClick={() => sendNavKey(key)}
-                className="pointer-events-auto flex min-w-[3rem] flex-col items-center gap-0.5 rounded-lg bg-black/45 px-1.5 py-2 text-slate-200 backdrop-blur-sm active:bg-black/65"
+                className="flex w-full flex-row items-center gap-2 rounded-lg bg-slate-800/80 px-3 py-2.5 text-left text-slate-100 active:bg-slate-700/90"
               >
-                <Icon className="h-5 w-5" />
-                <span className="text-[9px] leading-tight">{label}</span>
+                <Icon className="h-5 w-5 shrink-0" />
+                <span className="text-sm">{label}</span>
               </button>
             ))
           : undefined
