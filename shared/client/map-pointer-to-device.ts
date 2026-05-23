@@ -1,4 +1,10 @@
-export type Size2D = { width: number; height: number };
+import {
+  computeVideoFitLayout,
+  type Size2D,
+  type VideoFitMode,
+} from "./video-fit-layout";
+
+export type { Size2D, VideoFitMode };
 
 function mapClientToTarget(
   clientX: number,
@@ -6,25 +12,30 @@ function mapClientToTarget(
   element: HTMLElement | null,
   videoSize: Size2D,
   targetSize: Size2D,
+  fit: VideoFitMode = "contain",
 ): { x: number; y: number } | null {
   if (!element) return null;
 
   const rect = element.getBoundingClientRect();
   if (rect.width < 2 || rect.height < 2) return null;
 
-  const vw = videoSize.width > 0 ? videoSize.width : 1080;
-  const vh = videoSize.height > 0 ? videoSize.height : 2340;
+  const { contentW, contentH, offsetX, offsetY, vw, vh } = computeVideoFitLayout(
+    rect.width,
+    rect.height,
+    videoSize,
+    fit,
+  );
   const tw = targetSize.width > 0 ? targetSize.width : vw;
   const th = targetSize.height > 0 ? targetSize.height : vh;
 
-  const scale = Math.min(rect.width / vw, rect.height / vh);
-  const contentW = vw * scale;
-  const contentH = vh * scale;
-  const offsetX = (rect.width - contentW) / 2;
-  const offsetY = (rect.height - contentH) / 2;
-
   const localX = clientX - rect.left - offsetX;
   const localY = clientY - rect.top - offsetY;
+
+  if (fit !== "contain") {
+    if (localX < 0 || localY < 0 || localX > contentW || localY > contentH) {
+      return null;
+    }
+  }
 
   const clampedX = Math.max(0, Math.min(contentW, localX));
   const clampedY = Math.max(0, Math.min(contentH, localY));
@@ -48,8 +59,16 @@ export function mapClientToDevice(
   element: HTMLElement | null,
   videoSize: Size2D,
   deviceSize: Size2D,
+  fit: VideoFitMode = "contain",
 ): { x: number; y: number } | null {
-  return mapClientToTarget(clientX, clientY, element, videoSize, deviceSize);
+  return mapClientToTarget(
+    clientX,
+    clientY,
+    element,
+    videoSize,
+    deviceSize,
+    fit,
+  );
 }
 
 /**
@@ -61,6 +80,14 @@ export function mapClientToVideo(
   clientY: number,
   element: HTMLElement | null,
   videoSize: Size2D,
+  fit: VideoFitMode = "contain",
 ): { x: number; y: number } | null {
-  return mapClientToTarget(clientX, clientY, element, videoSize, videoSize);
+  return mapClientToTarget(
+    clientX,
+    clientY,
+    element,
+    videoSize,
+    videoSize,
+    fit,
+  );
 }

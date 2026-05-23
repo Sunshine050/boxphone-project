@@ -1,7 +1,15 @@
 "use client";
 
-import { useEffect, useRef, useState, forwardRef, useImperativeHandle } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  forwardRef,
+  useImperativeHandle,
+} from "react";
 import { getStreamSocket } from "@/lib/socket-client";
+import { useVideoFitCanvas } from "@/hooks/use-video-fit-canvas";
+import type { VideoFitMode } from "../../shared/client/video-fit-layout";
 
 export interface H264PlayerMeta {
   width: number;
@@ -23,6 +31,7 @@ interface H264PlayerProps {
   /** Optional — socket authenticates via HttpOnly cookie when omitted */
   token?: string;
   className?: string;
+  objectFit?: VideoFitMode;
   onMetadata?: (meta: H264PlayerMeta) => void;
   onError?: (err: Error) => void;
   onConnected?: () => void;
@@ -186,10 +195,35 @@ function toUint8(data: ArrayBuffer | Uint8Array | unknown): Uint8Array {
 
 export const H264Player = forwardRef<H264PlayerHandle, H264PlayerProps>(
   function H264Player(
-    { deviceSerial, token, className, onMetadata, onError, onConnected },
+    {
+      deviceSerial,
+      token,
+      className,
+      objectFit = "contain",
+      onMetadata,
+      onError,
+      onConnected,
+    },
     ref,
   ) {
+    const containerRef = useRef<HTMLDivElement | null>(null);
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
+    const [displayVideoSize, setDisplayVideoSize] = useState({
+      width: 0,
+      height: 0,
+    });
+    const syncDisplayLayoutRef = useRef<(size: { width: number; height: number }) => void>(
+      () => undefined,
+    );
+    syncDisplayLayoutRef.current = (size) => setDisplayVideoSize(size);
+
+    useVideoFitCanvas(
+      containerRef,
+      canvasRef,
+      displayVideoSize,
+      objectFit,
+      displayVideoSize.width + displayVideoSize.height,
+    );
     const decoderRef = useRef<VideoDecoder | null>(null);
     const configPacketRef = useRef<Uint8Array | null>(null);
     const naturalSizeRef = useRef({ width: 0, height: 0 });
@@ -321,6 +355,7 @@ export const H264Player = forwardRef<H264PlayerHandle, H264PlayerProps>(
               resetDecoderForDimensionChange();
               streamVideoSizeRef.current = next;
               updateNaturalFromVideo(next.width, next.height);
+              syncDisplayLayoutRef.current(next);
               onMetadata?.({
                 width: next.width,
                 height: next.height,
@@ -522,6 +557,10 @@ export const H264Player = forwardRef<H264PlayerHandle, H264PlayerProps>(
           };
         }
         updateNaturalFromVideo(payload.width, payload.height);
+        syncDisplayLayoutRef.current({
+          width: payload.width,
+          height: payload.height,
+        });
 
         onMetadata?.({
           width: payload.width,
@@ -685,10 +724,18 @@ export const H264Player = forwardRef<H264PlayerHandle, H264PlayerProps>(
     }, [deviceSerial, token]);
 
     return (
-      <div className={className} style={{ position: "absolute", inset: 0 }}>
+      <div
+        ref={containerRef}
+        className={className}
+        style={{ position: "absolute", inset: 0 }}
+      >
         <canvas
           ref={canvasRef}
-          className="pointer-events-none absolute inset-0 h-full w-full object-contain"
+          className={
+            objectFit === "balanced"
+              ? "pointer-events-none"
+              : "pointer-events-none absolute inset-0 h-full w-full object-contain"
+          }
           style={{ imageRendering: "auto" }}
         />
         {status !== "playing" && (

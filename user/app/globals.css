@@ -133,3 +133,12 @@
     display: none;
   }
 }
+
+/* Phone landscape stream — reclaim space from browser chrome where possible */
+html.mobile-browser-immersive,
+html.mobile-browser-immersive body {
+  height: 100%;
+  height: 100dvh;
+  overflow: hidden;
+  overscroll-behavior: none;
+}

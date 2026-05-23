@@ -13,12 +13,21 @@ const inter = localFont({
 export const viewport = {
   width: "device-width",
   initialScale: 1,
+  maximumScale: 1,
   viewportFit: "cover" as const,
+  interactiveWidget: "resizes-content" as const,
 };
 
 export const metadata: Metadata = {
   title: "CloudPhone - Remote Android Device Control",
   description: "Rent and control real Android devices via browser",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+  },
+  other: {
+    "mobile-web-app-capable": "yes",
+  },
    icons: {
     icon: [
       {
