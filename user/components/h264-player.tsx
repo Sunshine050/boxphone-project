@@ -23,6 +23,8 @@ interface H264PlayerProps {
   /** Optional — socket authenticates via HttpOnly cookie when omitted */
   token?: string;
   className?: string;
+  /** CSS object-fit for the canvas (default contain). */
+  objectFit?: "contain" | "cover";
   onMetadata?: (meta: H264PlayerMeta) => void;
   onError?: (err: Error) => void;
   onConnected?: () => void;
@@ -186,7 +188,15 @@ function toUint8(data: ArrayBuffer | Uint8Array | unknown): Uint8Array {
 
 export const H264Player = forwardRef<H264PlayerHandle, H264PlayerProps>(
   function H264Player(
-    { deviceSerial, token, className, onMetadata, onError, onConnected },
+    {
+      deviceSerial,
+      token,
+      className,
+      objectFit = "contain",
+      onMetadata,
+      onError,
+      onConnected,
+    },
     ref,
   ) {
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -688,7 +698,11 @@ export const H264Player = forwardRef<H264PlayerHandle, H264PlayerProps>(
       <div className={className} style={{ position: "absolute", inset: 0 }}>
         <canvas
           ref={canvasRef}
-          className="pointer-events-none absolute inset-0 h-full w-full object-contain"
+          className={
+            objectFit === "cover"
+              ? "pointer-events-none absolute inset-0 h-full w-full object-cover"
+              : "pointer-events-none absolute inset-0 h-full w-full object-contain"
+          }
           style={{ imageRendering: "auto" }}
         />
         {status !== "playing" && (

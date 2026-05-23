@@ -38,25 +38,25 @@ export function MobileLandscapePhoneShell({
           "px-2 pb-5 pt-[max(0.35rem,env(safe-area-inset-top))]",
         )}
       >
-        <div className="pointer-events-auto flex min-w-0 items-center gap-1">
+        <div className="flex min-w-0 items-center gap-1">
           {onCollapse && (
             <button
               type="button"
               onClick={onCollapse}
-              className="inline-flex h-8 shrink-0 items-center gap-0.5 rounded-md bg-black/50 px-2 text-slate-100 backdrop-blur-sm active:bg-black/70"
+              className="pointer-events-auto inline-flex h-8 shrink-0 items-center gap-0.5 rounded-md bg-black/50 px-2 text-slate-100 backdrop-blur-sm active:bg-black/70"
               aria-label="กลับ"
             >
               <ChevronLeft className="h-4 w-4" />
               <span className="text-[10px]">กลับ</span>
             </button>
           )}
-          <span className="min-w-0 flex-1 truncate text-xs font-semibold text-white drop-shadow">
+          <span className="pointer-events-none min-w-0 flex-1 truncate text-xs font-semibold text-white drop-shadow">
             {deviceName}
           </span>
           {toolbarExtra}
           <span
             className={cn(
-              "shrink-0 text-[10px] font-bold tabular-nums drop-shadow",
+              "pointer-events-none shrink-0 text-[10px] font-bold tabular-nums drop-shadow",
               remainingClassName,
             )}
           >
@@ -73,7 +73,7 @@ export function MobileLandscapePhoneShell({
             "py-4 pl-10 pr-[max(0.35rem,env(safe-area-inset-right))]",
           )}
         >
-          <div className="pointer-events-auto flex flex-col gap-1.5">{nav}</div>
+          <div className="flex flex-col gap-1.5">{nav}</div>
         </div>
       ) : null}
     </div>
