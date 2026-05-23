@@ -321,7 +321,6 @@ export function SessionPhoneControl({
   const isMobileLandscape = useMobileLandscape();
   const mobileFullscreen =
     allowMobileLandscapeFullscreen && isMobileLandscape;
-  const mobileStreamFit = mobileFullscreen ? "cover" : "contain";
   const [portalReady, setPortalReady] = useState(false);
 
   useEffect(() => {
@@ -370,7 +369,6 @@ export function SessionPhoneControl({
           ref={h264PlayerRef}
           deviceSerial={deviceSerial}
           className="absolute inset-0"
-          objectFit={mobileStreamFit}
           onMetadata={(m) => applyStreamDimensions(m.width, m.height)}
         />
       ) : streamingMode === "screenshot" &&
@@ -381,11 +379,7 @@ export function SessionPhoneControl({
           ref={imgRef}
           src={imgSrc}
           alt=""
-          className={
-            mobileStreamFit === "cover"
-              ? "pointer-events-none absolute inset-0 h-full w-full object-cover"
-              : "pointer-events-none absolute inset-0 h-full w-full object-contain"
-          }
+          className="pointer-events-none absolute inset-0 h-full w-full object-contain"
           onLoad={(e) => {
             const { naturalWidth, naturalHeight } = e.currentTarget;
             applyStreamDimensions(naturalWidth, naturalHeight);
@@ -415,7 +409,6 @@ export function SessionPhoneControl({
           getNaturalSize={getNaturalSize}
           getVideoElement={getVideoElement}
           getVideoSize={getVideoSize}
-          videoFit={mobileStreamFit}
           onAction={handleActionRefresh}
         />
       )}
@@ -465,7 +458,7 @@ export function SessionPhoneControl({
           <button
             type="button"
             onClick={cycleOrientation}
-            className="pointer-events-auto inline-flex h-8 shrink-0 items-center gap-1 rounded-md bg-black/50 px-2 text-slate-100 backdrop-blur-sm"
+            className="inline-flex h-8 shrink-0 items-center gap-1 rounded-md bg-black/50 px-2 text-slate-100 backdrop-blur-sm"
             aria-label={`แนวจอ: ${orientationLabel(orientationMode)}`}
           >
             {orientationIcon}
@@ -495,7 +488,7 @@ export function SessionPhoneControl({
                 type="button"
                 aria-label={label}
                 onClick={() => sendNavKey(key)}
-                className="pointer-events-auto flex min-w-[3rem] flex-col items-center gap-0.5 rounded-lg bg-black/45 px-1.5 py-2 text-slate-200 backdrop-blur-sm active:bg-black/65"
+                className="flex min-w-[3rem] flex-col items-center gap-0.5 rounded-lg bg-black/45 px-1.5 py-2 text-slate-200 backdrop-blur-sm active:bg-black/65"
               >
                 <Icon className="h-5 w-5" />
                 <span className="text-[9px] leading-tight">{label}</span>

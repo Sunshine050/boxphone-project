@@ -5,7 +5,6 @@ import {
   mapClientToDevice,
   mapClientToVideo,
   type Size2D,
-  type VideoFitMode,
 } from "./map-pointer-to-device";
 import {
   sendDeviceInputFast,
@@ -19,8 +18,6 @@ export type DeviceTouchOverlayProps = {
   getNaturalSize: () => Size2D;
   getVideoElement: () => HTMLElement | null;
   getVideoSize?: () => Size2D;
-  /** Must match CSS object-fit on the video/canvas (default contain). */
-  videoFit?: VideoFitMode;
   onAction?: () => void;
 };
 
@@ -65,7 +62,6 @@ export function DeviceTouchOverlay({
   getNaturalSize,
   getVideoElement,
   getVideoSize,
-  videoFit = "contain",
   onAction,
 }: DeviceTouchOverlayProps) {
   const overlayRef = useRef<HTMLDivElement>(null);
@@ -128,10 +124,9 @@ export function DeviceTouchOverlay({
         el,
         resolveVideoSize(),
         resolveDeviceSize(),
-        videoFit,
       );
     },
-    [getVideoElement, resolveVideoSize, resolveDeviceSize, videoFit],
+    [getVideoElement, resolveVideoSize, resolveDeviceSize],
   );
 
   const toVideo = useCallback(
@@ -140,9 +135,9 @@ export function DeviceTouchOverlay({
       if (!el) return null;
       const video = resolveVideoSize();
       if (video.width <= 0 || video.height <= 0) return null;
-      return mapClientToVideo(clientX, clientY, el, video, videoFit);
+      return mapClientToVideo(clientX, clientY, el, video);
     },
-    [getVideoElement, resolveVideoSize, videoFit],
+    [getVideoElement, resolveVideoSize],
   );
 
   const showCrosshair = useCallback(
