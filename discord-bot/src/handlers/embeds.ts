@@ -49,5 +49,9 @@ export function buildEmbed(event: AnyEvent): EmbedBuilder {
         .setDescription(`อุปกรณ์ **${event.deviceName}** เชื่อมต่อแล้ว`)
         .setColor(Colors.Green);
 
+    default: {
+      const _exhaustive: never = event;
+      throw new Error(`Unhandled event type: ${(_exhaustive as { type: string }).type}`);
+    }
   }
 }
