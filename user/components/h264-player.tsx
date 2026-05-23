@@ -38,6 +38,20 @@ type FramePayload = {
 
 const FALLBACK_CODEC = "avc1.42E01E";
 
+/** Orientation / resolution change — matches backend scrcpy debounce thresholds. */
+function dimensionsSignificantlyChanged(
+  prev: { width: number; height: number },
+  next: { width: number; height: number },
+): boolean {
+  if (prev.width <= 0 || prev.height <= 0) return false;
+  if (prev.width === next.width && prev.height === next.height) return false;
+  if (prev.width === next.height && prev.height === next.width) return true;
+  return (
+    Math.abs(next.width - prev.width) >= 16 ||
+    Math.abs(next.height - prev.height) >= 16
+  );
+}
+
 /** แยก Annex-B NAL units (ใช้หา SPS เพื่อสร้าง codec string ที่ถูกต้อง) */
 function splitNalUnits(buf: Uint8Array): Uint8Array[] {
   const out: Uint8Array[] = [];
@@ -256,6 +270,33 @@ export const H264Player = forwardRef<H264PlayerHandle, H264PlayerProps>(
         waitingKeyFrameRef.current = true; // need keyframe after every (re)configure
       };
 
+      /** Portrait-base wm size from stream_metadata — stable across video rotation. */
+      let displayBase = { w: 0, h: 0 };
+
+      const updateNaturalFromVideo = (videoW: number, videoH: number) => {
+        if (displayBase.w > 0 && displayBase.h > 0) {
+          const portraitW = Math.min(displayBase.w, displayBase.h);
+          const portraitH = Math.max(displayBase.w, displayBase.h);
+          const isLandscape = videoW > videoH;
+          naturalSizeRef.current = isLandscape
+            ? { width: portraitH, height: portraitW }
+            : { width: portraitW, height: portraitH };
+        } else {
+          naturalSizeRef.current = { width: videoW, height: videoH };
+        }
+      };
+
+      const resetDecoderForDimensionChange = () => {
+        closeDecoder();
+        const c = canvasRef.current;
+        const cx = c?.getContext("2d");
+        if (c && cx && c.width > 0 && c.height > 0) {
+          cx.clearRect(0, 0, c.width, c.height);
+        }
+        isPlayingRef.current = false;
+        setStatus("waiting");
+      };
+
       const handleDecodedFrame = (frame: VideoFrame) => {
         if (cancelled) {
           frame.close();
@@ -268,34 +309,39 @@ export const H264Player = forwardRef<H264PlayerHandle, H264PlayerProps>(
             c.width !== frame.displayWidth ||
             c.height !== frame.displayHeight
           ) {
-            c.width = frame.displayWidth;
-            c.height = frame.displayHeight;
-            videoSizeRef.current = {
+            const next = {
               width: frame.displayWidth,
               height: frame.displayHeight,
             };
-            // Keep streamVideoSizeRef from stream_metadata for touch mapping —
-            // decoded frame dims can differ slightly and cause scrcpy touch reject.
-            // First frame: if we never received stream_metadata with native
-            // display size, fall back to video dimensions for touch mapping
-            // (better than nothing, though slightly inaccurate for scaled streams).
+            const significant = dimensionsSignificantlyChanged(
+              streamVideoSizeRef.current,
+              next,
+            );
+            if (significant) {
+              resetDecoderForDimensionChange();
+              streamVideoSizeRef.current = next;
+              updateNaturalFromVideo(next.width, next.height);
+              onMetadata?.({
+                width: next.width,
+                height: next.height,
+                deviceName: "",
+              });
+            }
+            c.width = frame.displayWidth;
+            c.height = frame.displayHeight;
+            videoSizeRef.current = next;
+            // Minor per-frame drift: keep streamVideoSizeRef from metadata for touch.
             if (
               naturalSizeRef.current.width === 0 ||
               naturalSizeRef.current.height === 0
             ) {
-              naturalSizeRef.current = {
-                width: frame.displayWidth,
-                height: frame.displayHeight,
-              };
+              naturalSizeRef.current = next;
               onMetadata?.({
-                width: frame.displayWidth,
-                height: frame.displayHeight,
+                width: next.width,
+                height: next.height,
                 deviceName: "",
               });
             }
-            // If naturalSizeRef is already set (from stream_metadata with display
-            // size), don't overwrite it with video dimensions — the display size
-            // is what ADB input tap expects.
           }
           cx.drawImage(frame, 0, 0);
           isPlayingRef.current = true;
@@ -452,40 +498,30 @@ export const H264Player = forwardRef<H264PlayerHandle, H264PlayerProps>(
       }) => {
         if (payload.deviceSerial !== deviceSerial) return;
 
-        streamVideoSizeRef.current = {
-          width: payload.width,
-          height: payload.height,
-        };
-        videoSizeRef.current = {
-          width: payload.width,
-          height: payload.height,
-        };
+        const next = { width: payload.width, height: payload.height };
+        const significant = dimensionsSignificantlyChanged(
+          streamVideoSizeRef.current,
+          next,
+        );
+        if (significant) {
+          resetDecoderForDimensionChange();
+        }
 
-        // Canvas renders video at video resolution
+        streamVideoSizeRef.current = next;
+        videoSizeRef.current = next;
+
         if (canvasRef.current) {
           canvasRef.current.width = payload.width;
           canvasRef.current.height = payload.height;
         }
 
-        // Touch overlay needs NATIVE display coordinates (ADB input space).
-        // `displayWidth/Height` from backend is the portrait-base size from
-        // `adb shell wm size`.  Rotate it to match the current video orientation
-        // (video dims already reflect the device's physical orientation).
         if (payload.displayWidth && payload.displayHeight) {
-          const isLandscape = payload.width > payload.height;
-          // wm size always portrait-base → smaller side = portrait width, larger = height
-          const portraitW = Math.min(payload.displayWidth, payload.displayHeight);
-          const portraitH = Math.max(payload.displayWidth, payload.displayHeight);
-          naturalSizeRef.current = isLandscape
-            ? { width: portraitH, height: portraitW }   // landscape: swap dims
-            : { width: portraitW, height: portraitH };  // portrait: keep as-is
-        } else {
-          // Fallback: use video resolution (less accurate for scaled streams)
-          naturalSizeRef.current = {
-            width: payload.width,
-            height: payload.height,
+          displayBase = {
+            w: payload.displayWidth,
+            h: payload.displayHeight,
           };
         }
+        updateNaturalFromVideo(payload.width, payload.height);
 
         onMetadata?.({
           width: payload.width,
@@ -494,8 +530,8 @@ export const H264Player = forwardRef<H264PlayerHandle, H264PlayerProps>(
         });
         if (!isPlayingRef.current) {
           setStatus("waiting");
-          bumpWatchdog();
         }
+        bumpWatchdog();
       };
 
       const onFrame = (payload: FramePayload) => {

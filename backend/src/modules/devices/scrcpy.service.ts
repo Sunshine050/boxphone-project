@@ -23,6 +23,12 @@ import {
   serializeInjectTouchEvent,
 } from "./scrcpy-control.util";
 import type { AdbInputCommand } from "./adb-screenshot.service";
+import { parseConfigPacketDimensions } from "./scrcpy-sps.util";
+
+export type StreamMetadataChangeListener = (
+  serial: string,
+  metadata: StreamMetadata,
+) => void;
 
 const execFileAsync = promisify(execFile);
 
@@ -96,8 +102,21 @@ export class ScrcpyService implements OnModuleInit, OnModuleDestroy {
     Promise<ScrcpyStreamState>
   >();
   private readonly usedPorts = new Set<number>();
+  private metadataChangeListener: StreamMetadataChangeListener | null =
+    null;
+  private readonly dimensionChangeTimers = new Map<
+    string,
+    NodeJS.Timeout
+  >();
 
   constructor(private readonly config: ConfigService) {}
+
+  /** Gateway registers to push updated stream_metadata after rotation. */
+  setStreamMetadataChangeListener(
+    listener: StreamMetadataChangeListener | null,
+  ): void {
+    this.metadataChangeListener = listener;
+  }
 
   /* ─────────── env getters ─────────── */
 
@@ -753,6 +772,68 @@ export class ScrcpyService implements OnModuleInit, OnModuleDestroy {
    */
   private displaySizeCache = new Map<string, { w: number; h: number }>();
 
+  private scheduleConfigDimensionCheck(
+    stream: ScrcpyStreamState,
+    config: Buffer,
+  ): void {
+    const prev = this.dimensionChangeTimers.get(stream.serial);
+    if (prev) clearTimeout(prev);
+    const snapshot = Buffer.from(config);
+    const timer = setTimeout(() => {
+      this.dimensionChangeTimers.delete(stream.serial);
+      void this.applyConfigDimensionChange(stream, snapshot);
+    }, 300);
+    this.dimensionChangeTimers.set(stream.serial, timer);
+  }
+
+  private async applyConfigDimensionChange(
+    stream: ScrcpyStreamState,
+    config: Buffer,
+  ): Promise<void> {
+    if (!stream.videoHeaderReceived || stream.status !== "running") return;
+
+    const parsed = parseConfigPacketDimensions(new Uint8Array(config));
+    if (!parsed) return;
+
+    const { width: newW, height: newH } = parsed;
+    const oldW = stream.width;
+    const oldH = stream.height;
+    if (oldW <= 0 || oldH <= 0) return;
+
+    const swapped = oldW === newH && oldH === newW;
+    const changed = oldW !== newW || oldH !== newH;
+    if (!changed && !swapped) return;
+
+    // Ignore tiny drift from SPS re-parse on the same orientation.
+    if (
+      !swapped &&
+      Math.abs(newW - oldW) < 16 &&
+      Math.abs(newH - oldH) < 16
+    ) {
+      return;
+    }
+
+    stream.width = newW;
+    stream.height = newH;
+
+    this.logger.log(
+      `[scrcpy/${stream.serial}] video size ${oldW}×${oldH} → ${newW}×${newH} (touch space updated)`,
+    );
+
+    if (this.metadataChangeListener) {
+      try {
+        this.metadataChangeListener(
+          stream.serial,
+          this.buildStreamMetadata(stream),
+        );
+      } catch (e: any) {
+        this.logger.warn(
+          `[scrcpy/${stream.serial}] metadata listener failed: ${e.message}`,
+        );
+      }
+    }
+  }
+
   private async getDisplaySize(
     serial: string,
   ): Promise<{ w: number; h: number } | null> {
@@ -1071,7 +1152,10 @@ export class ScrcpyService implements OnModuleInit, OnModuleDestroy {
       const meta: FrameMeta = { isConfig, isKeyFrame, pts };
 
       // Cache SPS/PPS so late subscribers can initialize their decoder
-      if (isConfig) state.configPacket = payload;
+      if (isConfig) {
+        state.configPacket = payload;
+        this.scheduleConfigDimensionCheck(state, payload);
+      }
       if (isKeyFrame && !isConfig) {
         state.lastKeyFramePacket = payload;
         state.lastKeyFramePts = pts;
@@ -1098,6 +1182,12 @@ export class ScrcpyService implements OnModuleInit, OnModuleDestroy {
     if (state.idleTimer) {
       clearTimeout(state.idleTimer);
       state.idleTimer = null;
+    }
+
+    const dimTimer = this.dimensionChangeTimers.get(serial);
+    if (dimTimer) {
+      clearTimeout(dimTimer);
+      this.dimensionChangeTimers.delete(serial);
     }
 
     if (state.socket) {

@@ -4,6 +4,7 @@ import {
   SubscribeMessage,
   OnGatewayConnection,
   OnGatewayDisconnect,
+  OnGatewayInit,
 } from "@nestjs/websockets";
 import { Server, Socket } from "socket.io";
 import { ForbiddenException, Logger, UnauthorizedException } from "@nestjs/common";
@@ -20,6 +21,7 @@ import { UsersService } from "../modules/users/users.service";
 import {
   ScrcpyService,
   FrameMeta,
+  StreamMetadata,
 } from "../modules/devices/scrcpy.service";
 import { AdbScreenshotService } from "../modules/devices/adb-screenshot.service";
 
@@ -37,7 +39,9 @@ type AuthenticatedSocket = Socket & {
   // 5 MB เพียงพอสำหรับ JPEG frame ที่บีบอัดแล้วและลด DoS / memory exhaustion risk
   maxHttpBufferSize: 5e6,
 })
-export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect {
+export class AppGateway
+  implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect
+{
   @WebSocketServer() server: Server;
   private logger: Logger = new Logger("AppGateway");
 
@@ -56,6 +60,24 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   // socket.id -> serial -> unsubscribe fn (scrcpy stream subscriptions per socket)
   private streamSubscriptions: Map<string, Map<string, () => void>> = new Map();
+
+  afterInit() {
+    this.scrcpyService.setStreamMetadataChangeListener((serial, metadata) => {
+      this.broadcastStreamMetadata(serial, metadata);
+    });
+  }
+
+  private broadcastStreamMetadata(serial: string, metadata: StreamMetadata) {
+    for (const [socketId, subs] of this.streamSubscriptions.entries()) {
+      if (!subs.has(serial)) continue;
+      const client = this.server.sockets.sockets.get(socketId);
+      client?.emit("stream_metadata", {
+        deviceSerial: serial,
+        ...metadata,
+      });
+    }
+    this.logger.log(`stream_metadata broadcast ${serial} → ${metadata.width}×${metadata.height}`);
+  }
 
   async handleConnection(client: AuthenticatedSocket) {
     try {
