@@ -136,6 +136,7 @@ export function SessionPhoneControl({
   const [streamingMode, setStreamingMode] = useState<"unknown" | StreamingMode>(
     "unknown",
   );
+  const [streamPlaying, setStreamPlaying] = useState(false);
 
   const frameAspectCss = useMemo(
     () =>
@@ -202,6 +203,12 @@ export function SessionPhoneControl({
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (streamingMode !== "scrcpy") {
+      setStreamPlaying(false);
+    }
+  }, [streamingMode]);
 
   const deviceId = session.device_id?._id;
   const deviceSerial = session.device_id?.serial_number;
@@ -370,6 +377,7 @@ export function SessionPhoneControl({
           deviceSerial={deviceSerial}
           className="absolute inset-0"
           onMetadata={(m) => applyStreamDimensions(m.width, m.height)}
+          onPlaying={setStreamPlaying}
         />
       ) : streamingMode === "screenshot" &&
         imgSrc &&
@@ -401,17 +409,22 @@ export function SessionPhoneControl({
         </div>
       ) : null}
 
-      {streamActive && deviceId && (
-        <DeviceTouchOverlay
-          deviceId={deviceId}
-          deviceSerial={deviceSerial}
-          apiBaseUrl={BASE_URL}
-          getNaturalSize={getNaturalSize}
-          getVideoElement={getVideoElement}
-          getVideoSize={getVideoSize}
-          onAction={handleActionRefresh}
-        />
-      )}
+      {streamActive &&
+        deviceId &&
+        ((streamingMode === "scrcpy" && streamPlaying) ||
+          (streamingMode === "screenshot" &&
+            !!imgSrc &&
+            !imgError)) && (
+          <DeviceTouchOverlay
+            deviceId={deviceId}
+            deviceSerial={deviceSerial}
+            apiBaseUrl={BASE_URL}
+            getNaturalSize={getNaturalSize}
+            getVideoElement={getVideoElement}
+            getVideoSize={getVideoSize}
+            onAction={handleActionRefresh}
+          />
+        )}
 
       {isPaused && (
         <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-slate-950/90">

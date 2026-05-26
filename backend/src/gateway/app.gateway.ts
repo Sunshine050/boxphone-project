@@ -83,6 +83,10 @@ export class AppGateway
     try {
       if (await this.tryAuthenticateUser(client)) {
         this.logger.log(`User socket connected: ${client.id}`);
+        client.emit("authenticated", {
+          userId: client.data.userId,
+          role: client.data.role,
+        });
         return;
       }
       if (this.tryAuthenticateDevice(client)) {

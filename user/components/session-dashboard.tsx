@@ -16,6 +16,100 @@ import {
 import { loadOrientationMode } from "@/lib/screen-orientation";
 import { useMobileLandscape } from "@/hooks/use-mobile-landscape";
 import { cn } from "@/lib/utils";
+import { formatDurationThai } from "@boxphon/shared/client/format-duration";
+import { getServerNow } from "@boxphon/shared/client/server-time";
+
+const STAGGER_MAX_TOTAL_MS = 4000;
+const STAGGER_STEP_MAX_MS = 500;
+
+function staggerDelayMs(index: number, total: number): number {
+  if (total <= 1 || index <= 0) return 0;
+  const step = Math.min(
+    STAGGER_STEP_MAX_MS,
+    STAGGER_MAX_TOTAL_MS / (total - 1),
+  );
+  return Math.round(step * index);
+}
+
+/** Compact timer for card headers (matches session-phone-control). */
+function formatDurationHeaderCompact(totalSeconds: number): string {
+  const sec = Math.max(0, Math.floor(totalSeconds));
+  if (sec === 0) return "หมด";
+  if (sec < 3600) {
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    return `${m}:${String(s).padStart(2, "0")}`;
+  }
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  return m > 0 ? `${h}ชม.${m}น` : `${h}ชม.`;
+}
+
+function SessionCardSkeleton({
+  session,
+  fetchedAt,
+}: {
+  session: Session;
+  fetchedAt: number;
+}) {
+  const [now, setNow] = useState(() => getServerNow());
+
+  useEffect(() => {
+    const timer = setInterval(() => setNow(getServerNow()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  let remaining = session.remaining_seconds;
+  if (session.status === "ACTIVE" && fetchedAt) {
+    remaining = Math.max(
+      0,
+      session.remaining_seconds - Math.floor((now - fetchedAt) / 1000),
+    );
+  }
+  const expired = session.status === "EXPIRED" || remaining <= 0;
+  const isPaused = session.status === "PAUSED";
+  const deviceName = session.device_id?.name || "Device";
+
+  const remainingClassName = expired
+    ? "text-red-400"
+    : isPaused
+      ? "text-amber-400"
+      : "text-cyan-400";
+
+  return (
+    <div className="flex w-full min-w-0 shrink-0 flex-col max-w-[min(calc(100vw-1.5rem),240px)] sm:max-w-[260px] md:max-w-[280px]">
+      <div className="flex w-full min-w-0 flex-col overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/50 p-2 shadow-lg shadow-black/20 sm:rounded-3xl sm:p-3 md:p-3.5">
+        <div className="mb-2 flex min-w-0 items-center gap-1 border-b border-slate-800/90 pb-2 sm:mb-3 sm:gap-1.5 sm:pb-2.5">
+          <span
+            className="min-w-0 flex-1 truncate text-xs font-semibold text-white sm:text-sm"
+            title={deviceName}
+          >
+            {deviceName}
+          </span>
+          <div
+            className={`flex shrink-0 items-center font-bold tabular-nums leading-none ${remainingClassName}`}
+          >
+            <span className="text-[10px] sm:hidden">
+              {formatDurationHeaderCompact(remaining)}
+            </span>
+            <span className="hidden whitespace-nowrap text-xs sm:inline md:text-sm">
+              {formatDurationThai(remaining)}
+            </span>
+          </div>
+        </div>
+        <div
+          className="relative mx-auto w-full min-w-0 overflow-hidden rounded-[1.75rem] border-[3px] border-slate-700 bg-slate-900 shadow-xl sm:rounded-[2rem] sm:border-4 md:rounded-[2.25rem]"
+          style={{ aspectRatio: "9 / 19.5", maxHeight: "min(82vh, 720px)" }}
+        >
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-slate-900">
+            <div className="h-10 w-10 animate-spin rounded-full border-4 border-cyan-500 border-t-transparent" />
+            <span className="text-xs text-slate-400">กำลังโหลดหน้าจอ...</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 import {
   Dialog,
@@ -63,6 +157,9 @@ export function SessionDashboard({
   const [streamViews, setStreamViews] = useState<
     Record<string, SessionStreamViewState>
   >({});
+  const [mountedCount, setMountedCount] = useState(() =>
+    initialSessions.length <= 1 ? initialSessions.length : 0,
+  );
   const isMobileLandscape = useMobileLandscape();
 
   const getStreamView = (sessionId: string): SessionStreamViewState =>
@@ -87,6 +184,30 @@ export function SessionDashboard({
   useEffect(() => {
     setSessions(initialSessions);
   }, [initialSessions]);
+
+  useEffect(() => {
+    const n = sessions.length;
+    if (n === 0) {
+      setMountedCount(0);
+      return;
+    }
+    if (n === 1) {
+      setMountedCount(1);
+      return;
+    }
+    setMountedCount(0);
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    for (let i = 0; i < n; i++) {
+      timers.push(
+        setTimeout(() => {
+          setMountedCount((prev) => Math.max(prev, i + 1));
+        }, staggerDelayMs(i, n)),
+      );
+    }
+    return () => {
+      for (const t of timers) clearTimeout(t);
+    };
+  }, [sessions]);
 
   const hideDashboardChrome =
     isMobileLandscape &&
@@ -235,8 +356,9 @@ export function SessionDashboard({
             initial="hidden"
             animate="show"
           >
-            {sessions.map((s) => {
+            {sessions.map((s, index) => {
               const isThisExpanded = expandedSessionId === s._id;
+              const showControl = index < mountedCount;
               return (
                 <motion.div
                   key={s._id}
@@ -270,20 +392,27 @@ export function SessionDashboard({
                       layout: { type: "spring", stiffness: 380, damping: 36 },
                     }}
                   >
-                    <SessionPhoneControl
-                      session={s}
-                      fetchedAt={lastSyncTimestamp}
-                      streamView={getStreamView(s._id)}
-                      onStreamViewChange={(patch) =>
-                        patchStreamView(s._id, patch)
-                      }
-                      variant={isThisExpanded ? "expanded" : "default"}
-                      onExpand={() => setExpandedSessionId(s._id)}
-                      onCollapse={() => setExpandedSessionId(null)}
-                      allowMobileLandscapeFullscreen={
-                        sessions.length === 1 || isThisExpanded
-                      }
-                    />
+                    {showControl ? (
+                      <SessionPhoneControl
+                        session={s}
+                        fetchedAt={lastSyncTimestamp}
+                        streamView={getStreamView(s._id)}
+                        onStreamViewChange={(patch) =>
+                          patchStreamView(s._id, patch)
+                        }
+                        variant={isThisExpanded ? "expanded" : "default"}
+                        onExpand={() => setExpandedSessionId(s._id)}
+                        onCollapse={() => setExpandedSessionId(null)}
+                        allowMobileLandscapeFullscreen={
+                          sessions.length === 1 || isThisExpanded
+                        }
+                      />
+                    ) : (
+                      <SessionCardSkeleton
+                        session={s}
+                        fetchedAt={lastSyncTimestamp}
+                      />
+                    )}
                   </motion.div>
                 </motion.div>
               );

@@ -35,6 +35,8 @@ interface H264PlayerProps {
   onMetadata?: (meta: H264PlayerMeta) => void;
   onError?: (err: Error) => void;
   onConnected?: () => void;
+  /** Called when decoded video is playing or stops (waiting/error/disconnect). */
+  onPlaying?: (playing: boolean) => void;
 }
 
 type FramePayload = {
@@ -179,6 +181,10 @@ function annexBtoAvcc(annexB: Uint8Array): Uint8Array {
   return avcc;
 }
 
+function isAuthStreamError(message: string): boolean {
+  return message.toLowerCase().includes("authenticated users");
+}
+
 function toUint8(data: ArrayBuffer | Uint8Array | unknown): Uint8Array {
   if (data instanceof Uint8Array) return data;
   if (data instanceof ArrayBuffer) return new Uint8Array(data);
@@ -203,9 +209,12 @@ export const H264Player = forwardRef<H264PlayerHandle, H264PlayerProps>(
       onMetadata,
       onError,
       onConnected,
+      onPlaying,
     },
     ref,
   ) {
+    const onPlayingRef = useRef(onPlaying);
+    onPlayingRef.current = onPlaying;
     const containerRef = useRef<HTMLDivElement | null>(null);
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
     const [displayVideoSize, setDisplayVideoSize] = useState({
@@ -269,7 +278,10 @@ export const H264Player = forwardRef<H264PlayerHandle, H264PlayerProps>(
       const socket = getStreamSocket(token);
       let cancelled = false;
       let watchdog: ReturnType<typeof setTimeout> | null = null;
+      let authTimeout: ReturnType<typeof setTimeout> | null = null;
+      let authRetryTimer: ReturnType<typeof setTimeout> | null = null;
       let subscribeRetryCount = 0;
+      let authRetryCount = 0;
       const canvas = canvasRef.current;
       const ctx = canvas?.getContext("2d");
 
@@ -277,11 +289,32 @@ export const H264Player = forwardRef<H264PlayerHandle, H264PlayerProps>(
       // refresh; reset the timer whenever we receive metadata or any frame.
       const STREAM_TIMEOUT_MS = 35000;
       const MAX_SUBSCRIBE_RETRIES = 1;
+      const AUTH_TIMEOUT_MS = 3000;
+      const AUTH_RETRY_DELAY_MS = 2000;
+      const MAX_AUTH_RETRIES = 3;
+
+      const notifyPlaying = (playing: boolean) => {
+        onPlayingRef.current?.(playing);
+      };
 
       const clearWatchdog = () => {
         if (watchdog) {
           clearTimeout(watchdog);
           watchdog = null;
+        }
+      };
+
+      const clearAuthTimeout = () => {
+        if (authTimeout) {
+          clearTimeout(authTimeout);
+          authTimeout = null;
+        }
+      };
+
+      const clearAuthRetryTimer = () => {
+        if (authRetryTimer) {
+          clearTimeout(authRetryTimer);
+          authRetryTimer = null;
         }
       };
 
@@ -328,6 +361,7 @@ export const H264Player = forwardRef<H264PlayerHandle, H264PlayerProps>(
           cx.clearRect(0, 0, c.width, c.height);
         }
         isPlayingRef.current = false;
+        notifyPlaying(false);
         setStatus("waiting");
       };
 
@@ -379,11 +413,13 @@ export const H264Player = forwardRef<H264PlayerHandle, H264PlayerProps>(
             }
           }
           cx.drawImage(frame, 0, 0);
+          const wasPlaying = isPlayingRef.current;
           isPlayingRef.current = true;
           decodeErrorStreak = 0;
           setStatus("playing");
           setErrorMessage(null);
           clearWatchdog();
+          if (!wasPlaying) notifyPlaying(true);
         }
         frame.close();
       };
@@ -653,38 +689,100 @@ export const H264Player = forwardRef<H264PlayerHandle, H264PlayerProps>(
         message: string;
       }) => {
         if (payload.deviceSerial !== deviceSerial) return;
-        console.warn("[H264Player] stream_error", payload.message);
+        const msg = payload.message || "";
+        console.warn("[H264Player] stream_error", msg);
+
+        if (isAuthStreamError(msg)) {
+          if (authRetryCount >= MAX_AUTH_RETRIES) {
+            notifyPlaying(false);
+            setStatus("error");
+            setErrorMessage(msg);
+            onError?.(new Error(msg));
+            return;
+          }
+          authRetryCount += 1;
+          subscribedRef.current = false;
+          isPlayingRef.current = false;
+          notifyPlaying(false);
+          try {
+            socket.emit("stream_unsubscribe", { deviceSerial });
+          } catch {
+            /* ignore */
+          }
+          setStatus("waiting");
+          setErrorMessage("กำลังเชื่อมต่ออีกครั้ง...");
+          clearAuthRetryTimer();
+          authRetryTimer = setTimeout(() => {
+            if (cancelled) return;
+            trySubscribeViaAuthGate();
+          }, AUTH_RETRY_DELAY_MS);
+          return;
+        }
+
+        notifyPlaying(false);
         setStatus("error");
-        setErrorMessage(payload.message);
-        onError?.(new Error(payload.message));
+        setErrorMessage(msg);
+        onError?.(new Error(msg));
       };
 
       function subscribe() {
         if (subscribedRef.current) return;
         subscribedRef.current = true;
         isPlayingRef.current = false;
+        notifyPlaying(false);
         socket.emit("stream_subscribe", { deviceSerial });
         setStatus("waiting");
         armWatchdog();
         onConnected?.();
       }
 
+      function trySubscribeViaAuthGate() {
+        if (cancelled || subscribedRef.current) return;
+        clearAuthTimeout();
+        subscribe();
+      }
+
+      const armAuthTimeout = () => {
+        clearAuthTimeout();
+        authTimeout = setTimeout(() => {
+          if (cancelled || subscribedRef.current) return;
+          console.warn(
+            "[H264Player] authenticated timeout, subscribing anyway",
+          );
+          trySubscribeViaAuthGate();
+        }, AUTH_TIMEOUT_MS);
+      };
+
+      const onAuthenticated = () => {
+        if (cancelled) return;
+        clearAuthTimeout();
+        trySubscribeViaAuthGate();
+      };
+
       const onConnect = () => {
         console.log("[H264Player] stream socket connected");
-        // Re-subscribe after reconnect
         subscribedRef.current = false;
-        subscribe();
+        isPlayingRef.current = false;
+        notifyPlaying(false);
+        clearAuthTimeout();
+        clearAuthRetryTimer();
+        setStatus("connecting");
+        armAuthTimeout();
       };
 
       const onDisconnect = () => {
         console.warn("[H264Player] stream socket disconnected");
         subscribedRef.current = false;
         isPlayingRef.current = false;
+        notifyPlaying(false);
         decoderConfiguredRef.current = false;
         clearWatchdog();
+        clearAuthTimeout();
+        clearAuthRetryTimer();
         setStatus("connecting");
       };
 
+      socket.on("authenticated", onAuthenticated);
       socket.on("connect", onConnect);
       socket.on("disconnect", onDisconnect);
       socket.on("stream_metadata", onMetadataEvent);
@@ -692,23 +790,28 @@ export const H264Player = forwardRef<H264PlayerHandle, H264PlayerProps>(
       socket.on("stream_error", onStreamError);
 
       if (socket.connected) {
-        subscribe();
+        trySubscribeViaAuthGate();
       } else {
         setStatus("connecting");
+        armAuthTimeout();
       }
 
       return () => {
         cancelled = true;
+        notifyPlaying(false);
         if (decoderRecoverTimer) {
           clearTimeout(decoderRecoverTimer);
           decoderRecoverTimer = null;
         }
         clearWatchdog();
+        clearAuthTimeout();
+        clearAuthRetryTimer();
         try {
           socket.emit("stream_unsubscribe", { deviceSerial });
         } catch {
           /* ignore */
         }
+        socket.off("authenticated", onAuthenticated);
         socket.off("connect", onConnect);
         socket.off("disconnect", onDisconnect);
         socket.off("stream_metadata", onMetadataEvent);
@@ -753,7 +856,8 @@ export const H264Player = forwardRef<H264PlayerHandle, H264PlayerProps>(
             />
             <span className="text-xs text-slate-400">
               {status === "connecting" && "กำลังเชื่อมต่อ..."}
-              {status === "waiting" && "กำลังโหลดสตรีม..."}
+              {status === "waiting" &&
+                (errorMessage ?? "กำลังโหลดสตรีม...")}
               {status === "error" && (errorMessage ?? "ไม่สามารถโหลดสตรีมได้")}
             </span>
           </div>

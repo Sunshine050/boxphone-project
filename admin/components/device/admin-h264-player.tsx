@@ -109,6 +109,10 @@ function annexBtoAvcc(annexB: Uint8Array): Uint8Array {
   return avcc;
 }
 
+function isAuthStreamError(message: string): boolean {
+  return message.toLowerCase().includes("authenticated users");
+}
+
 function toUint8(data: unknown): Uint8Array {
   if (data instanceof Uint8Array) return data;
   if (data instanceof ArrayBuffer) return new Uint8Array(data);
@@ -150,11 +154,23 @@ export const AdminH264Player = forwardRef<AdminH264PlayerHandle, Props>(
       const socket = getStreamSocket();
       let cancelled = false;
       let watchdog: ReturnType<typeof setTimeout> | null = null;
+      let authTimeout: ReturnType<typeof setTimeout> | null = null;
+      let authRetryTimer: ReturnType<typeof setTimeout> | null = null;
       let retries = 0;
+      let authRetryCount = 0;
 
       const TIMEOUT_MS = 35000;
+      const AUTH_TIMEOUT_MS = 3000;
+      const AUTH_RETRY_DELAY_MS = 2000;
+      const MAX_AUTH_RETRIES = 3;
 
       const clearWd = () => { if (watchdog) { clearTimeout(watchdog); watchdog = null; } };
+      const clearAuthTimeout = () => {
+        if (authTimeout) { clearTimeout(authTimeout); authTimeout = null; }
+      };
+      const clearAuthRetryTimer = () => {
+        if (authRetryTimer) { clearTimeout(authRetryTimer); authRetryTimer = null; }
+      };
 
       const closeDecoder = () => {
         if (decoderRef.current && decoderRef.current.state !== "closed") {
@@ -300,7 +316,30 @@ export const AdminH264Player = forwardRef<AdminH264PlayerHandle, Props>(
 
       const onStreamError = (p: { deviceSerial: string; message: string }) => {
         if (p.deviceSerial !== deviceSerial) return;
-        setStatus("error"); setErrorMsg(p.message); onError?.(new Error(p.message));
+        const msg = p.message || "";
+        if (isAuthStreamError(msg)) {
+          if (authRetryCount >= MAX_AUTH_RETRIES) {
+            setStatus("error");
+            setErrorMsg(msg);
+            onError?.(new Error(msg));
+            return;
+          }
+          authRetryCount += 1;
+          subscribedRef.current = false;
+          isPlayingRef.current = false;
+          try { socket.emit("stream_unsubscribe", { deviceSerial }); } catch { /* ignore */ }
+          setStatus("waiting");
+          setErrorMsg("กำลังเชื่อมต่ออีกครั้ง...");
+          clearAuthRetryTimer();
+          authRetryTimer = setTimeout(() => {
+            if (cancelled) return;
+            trySubscribeViaAuthGate();
+          }, AUTH_RETRY_DELAY_MS);
+          return;
+        }
+        setStatus("error");
+        setErrorMsg(msg);
+        onError?.(new Error(msg));
       };
 
       function subscribe() {
@@ -312,26 +351,71 @@ export const AdminH264Player = forwardRef<AdminH264PlayerHandle, Props>(
         armWd();
       }
 
-      socket.on("connect", () => { subscribedRef.current = false; subscribe(); });
-      socket.on("disconnect", () => {
+      function trySubscribeViaAuthGate() {
+        if (cancelled || subscribedRef.current) return;
+        clearAuthTimeout();
+        subscribe();
+      }
+
+      const armAuthTimeout = () => {
+        clearAuthTimeout();
+        authTimeout = setTimeout(() => {
+          if (cancelled || subscribedRef.current) return;
+          console.warn(
+            "[AdminH264Player] authenticated timeout, subscribing anyway",
+          );
+          trySubscribeViaAuthGate();
+        }, AUTH_TIMEOUT_MS);
+      };
+
+      const onAuthenticated = () => {
+        if (cancelled) return;
+        clearAuthTimeout();
+        trySubscribeViaAuthGate();
+      };
+
+      const onConnect = () => {
+        subscribedRef.current = false;
+        isPlayingRef.current = false;
+        clearAuthTimeout();
+        clearAuthRetryTimer();
+        setStatus("connecting");
+        armAuthTimeout();
+      };
+
+      const onDisconnect = () => {
         subscribedRef.current = false;
         isPlayingRef.current = false;
         decoderConfiguredRef.current = false;
         clearWd();
+        clearAuthTimeout();
+        clearAuthRetryTimer();
         setStatus("connecting");
-      });
+      };
+
+      socket.on("authenticated", onAuthenticated);
+      socket.on("connect", onConnect);
+      socket.on("disconnect", onDisconnect);
       socket.on("stream_metadata", onMetaEvent);
       socket.on("stream_frame", onFrame);
       socket.on("stream_error", onStreamError);
 
-      if (socket.connected) subscribe(); else setStatus("connecting");
+      if (socket.connected) {
+        trySubscribeViaAuthGate();
+      } else {
+        setStatus("connecting");
+        armAuthTimeout();
+      }
 
       return () => {
         cancelled = true;
         clearWd();
+        clearAuthTimeout();
+        clearAuthRetryTimer();
         try { socket.emit("stream_unsubscribe", { deviceSerial }); } catch { /* ignore */ }
-        socket.off("connect");
-        socket.off("disconnect");
+        socket.off("authenticated", onAuthenticated);
+        socket.off("connect", onConnect);
+        socket.off("disconnect", onDisconnect);
         socket.off("stream_metadata", onMetaEvent);
         socket.off("stream_frame", onFrame);
         socket.off("stream_error", onStreamError);
@@ -352,7 +436,7 @@ export const AdminH264Player = forwardRef<AdminH264PlayerHandle, Props>(
             <div className={`h-8 w-8 rounded-full border-2 border-cyan-500 ${status === "error" ? "opacity-30" : "border-t-transparent animate-spin"}`} />
             <span className="text-xs text-neutral-400 text-center px-2">
               {status === "connecting" && "กำลังเชื่อมต่อ..."}
-              {status === "waiting" && "กำลังโหลดสตรีม..."}
+              {status === "waiting" && (errorMsg ?? "กำลังโหลดสตรีม...")}
               {status === "error" && (errorMsg ?? "ไม่สามารถโหลดสตรีมได้")}
             </span>
           </div>

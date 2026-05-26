@@ -127,6 +127,7 @@
 ## 8. การ Deploy เว็บ (สรุปให้ทีม IT)
 
 - คู่มือเทคนิคเต็ม: **`docs/DEPLOY.md`**  
+- **อัปเดตโค้ดบนเครื่องลูกค้า (git pull + build + PM2):** **`docs/CUSTOMER-SERVER-UPDATE.md`**  
 - สิ่งที่ต้องคู่กันเสมอ:  
   - **HTTPS**  
   - **`CORS_ORIGINS`** บน Backend = รายการ URL ของเว็บ **ผู้ใช้ + แอดมิน**  
@@ -156,6 +157,7 @@
 | **`docs/MEETING-DEPLOY-AND-PRICING-GUIDE.md`** | **เตรียมประชุมลูกค้า** — deploy, โดเมน, แพ็กเกจราคา, ถ้าลูกค้าว่าแพง |
 | **เอกสารนี้** | ส่งมอบลูกค้า — ติดตั้ง + ใช้งาน + FAQ |
 | `docs/DEPLOY.md` | Environment, CORS, Nginx, build |
+| **`docs/CUSTOMER-SERVER-UPDATE.md`** | **อัปเดตโค้ดบนเครื่องลูกค้า** — git pull, build admin/user/backend, PM2 |
 | `docs/SCREENSHOT-SETUP.md` | ADB, ภาพหน้าจอ, deploy checklist |
 | `docs/ARCHITECTURE.md` | โครงสร้างโมดูล (สำหรับทีมเทคนิค) |
 | `README.md` | เริ่มต้นโปรเจกต์ฝั่งนักพัฒนา |

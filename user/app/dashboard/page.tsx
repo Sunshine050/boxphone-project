@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
@@ -16,6 +16,11 @@ export type { Session };
 
 export default function DashboardPage() {
   const router = useRouter();
+  const routerRef = useRef(router);
+  useEffect(() => {
+    routerRef.current = router;
+  });
+
   const [sessions, setSessions] = useState<Session[]>([]);
   const [lastSyncTimestamp, setLastSyncTimestamp] = useState<number>(
     Date.now(),
@@ -31,9 +36,9 @@ export default function DashboardPage() {
       setLastSyncTimestamp(getServerNow());
       setLoading(false);
     } catch {
-      router.push("/login");
+      routerRef.current.push("/login");
     }
-  }, [router]);
+  }, []);
 
   useEffect(() => {
     loadSessions();
