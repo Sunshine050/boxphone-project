@@ -38,6 +38,11 @@ export function NotificationBell() {
 
   const socketRef = useRef<any>(null)
 
+  const pageRef = useRef(page)
+  useEffect(() => {
+    pageRef.current = page
+  }, [page])
+
   const loadNotis = useCallback(async (pageNum: number = 1) => {
     setLoading(true)
     try {
@@ -56,11 +61,15 @@ export function NotificationBell() {
     }
   }, [])
 
+  // initial fetch once
   useEffect(() => {
     setMounted(true)
-    let cancelled = false
-
     loadNotis(1)
+  }, [loadNotis])
+
+  // auth + socket subscribe once
+  useEffect(() => {
+    let cancelled = false
 
     apiFetch<{ user: { id: string; username: string; role: string } }>("/auth/me")
       .then((res) => {
@@ -76,7 +85,7 @@ export function NotificationBell() {
 
         const handler = () => {
           playNotificationSound()
-          loadNotis(page)
+          loadNotis(pageRef.current)
         }
 
         socket.on("new_notification", handler)
@@ -89,7 +98,7 @@ export function NotificationBell() {
         socketRef.current.off("new_notification")
       }
     }
-  }, [loadNotis, page])
+  }, [])
 
   const markOneRead = async (id: string) => {
     try {
