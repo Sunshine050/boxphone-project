@@ -111,19 +111,22 @@ export function DeviceTouchOverlay({
     if (natural.width > 0 && natural.height > 0) return natural;
     const video = resolveVideoSize();
     if (video.width > 0 && video.height > 0) return video;
-    return { width: 1080, height: 1920 };
+    console.warn("[DeviceTouchOverlay] device size unknown, tap skipped");
+    return { width: 0, height: 0 };
   }, [getNaturalSize, resolveVideoSize]);
 
   const toDevice = useCallback(
     (clientX: number, clientY: number) => {
       const el = getVideoElement() ?? overlayRef.current;
       if (!el) return null;
+      const deviceSize = resolveDeviceSize();
+      if (deviceSize.width <= 0 || deviceSize.height <= 0) return null;
       return mapClientToDevice(
         clientX,
         clientY,
         el,
         resolveVideoSize(),
-        resolveDeviceSize(),
+        deviceSize,
       );
     },
     [getVideoElement, resolveVideoSize, resolveDeviceSize],

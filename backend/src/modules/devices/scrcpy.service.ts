@@ -352,6 +352,17 @@ export class ScrcpyService implements OnModuleInit, OnModuleDestroy {
         stream.displayHeight = size.h;
       }
     }
+    if (stream.displayWidth <= 0) {
+      setTimeout(async () => {
+        const retry = await this.getDisplaySize(serial);
+        if (retry && stream.subscribers.size > 0) {
+          stream.displayWidth = retry.w;
+          stream.displayHeight = retry.h;
+          this.broadcastStreamMetadata(serial, this.buildStreamMetadata(stream));
+          this.logger.log(`touch retry OK: ${serial} ${retry.w}×${retry.h}`);
+        }
+      }, 2000);
+    }
 
     this.logger.log(
       `Subscribed ${subscriberId} → ${serial} (total subscribers: ${stream.subscribers.size})` +
@@ -438,6 +449,20 @@ export class ScrcpyService implements OnModuleInit, OnModuleDestroy {
           }
         : {}),
     };
+  }
+
+  private broadcastStreamMetadata(
+    serial: string,
+    metadata: StreamMetadata,
+  ): void {
+    if (!this.metadataChangeListener) return;
+    try {
+      this.metadataChangeListener(serial, metadata);
+    } catch (e: any) {
+      this.logger.warn(
+        `[scrcpy/${serial}] metadata listener failed: ${e.message}`,
+      );
+    }
   }
 
   hasActiveStream(serial: string): boolean {

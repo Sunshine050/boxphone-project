@@ -15,6 +15,8 @@ export interface H264PlayerMeta {
   width: number;
   height: number;
   deviceName: string;
+  displayWidth?: number;
+  displayHeight?: number;
 }
 
 export interface H264PlayerHandle {
@@ -602,6 +604,8 @@ export const H264Player = forwardRef<H264PlayerHandle, H264PlayerProps>(
           width: payload.width,
           height: payload.height,
           deviceName: payload.deviceName,
+          displayWidth: payload.displayWidth,
+          displayHeight: payload.displayHeight,
         });
         if (!isPlayingRef.current) {
           setStatus("waiting");
