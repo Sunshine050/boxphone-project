@@ -185,22 +185,19 @@ function AutoScrollCarousel() {
       >
         {["/banner-boxphone.jpg", "/poster-1.jpg", "/poster-2.jpg"].map((src, index) => (
           <div key={index} className="w-full shrink-0 px-1.5 snap-center">
-            <motion.div className="relative w-full aspect-[16/9] sm:aspect-[21/9] rounded-2xl overflow-hidden shadow-2xl">
-              {/* ภาพพื้นหลังแบบเบลอ (เฉพาะภาพ Poster) */}
-              {index !== 0 && (
-                <Image
-                  src={src}
-                  alt="blur-bg"
-                  fill
-                  className="object-cover blur-xl opacity-50 scale-110"
-                />
-              )}
-
+            <motion.div className="relative w-full aspect-[16/9] overflow-hidden rounded-2xl bg-slate-950/40 shadow-2xl">
               <Image
                 src={src}
-                alt={`Slide ${index}`}
+                alt=""
                 fill
-                className={`relative z-10 ${index === 0 ? "object-cover" : "object-contain p-2"}`}
+                aria-hidden
+                className="object-cover blur-xl opacity-40 scale-110"
+              />
+              <Image
+                src={src}
+                alt={`Slide ${index + 1}`}
+                fill
+                className="relative z-10 object-contain"
                 priority={index === 0}
               />
             </motion.div>
