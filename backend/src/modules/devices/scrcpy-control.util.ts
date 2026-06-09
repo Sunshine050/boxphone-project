@@ -5,6 +5,8 @@
 
 export const SC_CONTROL_MSG_TYPE_INJECT_KEYCODE = 0;
 export const SC_CONTROL_MSG_TYPE_INJECT_TOUCH_EVENT = 2;
+/** scrcpy v3.0+ — restart encoder to emit fresh SPS/PPS + IDR immediately */
+export const SC_CONTROL_MSG_TYPE_RESET_VIDEO = 17;
 
 /** Android MotionEvent actions */
 export const AMOTION_EVENT_ACTION_DOWN = 0;
@@ -87,3 +89,8 @@ export const ANDROID_KEYCODE_APP_SWITCH = 187;
 
 export const ANDROID_KEYEVENT_ACTION_DOWN = 0;
 export const ANDROID_KEYEVENT_ACTION_UP = 1;
+
+/** 1-byte RESET_VIDEO control message (scrcpy v3.0+). */
+export function serializeResetVideo(): Buffer {
+  return Buffer.from([SC_CONTROL_MSG_TYPE_RESET_VIDEO]);
+}

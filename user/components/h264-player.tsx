@@ -639,6 +639,9 @@ export const H264Player = forwardRef<H264PlayerHandle, H264PlayerProps>(
             ensureDecoderConfigured(bytes);
           }
           waitingKeyFrameRef.current = true;
+          const c = canvasRef.current;
+          const cx = c?.getContext("2d");
+          if (c && cx) cx.clearRect(0, 0, c.width, c.height);
           return;
         }
 

@@ -21,6 +21,7 @@ import {
   ANDROID_KEYEVENT_ACTION_UP,
   serializeInjectKeycode,
   serializeInjectTouchEvent,
+  serializeResetVideo,
 } from "./scrcpy-control.util";
 import type { AdbInputCommand } from "./adb-screenshot.service";
 import { parseConfigPacketDimensions } from "./scrcpy-sps.util";
@@ -856,6 +857,43 @@ export class ScrcpyService implements OnModuleInit, OnModuleDestroy {
           `[scrcpy/${stream.serial}] metadata listener failed: ${e.message}`,
         );
       }
+    }
+
+    // Replay cached IDR so clients can paint without waiting for the next GOP.
+    if (stream.lastKeyFramePacket) {
+      const meta: FrameMeta = {
+        isConfig: false,
+        isKeyFrame: true,
+        pts: stream.lastKeyFramePts,
+      };
+      stream.subscribers.forEach((listener) => {
+        try {
+          listener(stream.lastKeyFramePacket!, meta);
+        } catch (e: any) {
+          this.logger.warn(
+            `[scrcpy/${stream.serial}] keyframe replay on dimension change failed: ${e.message}`,
+          );
+        }
+      });
+    }
+
+    // scrcpy v3.0+: force encoder restart → fresh SPS/PPS + IDR (2.4 ignores unknown msg).
+    this.requestVideoReset(stream);
+  }
+
+  /** scrcpy v3.0+ RESET_VIDEO — no-op on older server jars. */
+  private requestVideoReset(stream: ScrcpyStreamState): void {
+    const major = parseInt(this.serverVersion.split(".")[0], 10);
+    if (major < 3 || !stream.controlReady || !stream.controlSocket) return;
+    try {
+      this.writeControl(stream, serializeResetVideo());
+      this.logger.log(
+        `[scrcpy/${stream.serial}] RESET_VIDEO sent (request fresh keyframe)`,
+      );
+    } catch (e: any) {
+      this.logger.warn(
+        `[scrcpy/${stream.serial}] RESET_VIDEO failed: ${e.message}`,
+      );
     }
   }
 
