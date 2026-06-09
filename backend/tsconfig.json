@@ -17,9 +17,5 @@
         "strictBindCallApply": false,
         "forceConsistentCasingInFileNames": false,
         "noFallthroughCasesInSwitch": false
-    },
-    "include": [
-        "src/**/*",
-        "../shared/client/scrcpy-sps.util.ts"
-    ]
+    }
 }
