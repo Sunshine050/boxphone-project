@@ -10,6 +10,7 @@ import {
 import { getStreamSocket } from "@/lib/socket-client";
 import { useVideoFitCanvas } from "@/hooks/use-video-fit-canvas";
 import type { VideoFitMode } from "../../shared/client/video-fit-layout";
+import { parseConfigPacketDimensions } from "@boxphon/shared/client/scrcpy-sps.util";
 
 export interface H264PlayerMeta {
   width: number;
@@ -639,9 +640,31 @@ export const H264Player = forwardRef<H264PlayerHandle, H264PlayerProps>(
             ensureDecoderConfigured(bytes);
           }
           waitingKeyFrameRef.current = true;
+
+          const dims = parseConfigPacketDimensions(bytes);
           const c = canvasRef.current;
           const cx = c?.getContext("2d");
-          if (c && cx) cx.clearRect(0, 0, c.width, c.height);
+          if (c && cx) {
+            if (
+              dims &&
+              dims.width > 0 &&
+              dims.height > 0 &&
+              (c.width !== dims.width || c.height !== dims.height)
+            ) {
+              c.width = dims.width;
+              c.height = dims.height;
+              streamVideoSizeRef.current = dims;
+              videoSizeRef.current = dims;
+              updateNaturalFromVideo(dims.width, dims.height);
+              syncDisplayLayoutRef.current(dims);
+              onMetadata?.({
+                width: dims.width,
+                height: dims.height,
+                deviceName: "",
+              });
+            }
+            cx.clearRect(0, 0, c.width, c.height);
+          }
           return;
         }
 
