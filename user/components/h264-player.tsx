@@ -628,20 +628,26 @@ export const H264Player = forwardRef<H264PlayerHandle, H264PlayerProps>(
           // Config packet = SPS + PPS from scrcpy.
           configPacketRef.current = bytes;
           const nextCodec = codecFromConfig(bytes);
-          if (
-            decoderConfiguredRef.current &&
-            configuredCodecRef.current &&
-            configuredCodecRef.current !== nextCodec
-          ) {
-            closeDecoder();
-          }
+          const dims = parseConfigPacketDimensions(bytes);
+          const dimsChanged =
+            !!dims &&
+            dims.width > 0 &&
+            dims.height > 0 &&
+            (streamVideoSizeRef.current.width !== dims.width ||
+              streamVideoSizeRef.current.height !== dims.height);
+          const codecChanged =
+            !!configuredCodecRef.current &&
+            configuredCodecRef.current !== nextCodec;
+
           configuredCodecRef.current = nextCodec;
-          if (!decoderConfiguredRef.current) {
-            ensureDecoderConfigured(bytes);
+
+          if (!decoderConfiguredRef.current || codecChanged || dimsChanged) {
+            // force recreate so the new SPS/PPS (AVCDecoderConfigRecord)
+            // is applied — same codec string still needs new description
+            ensureDecoderConfigured(bytes, true);
           }
           waitingKeyFrameRef.current = true;
 
-          const dims = parseConfigPacketDimensions(bytes);
           const c = canvasRef.current;
           const cx = c?.getContext("2d");
           if (c && cx) {
