@@ -415,6 +415,13 @@ export const H264Player = forwardRef<H264PlayerHandle, H264PlayerProps>(
               });
             }
           }
+          console.log("[ROTATE] frame", {
+            frameW: frame.displayWidth,
+            frameH: frame.displayHeight,
+            canvasW: c.width,
+            canvasH: c.height,
+            waitingKey: waitingKeyFrameRef.current,
+          });
           cx.drawImage(frame, 0, 0);
           const wasPlaying = isPlayingRef.current;
           isPlayingRef.current = true;
@@ -638,6 +645,16 @@ export const H264Player = forwardRef<H264PlayerHandle, H264PlayerProps>(
           const codecChanged =
             !!configuredCodecRef.current &&
             configuredCodecRef.current !== nextCodec;
+
+          console.log("[ROTATE] config", {
+            nextCodec,
+            dims,
+            dimsChanged,
+            codecChanged,
+            currentStreamSize: { ...streamVideoSizeRef.current },
+            willRecreate:
+              !decoderConfiguredRef.current || codecChanged || dimsChanged,
+          });
 
           configuredCodecRef.current = nextCodec;
 
