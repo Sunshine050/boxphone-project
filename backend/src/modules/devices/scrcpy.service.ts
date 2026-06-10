@@ -158,6 +158,13 @@ export class ScrcpyService implements OnModuleInit, OnModuleDestroy {
     return this.config.get<string>("SCRCPY_VIDEO_ENCODER") || "";
   }
 
+  private get codecOptions(): string {
+    return (
+      this.config.get<string>("SCRCPY_VIDEO_CODEC_OPTIONS") ||
+      "i-frame-interval=2"
+    );
+  }
+
   private get portPoolStart(): number {
     return parseInt(
       this.config.get<string>("SCRCPY_PORT_POOL_START") || "27183",
@@ -859,24 +866,6 @@ export class ScrcpyService implements OnModuleInit, OnModuleDestroy {
       }
     }
 
-    // Replay cached IDR so clients can paint without waiting for the next GOP.
-    if (stream.lastKeyFramePacket) {
-      const meta: FrameMeta = {
-        isConfig: false,
-        isKeyFrame: true,
-        pts: stream.lastKeyFramePts,
-      };
-      stream.subscribers.forEach((listener) => {
-        try {
-          listener(stream.lastKeyFramePacket!, meta);
-        } catch (e: any) {
-          this.logger.warn(
-            `[scrcpy/${stream.serial}] keyframe replay on dimension change failed: ${e.message}`,
-          );
-        }
-      });
-    }
-
     // scrcpy v3.0+: force encoder restart → fresh SPS/PPS + IDR (2.4 ignores unknown msg).
     this.requestVideoReset(stream);
   }
@@ -1057,6 +1046,7 @@ export class ScrcpyService implements OnModuleInit, OnModuleDestroy {
         `max_fps=${this.maxFps}`,
         `max_size=${this.maxSize}`,
         "video_codec=h264",
+        `video_codec_options=${this.codecOptions}`,
         "send_device_meta=true",
         "send_frame_meta=true",
         "send_dummy_byte=true",
