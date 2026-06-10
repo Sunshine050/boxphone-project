@@ -415,13 +415,6 @@ export const H264Player = forwardRef<H264PlayerHandle, H264PlayerProps>(
               });
             }
           }
-          console.log("[ROTATE] frame", {
-            frameW: frame.displayWidth,
-            frameH: frame.displayHeight,
-            canvasW: c.width,
-            canvasH: c.height,
-            waitingKey: waitingKeyFrameRef.current,
-          });
           cx.drawImage(frame, 0, 0);
           const wasPlaying = isPlayingRef.current;
           isPlayingRef.current = true;
@@ -588,9 +581,6 @@ export const H264Player = forwardRef<H264PlayerHandle, H264PlayerProps>(
           resetDecoderForDimensionChange();
         }
 
-        streamVideoSizeRef.current = next;
-        videoSizeRef.current = next;
-
         if (canvasRef.current) {
           canvasRef.current.width = payload.width;
           canvasRef.current.height = payload.height;
@@ -636,33 +626,9 @@ export const H264Player = forwardRef<H264PlayerHandle, H264PlayerProps>(
           configPacketRef.current = bytes;
           const nextCodec = codecFromConfig(bytes);
           const dims = parseConfigPacketDimensions(bytes);
-          const dimsChanged =
-            !!dims &&
-            dims.width > 0 &&
-            dims.height > 0 &&
-            (streamVideoSizeRef.current.width !== dims.width ||
-              streamVideoSizeRef.current.height !== dims.height);
-          const codecChanged =
-            !!configuredCodecRef.current &&
-            configuredCodecRef.current !== nextCodec;
-
-          console.log("[ROTATE] config", {
-            nextCodec,
-            dims,
-            dimsChanged,
-            codecChanged,
-            currentStreamSize: { ...streamVideoSizeRef.current },
-            willRecreate:
-              !decoderConfiguredRef.current || codecChanged || dimsChanged,
-          });
 
           configuredCodecRef.current = nextCodec;
-
-          if (!decoderConfiguredRef.current || codecChanged || dimsChanged) {
-            // force recreate so the new SPS/PPS (AVCDecoderConfigRecord)
-            // is applied — same codec string still needs new description
-            ensureDecoderConfigured(bytes, true);
-          }
+          ensureDecoderConfigured(bytes, true);
           waitingKeyFrameRef.current = true;
 
           const c = canvasRef.current;
