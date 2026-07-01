@@ -183,7 +183,7 @@ function AutoScrollCarousel() {
         className="overflow-x-auto flex snap-x snap-mandatory scrollbar-hide no-scrollbar touch-pan-x"
         style={{ scrollbarWidth: 'none' }}
       >
-        {["/banner-boxphone.jpg", "/poster-1.jpg", "/poster-2.jpg"].map((src, index) => (
+        {["/banner-boxphone.jpg", "/promotions-boxphone.png", "/poster-2.jpg"].map((src, index) => (
           <div key={index} className="w-full shrink-0 px-1.5 snap-center">
             <motion.div className="relative w-full aspect-[16/9] overflow-hidden rounded-2xl bg-slate-950/40 shadow-2xl">
               <Image
